@@ -4,46 +4,52 @@ import { motion } from "framer-motion";
 
 const timeline = [
   {
-    year: "2019",
-    title: "The Campfire",
+    year: "2017",
+    title: "The Genesis",
     description:
-      "15 people, a patch of desert, and a shared idea. NODE started as Node Republik — a group of friends who wanted to build something intentional.",
+      'A few colleagues sat around in the heat of 2017 thinking, "What if we built our own camp?" The idea took root.',
   },
   {
-    year: "2020",
+    year: "2018",
+    title: "Launch",
+    description:
+      "We overpromised, built an insane wooden temple and launched NODE Republik with 92 campers.",
+  },
+  {
+    year: "2019",
+    title: "Not Quite Dialed...Yet",
+    description:
+      "60 people, a patch of desert, and the concept that we're building an optimistic future home.",
+  },
+  {
+    year: "2020–2021",
     title: "The Pause",
     description:
-      "No playa. We kept the thread alive with calls, shared playlists, and plans for what came next.",
-  },
-  {
-    year: "2021",
-    title: "First Real Build",
-    description:
-      "30 members. Proper infrastructure for the first time. A sound system that actually worked.",
+      "No playa. We kept the thread alive with calls, hangs, shared playlists, and plans for what came next.",
   },
   {
     year: "2022",
-    title: "The Identity",
+    title: "Finding Our Identity",
     description:
-      "Interactive LED sculptures and our first art that stopped people in their tracks. We started figuring out who we were.",
+      "NODE returned to Black Rock City, with 50 souls and more ambition than ever.",
   },
   {
     year: "2023",
-    title: "Structure",
+    title: "Dialing It In",
     description:
-      "We formalized. Point systems for accountability. Pod leads. Monthly calls. The 10 Principles became part of every conversation, not just an idea on a poster.",
+      "With 55 nodes, we launched Big Petes' Hip-Hop BBQ, which became an instant hit.",
   },
   {
     year: "2024",
     title: "Full Send",
     description:
-      "Our biggest year. The camp ran like a machine and the parties ran late. We became the camp people came back to.",
+      "Our best year yet, though the playa had bigger ideas. We iterated and the communal effort was stronger than ever.",
   },
   {
     year: "2026",
     title: "What's Next",
     description:
-      "~55 campers. Daily yoga. The Rocket Fuel Coffee Bar. More consistent interactivity, more art, and always more communal effort. This is where you come in.",
+      "~60 campers. More interactivity, more art, and always more communal effort. This is where you come in.",
   },
 ];
 
