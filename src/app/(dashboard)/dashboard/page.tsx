@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, Users, CreditCard, Shield } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const stats = [
   {
@@ -20,7 +22,7 @@ const stats = [
   },
   {
     label: "Group",
-    value: "Builders",
+    value: "—",
     icon: Users,
     color: "text-coral",
   },
@@ -33,6 +35,20 @@ const stats = [
 ];
 
 export default function DashboardPage() {
+  const [userName, setUserName] = useState("");
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const name =
+        user.user_metadata?.full_name ||
+        user.email?.split("@")[0] ||
+        "there";
+      setUserName(name.split(" ")[0]);
+    });
+  }, []);
+
   return (
     <div className="space-y-8">
       <motion.div
@@ -41,7 +57,7 @@ export default function DashboardPage() {
         transition={{ duration: 0.4 }}
       >
         <h1 className="text-3xl font-bold text-sand-100">
-          Welcome back, Jane
+          Welcome back{userName ? `, ${userName}` : ""}
         </h1>
         <p className="mt-1 text-sand-400">
           Here&apos;s your NODE dashboard.

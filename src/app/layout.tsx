@@ -36,26 +36,26 @@ const sciFied = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "NODE | The Collective",
+    default: "NODE",
     template: "%s | NODE",
   },
   description:
-    "NODE is a community of creators, builders, and dreamers. Born in the desert. Built for the future.",
+    "NODE is a Burning Man theme camp and 501(c)(3) built on art, music, and communal effort. We're a node in the network — the point where individuals connect to something larger.",
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL || "https://node.family"
   ),
   openGraph: {
-    title: "NODE | The Collective",
+    title: "NODE",
     description:
-      "A collective of creators, builders, and dreamers. Born in the desert. Built for the future.",
+      "A Burning Man theme camp built on art, music, and communal effort. The point where individuals connect to something larger.",
     siteName: "NODE",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "NODE | The Collective",
+    title: "NODE",
     description:
-      "A collective of creators, builders, and dreamers. Born in the desert. Built for the future.",
+      "A Burning Man theme camp built on art, music, and communal effort. The point where individuals connect to something larger.",
   },
   robots: {
     index: true,

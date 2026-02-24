@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, Clock, MapPin, Users } from "lucide-react";
+import { toast } from "sonner";
 
 const jobs = [
   {
@@ -33,7 +34,7 @@ const jobs = [
     slots: 2,
     filled: 1,
     shift: "Tue PM",
-    description: "Prepare and serve community dinner for 80+ members.",
+    description: "Prep and serve community dinner for camp. Second helpings only after everyone's had firsts.",
   },
   {
     id: 3,
@@ -53,7 +54,7 @@ const jobs = [
     slots: 3,
     filled: 0,
     shift: "Thu PM",
-    description: "Welcome visitors and give tours of our camp.",
+    description: "Welcome visitors and introduce them to the crew. Hospitality runs deep, but trust is built with names and handshakes.",
   },
   {
     id: 5,
@@ -63,7 +64,7 @@ const jobs = [
     slots: 10,
     filled: 3,
     shift: "Sun AM",
-    description: "Help tear down camp structures. Leave no trace.",
+    description: "Strike is a team effort. Saturday morning, no exceptions. Leave no trace.",
   },
 ];
 
@@ -76,7 +77,7 @@ export default function JobsPage() {
       >
         <h1 className="text-3xl font-bold text-sand-100">Job Board</h1>
         <p className="mt-1 text-sand-400">
-          Sign up for shifts and contribute to the camp.
+          Sign up for shifts. Everyone contributes — that&apos;s how this works.
         </p>
       </motion.div>
 
@@ -150,6 +151,7 @@ export default function JobsPage() {
                       <Button
                         size="sm"
                         disabled={isFull}
+                        onClick={() => toast.info("Job signups opening soon!")}
                         className="rounded-full bg-pink-500 text-white hover:bg-pink-600 disabled:bg-sand-700/30 disabled:text-sand-500"
                       >
                         {isFull ? "Full" : "Sign Up"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Eye, CheckCircle, XCircle, Clock, Loader2 } from "lucide-react";
+import { Eye, CheckCircle, XCircle, Clock, Loader2, RefreshCw } from "lucide-react";
 import type { ApplicationRow } from "@/lib/types/application";
 import {
   updateApplicationStatus,
@@ -46,7 +46,23 @@ export function ApplicationsTable({
   const [selected, setSelected] = useState<ApplicationRow | null>(null);
   const [notes, setNotes] = useState("");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const refreshVideoUrl = useCallback(async (videoPath: string) => {
+    setVideoLoading(true);
+    const result = await getVideoSignedUrl(videoPath);
+    if ("url" in result) setVideoUrl(result.url);
+    else toast.error("Failed to load video");
+    setVideoLoading(false);
+  }, []);
+
+  // Auto-refresh signed URL every 50 minutes while dialog is open
+  useEffect(() => {
+    if (!selected?.video_url) return;
+    const interval = setInterval(() => refreshVideoUrl(selected.video_url!), 50 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [selected, refreshVideoUrl]);
 
   async function openDetail(app: ApplicationRow) {
     setSelected(app);
@@ -54,10 +70,7 @@ export function ApplicationsTable({
     setVideoUrl(null);
 
     if (app.video_url) {
-      const result = await getVideoSignedUrl(app.video_url);
-      if ("url" in result) {
-        setVideoUrl(result.url);
-      }
+      refreshVideoUrl(app.video_url);
     }
   }
 
@@ -129,6 +142,7 @@ export function ApplicationsTable({
                         size="sm"
                         onClick={() => openDetail(app)}
                         className="text-sand-300 hover:text-sand-100"
+                        aria-label={`View ${app.first_name} ${app.last_name}'s application`}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -173,15 +187,30 @@ export function ApplicationsTable({
             {/* Video */}
             {selected?.video_url && (
               <div>
-                <h4 className="text-sm font-medium text-pink-400">Video</h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-pink-400">Video</h4>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => selected.video_url && refreshVideoUrl(selected.video_url)}
+                    disabled={videoLoading}
+                    className="text-sand-400 hover:text-sand-200 h-7 px-2"
+                    aria-label="Refresh video URL"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${videoLoading ? "animate-spin" : ""}`} />
+                  </Button>
+                </div>
                 {videoUrl ? (
                   <video
                     src={videoUrl}
                     controls
                     className="mt-1 w-full max-w-md rounded-lg border border-blue-900/50"
+                    onError={() => selected.video_url && refreshVideoUrl(selected.video_url)}
                   />
                 ) : (
-                  <p className="mt-1 text-sm text-sand-500">Loading video…</p>
+                  <p className="mt-1 text-sm text-sand-500">
+                    {videoLoading ? "Loading video…" : "Failed to load video."}
+                  </p>
                 )}
               </div>
             )}

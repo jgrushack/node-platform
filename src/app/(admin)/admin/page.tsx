@@ -6,9 +6,9 @@ import { Users, FileText, Briefcase, DollarSign } from "lucide-react";
 
 const stats = [
   {
-    label: "Total Members",
-    value: "84",
-    change: "+12 this year",
+    label: "Total Campers",
+    value: "55",
+    change: "~same as 2025",
     icon: Users,
     color: "text-pink-400",
   },
@@ -27,9 +27,9 @@ const stats = [
     color: "text-coral",
   },
   {
-    label: "Revenue",
+    label: "Dues Collected",
     value: "$42,800",
-    change: "Dues collected",
+    change: "on track",
     icon: DollarSign,
     color: "text-golden",
   },

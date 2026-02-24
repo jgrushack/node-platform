@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Table,
@@ -24,6 +24,7 @@ import {
   Send,
   ArrowLeft,
   Video,
+  RefreshCw,
 } from "lucide-react";
 import type { ApplicationRow, ApplicationComment } from "@/lib/types/application";
 import {
@@ -176,19 +177,30 @@ function ApplicationDetail({
   const [comments, setComments] = useState<ApplicationComment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isCommenting, startCommentTransition] = useTransition();
+
+  const refreshVideoUrl = useCallback(async () => {
+    if (!application.video_url) return;
+    setVideoLoading(true);
+    const r = await getVideoSignedUrl(application.video_url);
+    if ("url" in r) setVideoUrl(r.url);
+    else toast.error("Failed to load video");
+    setVideoLoading(false);
+  }, [application.video_url]);
 
   useEffect(() => {
     getApplicationComments(application.id).then((r) => {
       if (!("error" in r)) setComments(r);
     });
-    if (application.video_url) {
-      getVideoSignedUrl(application.video_url).then((r) => {
-        if ("url" in r) setVideoUrl(r.url);
-      });
-    }
-  }, [application.id, application.video_url]);
+    refreshVideoUrl();
+    // Auto-refresh signed URL every 50 minutes (URLs expire in 1 hour)
+    const interval = application.video_url
+      ? setInterval(refreshVideoUrl, 50 * 60 * 1000)
+      : undefined;
+    return () => clearInterval(interval);
+  }, [application.id, refreshVideoUrl]);
 
   function handleStatusUpdate(status: "approved" | "rejected" | "waitlist") {
     startTransition(async () => {
@@ -265,18 +277,33 @@ function ApplicationDetail({
           {/* Video */}
           {application.video_url && (
             <div className="glass-card rounded-2xl p-6">
-              <h3 className="text-sm font-medium text-pink-400 flex items-center gap-2 mb-3">
-                <Video className="h-4 w-4" />
-                Video Submission
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-pink-400 flex items-center gap-2">
+                  <Video className="h-4 w-4" />
+                  Video Submission
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={refreshVideoUrl}
+                  disabled={videoLoading}
+                  className="text-sand-400 hover:text-sand-200"
+                  aria-label="Refresh video URL"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${videoLoading ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
               {videoUrl ? (
                 <video
                   src={videoUrl}
                   controls
                   className="w-full rounded-lg border border-blue-900/50"
+                  onError={refreshVideoUrl}
                 />
               ) : (
-                <p className="text-sm text-sand-500">Loading video…</p>
+                <p className="text-sm text-sand-500">
+                  {videoLoading ? "Loading video…" : "Failed to load video."}
+                </p>
               )}
             </div>
           )}
@@ -313,7 +340,7 @@ function ApplicationDetail({
                 className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10"
               >
                 <XCircle className="mr-2 h-4 w-4" />
-                Deny
+                Reject
               </Button>
             </div>
           </div>

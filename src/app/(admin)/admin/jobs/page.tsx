@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Edit, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 const jobs = [
   {
@@ -120,7 +121,10 @@ export default function AdminJobsPage() {
                 <Label className="text-sand-300">Description</Label>
                 <Textarea placeholder="What does this job involve?" />
               </div>
-              <Button className="w-full rounded-full bg-amber text-blue-950 font-semibold hover:bg-amber/90">
+              <Button
+                className="w-full rounded-full bg-amber text-blue-950 font-semibold hover:bg-amber/90"
+                onClick={() => toast.info("Job management coming soon!")}
+              >
                 Create Job
               </Button>
             </div>
@@ -177,6 +181,8 @@ export default function AdminJobsPage() {
                         variant="ghost"
                         size="sm"
                         className="text-sand-300 hover:text-sand-100"
+                        onClick={() => toast.info("Job editing coming soon!")}
+                        aria-label={`Edit ${job.title}`}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -184,6 +190,8 @@ export default function AdminJobsPage() {
                         variant="ghost"
                         size="sm"
                         className="text-red-400 hover:text-red-300"
+                        onClick={() => toast.info("Job deletion coming soon!")}
+                        aria-label={`Delete ${job.title}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

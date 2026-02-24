@@ -23,6 +23,7 @@ export default function VerifyPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setState("success");
+        setTimeout(() => router.push("/dashboard"), 1500);
         return;
       }
 

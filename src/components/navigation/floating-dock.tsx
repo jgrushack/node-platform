@@ -102,7 +102,10 @@ function MobileDock() {
     <div className="fixed bottom-4 right-4 z-50 md:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <button className="glass glow-pink rounded-full p-4 text-pink-400">
+          <button
+            className="glass glow-pink rounded-full p-4 text-pink-400"
+            aria-label={open ? "Close navigation menu" : "Open navigation menu"}
+          >
             {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </SheetTrigger>
