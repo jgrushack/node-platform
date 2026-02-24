@@ -75,7 +75,9 @@ export async function submitApplication(
   }
 
   // Non-blocking: sync to Google Sheet for redundancy
-  appendApplicationToSheet(parsed.data).catch(() => {});
+  appendApplicationToSheet(parsed.data).catch((err) => {
+    console.error("[Google Sheets sync]", err);
+  });
 
   return { id };
 }
