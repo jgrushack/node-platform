@@ -598,14 +598,14 @@ function VideoStep({ form, update }: FormStepProps) {
         </p>
       </div>
       <div className="space-y-4 rounded-xl border border-blue-900/30 bg-blue-900/10 p-6">
-        <div className="space-y-2 text-sm text-sand-200">
-          <p className="font-semibold text-pink-400">What to cover:</p>
-          <ul className="list-inside list-disc space-y-1 ml-2">
-            <li>Who you are and where you&apos;re from</li>
-            <li>Why NODE</li>
-            <li>How you see yourself contributing</li>
-            <li>Show us your personality — we care about vibe</li>
-          </ul>
+        <div className="space-y-3 text-sm text-sand-200">
+          <p className="font-semibold text-pink-400">Answer these prompts:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Why do you want to go to Burning Man?</li>
+            <li>Why do you want to camp with NODE?</li>
+            <li>Who are you and what do you bring?</li>
+          </ol>
+          <p className="text-sand-400 text-xs mt-2">Show us your personality — we care about vibe.</p>
         </div>
 
         <div className="mt-6 border-2 border-dashed border-blue-900/50 rounded-lg overflow-hidden transition-colors">
