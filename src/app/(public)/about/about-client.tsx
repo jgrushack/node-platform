@@ -58,22 +58,33 @@ export default function AboutClient() {
     <main className="min-h-screen px-6 py-24">
       {/* Header */}
       <section className="mx-auto max-w-3xl text-center">
-        <motion.h1
-          className="text-5xl font-bold text-gradient-warm sm:text-6xl"
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          About NODE
-        </motion.h1>
-        <motion.p
-          className="mt-6 text-lg text-sand-300"
+          <h1 className="text-5xl font-bold text-gradient-warm sm:text-6xl">
+            History of <span className="font-brand">NODE</span>
+          </h1>
+        </motion.div>
+        <motion.div
+          className="mt-8 inline-block text-left"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          Named after the structure of a decentralized network — the point where an individual connects to something larger.
-        </motion.p>
+          <p className="text-2xl font-bold text-sand-100 font-brand tracking-wide">node</p>
+          <p className="mt-1 text-sm text-sand-400 italic">American</p>
+          <p className="mt-0.5 text-sand-300">
+            <span className="text-sand-400">/</span>
+            <span className="mx-1">noʊd</span>
+            <span className="text-sand-400">/</span>
+          </p>
+          <p className="mt-2 text-sand-300">
+            <span className="text-sand-400 italic mr-2">noun</span>
+            a connection point in a network.
+          </p>
+        </motion.div>
       </section>
 
       {/* Timeline */}
