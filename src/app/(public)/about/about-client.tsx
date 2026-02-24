@@ -59,28 +59,26 @@ export default function AboutClient() {
       {/* Header */}
       <section className="mx-auto max-w-3xl text-center">
         <motion.h1
-          className="text-5xl font-bold text-gradient-warm sm:text-6xl"
+          className="text-6xl font-bold text-gradient-warm sm:text-7xl"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
           History
         </motion.h1>
-        <motion.div
-          className="mt-8 inline-block text-left"
+        <motion.p
+          className="mt-6 flex items-baseline justify-center gap-3 text-sand-300"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          <p className="text-2xl font-bold text-sand-100 font-brand tracking-wide">NODE</p>
-          <p className="mt-1 text-sand-300">
-            <span className="text-sand-400">/</span>
-            <span className="mx-1">noʊd</span>
-            <span className="text-sand-400">/</span>
-            <span className="text-sand-400 italic ml-3 mr-2">noun</span>
-            a connection point in a network.
-          </p>
-        </motion.div>
+          <span className="text-xl font-bold text-sand-100 font-brand tracking-wide">NODE</span>
+          <span className="text-sand-400">/</span>
+          <span>noʊd</span>
+          <span className="text-sand-400">/</span>
+          <span className="text-sand-400 italic">noun</span>
+          <span>a connection point in a network.</span>
+        </motion.p>
       </section>
 
       {/* Timeline */}
