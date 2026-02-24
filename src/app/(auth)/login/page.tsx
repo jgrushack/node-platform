@@ -10,6 +10,8 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [usePassword, setUsePassword] = useState(false);
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -20,18 +22,31 @@ export default function LoginPage() {
     setError("");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
 
-    setLoading(false);
-    if (error) {
-      setError(error.message);
+    if (usePassword) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      setLoading(false);
+      if (error) {
+        setError(error.message);
+      } else {
+        window.location.href = "/dashboard";
+      }
     } else {
-      setSent(true);
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      setLoading(false);
+      if (error) {
+        setError(error.message);
+      } else {
+        setSent(true);
+      }
     }
   }
 
@@ -88,6 +103,22 @@ export default function LoginPage() {
         </div>
       </div>
 
+      {usePassword && (
+        <div className="space-y-2">
+          <Label htmlFor="password" className="text-sand-200">
+            Password
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+      )}
+
       <Button
         type="submit"
         disabled={loading}
@@ -98,8 +129,16 @@ export default function LoginPage() {
         ) : (
           <ArrowRight className="mr-2 h-4 w-4" />
         )}
-        {loading ? "Sending..." : "Send Magic Link"}
+        {loading ? (usePassword ? "Signing in..." : "Sending...") : (usePassword ? "Sign In" : "Send Magic Link")}
       </Button>
+
+      <button
+        type="button"
+        onClick={() => setUsePassword(!usePassword)}
+        className="w-full text-center text-xs text-sand-500 hover:text-sand-300 transition-colors"
+      >
+        {usePassword ? "Use magic link instead" : "Use password instead"}
+      </button>
 
       <p className="text-center text-sm text-sand-400">
         Don&apos;t have an account?{" "}

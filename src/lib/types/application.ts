@@ -1,17 +1,17 @@
 import { z } from "zod";
 
 export const applicationSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  email: z.string().email("Valid email is required"),
-  phone: z.string().optional(),
-  playaName: z.string().optional(),
+  firstName: z.string().min(1, "First name is required").max(100),
+  lastName: z.string().min(1, "Last name is required").max(100),
+  email: z.string().email("Valid email is required").max(254),
+  phone: z.string().max(20).optional(),
+  playaName: z.string().max(100).optional(),
   yearsAttended: z.string().min(1, "Please select your experience level"),
-  previousCamps: z.string().optional(),
-  favoritePrinciple: z.string().optional(),
-  principleReason: z.string().optional(),
-  skills: z.string().optional(),
-  referredBy: z.string().optional(),
+  previousCamps: z.string().max(2000).optional(),
+  favoritePrinciple: z.string().max(200).optional(),
+  principleReason: z.string().max(2000).optional(),
+  skills: z.string().max(2000).optional(),
+  referredBy: z.string().max(200).optional(),
 });
 
 export type ApplicationFormData = z.infer<typeof applicationSchema>;
@@ -38,4 +38,18 @@ export interface ApplicationRow {
   profile_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ApplicationComment {
+  id: string;
+  application_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  author: {
+    first_name: string | null;
+    last_name: string | null;
+    playa_name: string | null;
+    email: string;
+  };
 }

@@ -5,13 +5,15 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, User, ArrowRight, CheckCircle, Loader2 } from "lucide-react";
+import { Mail, User, Lock, ArrowRight, CheckCircle, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -20,11 +22,23 @@ export default function SignupPage() {
     setLoading(true);
     setError("");
 
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      setLoading(false);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      setLoading(false);
+      return;
+    }
+
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signUp({
       email,
+      password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: {
           full_name: name,
         },
@@ -35,23 +49,26 @@ export default function SignupPage() {
     if (error) {
       setError(error.message);
     } else {
-      setSent(true);
+      setSuccess(true);
     }
   }
 
-  if (sent) {
+  if (success) {
     return (
       <div className="flex flex-col items-center text-center">
         <CheckCircle className="mb-4 h-12 w-12 text-pink-400" />
         <h1 className="text-2xl font-bold text-sand-100">Check your email</h1>
         <p className="mt-2 text-sm text-sand-300">
-          We sent a magic link to{" "}
+          We sent a confirmation link to{" "}
           <span className="text-pink-400">{email}</span>
+        </p>
+        <p className="mt-1 text-xs text-sand-500">
+          Click the link in the email to activate your account.
         </p>
         <Button
           variant="ghost"
           className="mt-6 text-pink-400 hover:text-pink-300"
-          onClick={() => setSent(false)}
+          onClick={() => setSuccess(false)}
         >
           Try a different email
         </Button>
@@ -110,6 +127,44 @@ export default function SignupPage() {
         </div>
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="password" className="text-sand-200">
+          Password
+        </Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sand-400" />
+          <Input
+            id="password"
+            type="password"
+            placeholder="Min. 8 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="pl-10"
+            required
+            minLength={8}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="confirmPassword" className="text-sand-200">
+          Confirm Password
+        </Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sand-400" />
+          <Input
+            id="confirmPassword"
+            type="password"
+            placeholder="Repeat password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="pl-10"
+            required
+            minLength={8}
+          />
+        </div>
+      </div>
+
       <Button
         type="submit"
         disabled={loading}
@@ -120,7 +175,7 @@ export default function SignupPage() {
         ) : (
           <ArrowRight className="mr-2 h-4 w-4" />
         )}
-        {loading ? "Sending..." : "Send Magic Link"}
+        {loading ? "Creating account..." : "Create Account"}
       </Button>
 
       <p className="text-center text-sm text-sand-400">

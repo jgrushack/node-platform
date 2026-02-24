@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FileText,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { createClient } from "@/lib/supabase/client";
 
 const sidebarItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -24,6 +26,33 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState("");
+  const [userInitials, setUserInitials] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const email = user.email || "";
+      setUserEmail(email);
+      const name = user.user_metadata?.full_name || email;
+      const parts = name.split(/[\s@]/);
+      setUserInitials(
+        parts.length >= 2
+          ? (parts[0][0] + parts[1][0]).toUpperCase()
+          : name.substring(0, 2).toUpperCase()
+      );
+    });
+  }, []);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -65,14 +94,19 @@ export default function AdminLayout({
           <div className="flex items-center gap-3">
             <Avatar className="h-8 w-8 border border-amber/20">
               <AvatarFallback className="bg-amber/20 text-xs text-amber">
-                AD
+                {userInitials || ".."}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 text-sm">
               <p className="font-medium text-sand-200">Admin</p>
-              <p className="text-xs text-sand-500">admin@node.family</p>
+              <p className="text-xs text-sand-500 truncate">{userEmail || "..."}</p>
             </div>
-            <button className="text-sand-400 hover:text-sand-200">
+            <button
+              className="text-sand-400 hover:text-sand-200"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              aria-label="Log out"
+            >
               <LogOut className="h-4 w-4" />
             </button>
           </div>

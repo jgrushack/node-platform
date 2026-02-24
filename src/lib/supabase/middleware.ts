@@ -1,12 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+function getEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) throw new Error(`Missing env var: ${key}`);
+  return value;
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    getEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
     {
       cookies: {
         getAll() {
@@ -42,13 +48,17 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect non-admin users away from /admin routes
   if (user && request.nextUrl.pathname.startsWith("/admin")) {
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .single();
 
-    if (!profile || !["admin", "super_admin"].includes(profile.role)) {
+    if (
+      profileError ||
+      !profile ||
+      !["admin", "super_admin"].includes(profile.role)
+    ) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);

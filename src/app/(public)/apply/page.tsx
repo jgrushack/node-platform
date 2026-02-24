@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,28 @@ const TEN_PRINCIPLES = [
   "Immediacy"
 ];
 
+interface ApplyFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  playaName: string;
+  yearsAttended: string;
+  previousCamps: string;
+  virginExpectations: string;
+  favoritePrinciple: string;
+  principleReason: string;
+  skills: string;
+  referredBy: string;
+  videoFile: File | null;
+  agreeTerms: boolean;
+}
+
+type FormStepProps = {
+  form: ApplyFormData;
+  update: <K extends keyof ApplyFormData>(field: K, value: ApplyFormData[K]) => void;
+};
+
 const slideVariants = {
   enter: (direction: number) => ({
     x: direction > 0 ? 200 : -200,
@@ -67,10 +89,22 @@ const slideVariants = {
   }),
 };
 
+function canAdvance(step: number, form: ApplyFormData): boolean {
+  switch (step) {
+    case 0: return true; // Welcome
+    case 1: return !!(form.firstName && form.lastName && form.email);
+    case 2: return !!form.yearsAttended;
+    case 3: return true; // Contribution (optional fields)
+    case 4: return true; // Video (optional)
+    case 5: return true; // Review
+    default: return true;
+  }
+}
+
 export default function ApplyPage() {
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(0);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ApplyFormData>({
     firstName: "",
     lastName: "",
     email: "",
@@ -83,7 +117,7 @@ export default function ApplyPage() {
     principleReason: "",
     skills: "",
     referredBy: "",
-    videoFile: null as File | null,
+    videoFile: null,
     agreeTerms: false,
   });
 
@@ -91,6 +125,10 @@ export default function ApplyPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   function next() {
+    if (!canAdvance(step, form)) {
+      toast.error("Please fill in the required fields before continuing.");
+      return;
+    }
     setDirection(1);
     setStep((s) => Math.min(s + 1, steps.length - 1));
   }
@@ -100,7 +138,7 @@ export default function ApplyPage() {
     setStep((s) => Math.max(s - 1, 0));
   }
 
-  function update(field: string, value: any) {
+  function update<K extends keyof ApplyFormData>(field: K, value: ApplyFormData[K]) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
@@ -269,48 +307,45 @@ function WelcomeStep() {
   );
 }
 
-function PersonalStep({
-  form,
-  update,
-}: {
-  form: Record<string, any>;
-  update: (field: string, value: any) => void;
-}) {
+function PersonalStep({ form, update }: FormStepProps) {
   return (
     <div className="space-y-5">
       <h2 className="text-2xl font-bold text-sand-100">Personal Info</h2>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label className="text-sand-300">First Name</Label>
+          <Label className="text-sand-300">First Name *</Label>
           <Input
-            value={form.firstName as string}
+            value={form.firstName}
             onChange={(e) => update("firstName", e.target.value)}
             placeholder="Jane"
+            required
           />
         </div>
         <div className="space-y-2">
-          <Label className="text-sand-300">Last Name</Label>
+          <Label className="text-sand-300">Last Name *</Label>
           <Input
-            value={form.lastName as string}
+            value={form.lastName}
             onChange={(e) => update("lastName", e.target.value)}
             placeholder="Doe"
+            required
           />
         </div>
       </div>
       <div className="space-y-2">
-        <Label className="text-sand-300">Email</Label>
+        <Label className="text-sand-300">Email *</Label>
         <Input
           type="email"
-          value={form.email as string}
+          value={form.email}
           onChange={(e) => update("email", e.target.value)}
           placeholder="you@example.com"
+          required
         />
       </div>
       <div className="space-y-2">
         <Label className="text-sand-300">Phone</Label>
         <Input
           type="tel"
-          value={form.phone as string}
+          value={form.phone}
           onChange={(e) => update("phone", e.target.value)}
           placeholder="+1 (555) 000-0000"
         />
@@ -318,7 +353,7 @@ function PersonalStep({
       <div className="space-y-2">
         <Label className="text-sand-300">Playa Name (optional)</Label>
         <Input
-          value={form.playaName as string}
+          value={form.playaName}
           onChange={(e) => update("playaName", e.target.value)}
           placeholder="Your playa name"
         />
