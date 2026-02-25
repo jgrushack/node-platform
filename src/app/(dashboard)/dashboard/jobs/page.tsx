@@ -82,13 +82,13 @@ export default function JobsPage() {
       </motion.div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sand-400" />
           <Input placeholder="Search jobs..." className="pl-10" />
         </div>
         <Select>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent className="glass">
@@ -113,7 +113,7 @@ export default function JobsPage() {
               transition={{ delay: i * 0.05 }}
             >
               <Card className="glass-card border-0">
-                <CardHeader className="flex flex-row items-start justify-between pb-3">
+                <CardHeader className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <CardTitle className="text-lg text-sand-100">
                       {job.title}
@@ -134,7 +134,7 @@ export default function JobsPage() {
                   </Badge>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-sand-400">
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm text-sand-400">
                     <span className="flex items-center gap-1">
                       <MapPin className="h-3.5 w-3.5" />
                       {job.location}
@@ -147,16 +147,14 @@ export default function JobsPage() {
                       <Users className="h-3.5 w-3.5" />
                       {job.filled}/{job.slots} spots
                     </span>
-                    <div className="ml-auto">
-                      <Button
-                        size="sm"
-                        disabled={isFull}
-                        onClick={() => toast.info("Job signups opening soon!")}
-                        className="rounded-full bg-pink-500 text-white hover:bg-pink-600 disabled:bg-sand-700/30 disabled:text-sand-500"
-                      >
-                        {isFull ? "Full" : "Sign Up"}
-                      </Button>
-                    </div>
+                    <Button
+                      size="sm"
+                      disabled={isFull}
+                      onClick={() => toast.info("Job signups opening soon!")}
+                      className="ml-auto rounded-full bg-pink-500 text-white hover:bg-pink-600 disabled:bg-sand-700/30 disabled:text-sand-500"
+                    >
+                      {isFull ? "Full" : "Sign Up"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

@@ -370,7 +370,7 @@ export default function DashboardPage() {
                 <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${stat.valueColor}`}>
+                <div className={`text-xl sm:text-2xl font-bold ${stat.valueColor}`}>
                   {stat.value}
                 </div>
                 {stat.subtext && (
@@ -519,7 +519,7 @@ export default function DashboardPage() {
                 <ul className="space-y-3">
                   {upcomingBmEvents.map((event) => (
                     <li key={event.label} className="flex items-start gap-3">
-                      <span className="w-28 flex-shrink-0 text-xs font-medium text-sand-400 pt-0.5">
+                      <span className="w-20 sm:w-28 flex-shrink-0 text-xs font-medium text-sand-400 pt-0.5">
                         {event.date}
                       </span>
                       <span className="text-sm text-sand-200">
@@ -558,7 +558,7 @@ export default function DashboardPage() {
                 <ul className="space-y-3">
                   {nodeEvents.map((event) => (
                     <li key={event.label} className="flex items-start gap-3">
-                      <span className="w-28 flex-shrink-0 text-xs font-medium text-sand-400 pt-0.5">
+                      <span className="w-20 sm:w-28 flex-shrink-0 text-xs font-medium text-sand-400 pt-0.5">
                         {event.date}
                       </span>
                       <span className="text-sm text-sand-200">

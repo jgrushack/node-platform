@@ -393,13 +393,13 @@ export default function MembersPage() {
           if (!open) setSelectedMember(null);
         }}
       >
-        <DialogContent className="border-pink-500/10 max-h-[85vh] overflow-y-auto sm:max-w-lg bg-[rgba(36,3,68,0.85)] backdrop-blur-xl">
+        <DialogContent className="border-pink-500/10 max-h-[85vh] overflow-y-auto sm:max-w-lg bg-[rgba(36,3,68,0.92)] backdrop-blur-xl p-4 sm:p-6">
           {selectedMember && (
             <div className="space-y-5">
               {/* Header */}
               <DialogHeader className="gap-0">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16 shrink-0 border-2 border-pink-500/20">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <Avatar className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 border-2 border-pink-500/20">
                     {selectedMember.avatar_url && (
                       <AvatarImage src={selectedMember.avatar_url} alt="" />
                     )}

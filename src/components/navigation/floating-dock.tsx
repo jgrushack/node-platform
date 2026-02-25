@@ -18,7 +18,7 @@ import {
   User,
   LogOut,
 } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { createClient } from "@/lib/supabase/client";
 
 const publicNavItems = [
@@ -267,6 +267,7 @@ function MobileDock({ user, loading }: { user: DockUser; loading: boolean }) {
               : "glass border-t-pink-500/20"
           }`}
         >
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
           <nav className="flex flex-col gap-2 pb-8 pt-4">
             {navItems.map((item) => {
               const isActive =
