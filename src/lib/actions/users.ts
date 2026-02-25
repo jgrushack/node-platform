@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 export type UserRole =
   | "member"
@@ -34,7 +33,7 @@ async function requireSuperAdmin() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" as const, user: null };
+  if (!user) return { error: "Not authenticated" as const, supabase, user: null };
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -43,20 +42,19 @@ async function requireSuperAdmin() {
     .single();
 
   if (!profile || profile.role !== "super_admin") {
-    return { error: "Unauthorized" as const, user: null };
+    return { error: "Unauthorized" as const, supabase, user: null };
   }
 
-  return { error: null, user };
+  return { error: null, supabase, user };
 }
 
 export async function getUsers(): Promise<
   UserProfile[] | { error: string }
 > {
-  const { error } = await requireSuperAdmin();
-  if (error) return { error };
+  const { error, supabase } = await requireSuperAdmin();
+  if (error || !supabase) return { error: error ?? "Not authenticated" };
 
-  const admin = createAdminClient();
-  const { data, error: dbError } = await admin
+  const { data, error: dbError } = await supabase
     .from("profiles")
     .select("*")
     .order("created_at", { ascending: false });
@@ -73,8 +71,8 @@ export async function updateUserRole(
   userId: string,
   role: UserRole
 ): Promise<{ success: true } | { error: string }> {
-  const { error, user } = await requireSuperAdmin();
-  if (error || !user) return { error: error ?? "Not authenticated" };
+  const { error, supabase, user } = await requireSuperAdmin();
+  if (error || !supabase || !user) return { error: error ?? "Not authenticated" };
 
   if (userId === user.id) {
     return { error: "Cannot change your own role." };
@@ -91,8 +89,7 @@ export async function updateUserRole(
     return { error: "Invalid role." };
   }
 
-  const admin = createAdminClient();
-  const { error: dbError } = await admin
+  const { error: dbError } = await supabase
     .from("profiles")
     .update({ role })
     .eq("id", userId);
@@ -120,11 +117,10 @@ export async function updateUserProfile(
     node_events_attended?: string[];
   }
 ): Promise<{ success: true } | { error: string }> {
-  const { error } = await requireSuperAdmin();
-  if (error) return { error };
+  const { error, supabase } = await requireSuperAdmin();
+  if (error || !supabase) return { error: error ?? "Not authenticated" };
 
-  const admin = createAdminClient();
-  const { error: dbError } = await admin
+  const { error: dbError } = await supabase
     .from("profiles")
     .update(data)
     .eq("id", userId);
