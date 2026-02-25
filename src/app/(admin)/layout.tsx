@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   FileText,
   Briefcase,
+  UsersRound,
   LogOut,
   Menu,
 } from "lucide-react";
@@ -16,11 +17,13 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 
-const sidebarItems = [
+const baseSidebarItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/applications", label: "Applications", icon: FileText },
   { href: "/admin/jobs", label: "Jobs", icon: Briefcase },
 ];
+
+const usersItem = { href: "/admin/users", label: "Users", icon: UsersRound };
 
 export default function AdminLayout({
   children,
@@ -31,6 +34,7 @@ export default function AdminLayout({
   const router = useRouter();
   const [userEmail, setUserEmail] = useState("");
   const [userInitials, setUserInitials] = useState("");
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -46,6 +50,14 @@ export default function AdminLayout({
           ? (parts[0][0] + parts[1][0]).toUpperCase()
           : name.substring(0, 2).toUpperCase()
       );
+      supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.role === "super_admin") setIsSuperAdmin(true);
+        });
     });
   }, []);
 
@@ -57,6 +69,10 @@ export default function AdminLayout({
   }
 
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sidebarItems = isSuperAdmin
+    ? [...baseSidebarItems, usersItem]
+    : baseSidebarItems;
 
   const navLinks = (onNavigate?: () => void) =>
     sidebarItems.map((item) => {

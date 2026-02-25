@@ -13,6 +13,8 @@ import {
   Menu,
   X,
   UsersRound,
+  Eye,
+  ArrowLeft,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -48,8 +50,14 @@ export default function DashboardLayout({
   const [isCommittee, setIsCommittee] = useState(false);
   const [userInitials, setUserInitials] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
+  const [viewAsRole, setViewAsRole] = useState<string | null>(null);
+  const [realRole, setRealRole] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for view-as mode
+    const stored = localStorage.getItem("viewAsRole");
+    if (stored) setViewAsRole(stored);
+
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
@@ -67,7 +75,16 @@ export default function DashboardLayout({
         .eq("id", user.id)
         .single()
         .then(({ data }) => {
-          if (["committee", "admin", "super_admin"].includes(data?.role)) {
+          const role = data?.role || "member";
+          setRealRole(role);
+
+          // Use viewAs role for UI if super_admin, otherwise real role
+          const effectiveRole =
+            stored && role === "super_admin" ? stored : role;
+
+          if (
+            ["committee", "admin", "super_admin"].includes(effectiveRole)
+          ) {
             setIsCommittee(true);
           }
         });
@@ -187,6 +204,32 @@ export default function DashboardLayout({
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
+
+        {/* View-as banner */}
+        {viewAsRole && realRole === "super_admin" && (
+          <div className="flex items-center justify-between bg-amber/15 px-4 py-2 md:px-6">
+            <div className="flex items-center gap-2 text-sm text-amber">
+              <Eye className="h-4 w-4" />
+              <span>
+                Viewing as{" "}
+                <span className="font-semibold capitalize">
+                  {viewAsRole.replace("_", " ")}
+                </span>
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem("viewAsRole");
+                setViewAsRole(null);
+                router.push("/admin/users");
+              }}
+              className="flex items-center gap-1.5 rounded-full bg-amber/20 px-3 py-1 text-xs font-medium text-amber hover:bg-amber/30 transition-colors"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              Exit Preview
+            </button>
+          </div>
+        )}
 
         {/* Page content */}
         <ScrollArea className="flex-1">
