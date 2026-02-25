@@ -181,7 +181,7 @@ function DesktopDock({ user, loading }: { user: DockUser; loading: boolean }) {
         </motion.div>
       </AnimatePresence>
 
-      {/* Separate login pill — only when logged out */}
+      {/* Separate login button — only when logged out */}
       {!loading && !user && (
         <motion.div
           initial={{ y: 100, opacity: 0 }}
@@ -190,12 +190,11 @@ function DesktopDock({ user, loading }: { user: DockUser; loading: boolean }) {
         >
           <Link href="/login">
             <motion.div
-              className="glass-dock-login flex items-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-sand-100 transition-colors hover:text-amber"
-              whileHover={{ scale: 1.05 }}
+              className="glass-dock-login flex h-[46px] w-[46px] items-center justify-center rounded-full text-sand-100 transition-colors hover:text-amber"
+              whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
             >
-              <LogIn className="h-4 w-4" />
-              <span>Log in</span>
+              <LogIn className="h-5 w-5" />
             </motion.div>
           </Link>
         </motion.div>
@@ -222,7 +221,7 @@ function MobileDock({ user, loading }: { user: DockUser; loading: boolean }) {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 md:hidden">
-      {/* Login pill on mobile */}
+      {/* Login button on mobile */}
       {!loading && !user && (
         <motion.div
           initial={{ y: 100, opacity: 0 }}
@@ -230,9 +229,8 @@ function MobileDock({ user, loading }: { user: DockUser; loading: boolean }) {
           transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.7 }}
         >
           <Link href="/login">
-            <div className="glass-dock-login flex items-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-sand-100">
-              <LogIn className="h-4 w-4" />
-              <span>Log in</span>
+            <div className="glass-dock-login flex h-14 w-14 items-center justify-center rounded-full text-sand-100">
+              <LogIn className="h-5 w-5" />
             </div>
           </Link>
         </motion.div>
