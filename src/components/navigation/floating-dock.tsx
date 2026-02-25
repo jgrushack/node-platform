@@ -86,7 +86,7 @@ function DesktopDock({ user, loading }: { user: DockUser; loading: boolean }) {
   }
 
   return (
-    <nav className="fixed bottom-6 left-1/2 z-50 hidden -translate-x-1/2 md:flex items-end gap-3">
+    <nav className="fixed bottom-6 left-1/2 z-50 hidden -translate-x-1/2 md:flex items-center gap-3">
       {/* Main nav pill */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -190,7 +190,7 @@ function DesktopDock({ user, loading }: { user: DockUser; loading: boolean }) {
         >
           <Link href="/login">
             <motion.div
-              className="glass-dock-login flex h-[46px] w-[46px] items-center justify-center rounded-full text-sand-100 transition-colors hover:text-amber"
+              className="glass-dock-login flex h-[52px] w-[52px] items-center justify-center rounded-full text-sand-100 transition-colors hover:text-amber"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
             >
