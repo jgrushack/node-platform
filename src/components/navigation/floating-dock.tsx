@@ -190,11 +190,23 @@ function DesktopDock({ user, loading }: { user: DockUser; loading: boolean }) {
         >
           <Link href="/login">
             <motion.div
-              className="glass-dock-login flex h-[52px] w-[52px] items-center justify-center rounded-full text-sand-100 transition-colors hover:text-amber"
+              className="relative glass-dock-login flex h-[52px] w-[52px] items-center justify-center rounded-full text-sand-100 transition-colors hover:text-amber"
+              onMouseEnter={() => setHoveredIndex(-1)}
+              onMouseLeave={() => setHoveredIndex(null)}
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
             >
               <LogIn className="h-5 w-5" />
+              {hoveredIndex === -1 && (
+                <motion.span
+                  className="absolute -top-8 whitespace-nowrap rounded-md bg-blue-900/90 px-2 py-1 text-xs text-sand-200"
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                >
+                  Log in
+                </motion.span>
+              )}
             </motion.div>
           </Link>
         </motion.div>
