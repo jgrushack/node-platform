@@ -16,7 +16,7 @@ export default function AuthLayout({
           priority
         />
       </div>
-      <div className="glass-card w-full max-w-md rounded-2xl p-8">
+      <div className="glass-card w-full max-w-md rounded-2xl p-8 glow-pink">
         {children}
       </div>
     </div>

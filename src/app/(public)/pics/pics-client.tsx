@@ -57,7 +57,7 @@ function TiltCard({
   return (
     <motion.div
       ref={ref}
-      className="group relative aspect-square cursor-pointer overflow-hidden rounded-2xl"
+      className="glass-tilt relative aspect-square cursor-pointer rounded-2xl"
       style={{
         rotateX,
         rotateY,
@@ -71,14 +71,11 @@ function TiltCard({
       transition={{ duration: 0.5, delay: index * 0.08 }}
     >
       {/* Gradient placeholder */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${color}`} />
-      <div className="absolute inset-0 bg-blue-950/30" />
-
-      {/* Shimmer overlay */}
-      <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-[100%]" />
+      <div className={`absolute inset-0 bg-gradient-to-br ${color} rounded-2xl`} />
+      <div className="absolute inset-0 bg-blue-950/30 rounded-2xl" />
 
       {/* Label */}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-950/80 to-transparent p-4 pt-12">
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-950/80 to-transparent p-4 pt-12 rounded-b-2xl">
         <p className="text-sm font-medium text-sand-200">{label}</p>
       </div>
     </motion.div>
