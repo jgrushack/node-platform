@@ -206,7 +206,7 @@ export default function DashboardPage() {
                       .eq("email", authUser.email!)
                       .order("created_at", { ascending: false })
                       .limit(1)
-                      .single()
+                      .maybeSingle()
                       .then(({ data: app }) => {
                         if (app?.status === "approved") {
                           setCampStatus({ label: "Approved", payment: null });

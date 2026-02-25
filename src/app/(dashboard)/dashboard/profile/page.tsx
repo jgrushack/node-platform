@@ -114,7 +114,7 @@ export default function ProfilePage() {
         .eq("email", user.email!)
         .order("created_at", { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
         .then(({ data: app }) => {
           if (app?.referred_by) {
             setReadOnly((prev) => ({ ...prev, referredBy: app.referred_by }));
