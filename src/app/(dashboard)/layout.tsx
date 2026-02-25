@@ -12,6 +12,7 @@ import {
   FileText,
   Menu,
   X,
+  UsersRound,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -20,12 +21,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 
 const baseSidebarItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/members", label: "Members", icon: UsersRound },
   { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
   { href: "/dashboard/profile", label: "Profile", icon: User },
 ];
@@ -65,7 +67,7 @@ export default function DashboardLayout({
         .eq("id", user.id)
         .single()
         .then(({ data }) => {
-          if (data?.role === "admin" || data?.role === "super_admin") {
+          if (["committee", "admin", "super_admin"].includes(data?.role)) {
             setIsCommittee(true);
           }
         });
@@ -141,7 +143,7 @@ export default function DashboardLayout({
               <SheetContent side="left" className="glass w-64 border-r-pink-500/10 p-0">
                 <div className="flex h-16 items-center gap-3 border-b border-pink-500/10 px-6">
                   <Image src="/node-mark.svg" alt="NODE" width={28} height={28} />
-                  <span className="text-lg font-bold font-brand text-sand-100">NODE</span>
+                  <SheetTitle className="text-lg font-bold font-brand text-sand-100">NODE</SheetTitle>
                 </div>
                 <nav className="space-y-1 px-3 py-4">
                   {navLinks(() => setMobileOpen(false))}
