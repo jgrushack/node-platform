@@ -45,17 +45,17 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_SITE_URL || "https://node.family"
   ),
   openGraph: {
-    title: "NODE",
+    title: "NODE 2026",
     description:
-      "A Burning Man theme camp built on art, music, and communal effort. The point where individuals connect to something larger.",
+      "Art, music, and communal effort on the playa. The point where you connect to something larger.",
     siteName: "NODE",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "NODE",
+    title: "NODE 2026",
     description:
-      "A Burning Man theme camp built on art, music, and communal effort. The point where individuals connect to something larger.",
+      "Art, music, and communal effort on the playa. The point where you connect to something larger.",
   },
   robots: {
     index: true,
