@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
+import { respondToNodeYear } from "@/lib/actions/registrations";
+import { Button } from "@/components/ui/button";
 
 interface UserData {
   firstName: string;
@@ -28,7 +30,7 @@ interface AppCounts {
   needsResponse: number;
 }
 
-type CampStatusLabel = "Unknown" | "Undecided" | "Approved" | "Attending";
+type CampStatusLabel = "Unknown" | "Undecided" | "Approved" | "Attending" | "Not Attending";
 type PaymentState = "unpaid" | "partial" | "paid" | null;
 
 interface CampStatus {
@@ -42,6 +44,7 @@ function getStatusColor(status: CampStatus): string {
     if (status.payment === "partial") return "text-yellow-400";
     return "text-red-400";
   }
+  if (status.label === "Not Attending") return "text-sand-500";
   return "text-sand-400";
 }
 
@@ -52,13 +55,13 @@ function getStatusIconColor(status: CampStatus): string {
     return "text-red-400";
   }
   if (status.label === "Approved") return "text-amber";
+  if (status.label === "Not Attending") return "text-sand-600";
   return "text-sand-500";
 }
 
 function getStatusDisplay(status: CampStatus): string {
+  if (status.label === "Not Attending") return "Not Attending";
   if (status.label !== "Attending") return status.label;
-  if (status.payment === "paid") return "Attending";
-  if (status.payment === "partial") return "Attending";
   return "Attending";
 }
 
@@ -124,6 +127,8 @@ export default function DashboardPage() {
   const [campStatus, setCampStatus] = useState<CampStatus | null>(null);
   const [yearsAtNode, setYearsAtNode] = useState<number | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
+  const [showRegistrationPrompt, setShowRegistrationPrompt] = useState(false);
+  const [registrationLoading, setRegistrationLoading] = useState<string | null>(null);
 
   const userTz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -172,7 +177,7 @@ export default function DashboardPage() {
                 .select("status")
                 .eq("profile_id", authUser.id)
                 .eq("camp_year_id", campYear.id)
-                .single()
+                .maybeSingle()
                 .then(({ data: reg }) => {
                   if (reg && reg.status === "confirmed") {
                     // Registration confirmed — check invoices for payment state
@@ -183,7 +188,7 @@ export default function DashboardPage() {
                       .eq("camp_year_id", campYear.id)
                       .then(({ data: invoices }) => {
                         if (!invoices || invoices.length === 0) {
-                          setCampStatus({ label: "Approved", payment: null });
+                          setCampStatus({ label: "Attending", payment: null });
                           setBalance(0);
                           return;
                         }
@@ -195,27 +200,15 @@ export default function DashboardPage() {
                         else if (totalPaid > 0) payment = "partial";
                         setCampStatus({ label: "Attending", payment });
                       });
+                  } else if (reg && reg.status === "cancelled") {
+                    setCampStatus({ label: "Not Attending", payment: null });
                   } else if (reg) {
                     // Registration exists but not confirmed (pending/waitlisted)
                     setCampStatus({ label: "Undecided", payment: null });
                   } else {
-                    // No registration — check application
-                    supabase
-                      .from("applications")
-                      .select("status")
-                      .eq("email", authUser.email!)
-                      .order("created_at", { ascending: false })
-                      .limit(1)
-                      .maybeSingle()
-                      .then(({ data: app }) => {
-                        if (app?.status === "approved") {
-                          setCampStatus({ label: "Approved", payment: null });
-                        } else if (app) {
-                          setCampStatus({ label: "Undecided", payment: null });
-                        } else {
-                          setCampStatus({ label: "Unknown", payment: null });
-                        }
-                      });
+                    // No registration — show the registration prompt
+                    setShowRegistrationPrompt(true);
+                    setCampStatus({ label: "Undecided", payment: null });
                   }
                 });
             });
@@ -288,6 +281,21 @@ export default function DashboardPage() {
     });
   }
 
+  async function handleRegistrationResponse(response: "yes" | "no" | "maybe") {
+    if (response === "maybe") return; // Do nothing — banner stays until next login
+    setRegistrationLoading(response);
+    const result = await respondToNodeYear(response);
+    setRegistrationLoading(null);
+    if (result.success) {
+      setShowRegistrationPrompt(false);
+      if (response === "yes") {
+        setCampStatus({ label: "Attending", payment: null });
+      } else {
+        setCampStatus({ label: "Not Attending", payment: null });
+      }
+    }
+  }
+
   const statusDisplay = campStatus ? getStatusDisplay(campStatus) : "—";
   const statusSubtext = campStatus ? getStatusSubtext(campStatus) : null;
   const statusIconColor = campStatus
@@ -352,6 +360,49 @@ export default function DashboardPage() {
           Here&apos;s your NODE dashboard.
         </p>
       </motion.div>
+
+      {/* Registration prompt */}
+      {showRegistrationPrompt && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+        >
+          <Card className="glass-card border-0 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 via-amber/5 to-pink-500/5" />
+            <CardContent className="relative py-6 px-6 sm:px-8">
+              <h2 className="text-xl sm:text-2xl font-bold text-sand-100 mb-4">
+                Are you joining NODE in 2026?
+              </h2>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={() => handleRegistrationResponse("yes")}
+                  disabled={registrationLoading !== null}
+                  className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/20 hover:border-green-500/30"
+                >
+                  {registrationLoading === "yes" ? "Saving..." : "Yes, I'm in!"}
+                </Button>
+                <Button
+                  onClick={() => handleRegistrationResponse("maybe")}
+                  disabled={registrationLoading !== null}
+                  variant="ghost"
+                  className="text-sand-400 hover:text-sand-200 hover:bg-sand-700/20"
+                >
+                  Still on the fence
+                </Button>
+                <Button
+                  onClick={() => handleRegistrationResponse("no")}
+                  disabled={registrationLoading !== null}
+                  variant="ghost"
+                  className="text-sand-500 hover:text-sand-300 hover:bg-sand-700/20"
+                >
+                  {registrationLoading === "no" ? "Saving..." : "No, not this year"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
