@@ -19,6 +19,15 @@ import { createClient } from "@/lib/supabase/client";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
 import { respondToNodeYear } from "@/lib/actions/registrations";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Lock, Loader2 as Spinner } from "lucide-react";
 
 interface UserData {
   firstName: string;
@@ -129,6 +138,11 @@ export default function DashboardPage() {
   const [balance, setBalance] = useState<number | null>(null);
   const [showRegistrationPrompt, setShowRegistrationPrompt] = useState(false);
   const [registrationLoading, setRegistrationLoading] = useState<string | null>(null);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
 
   const userTz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -145,6 +159,11 @@ export default function DashboardPage() {
         authUser.user_metadata?.full_name ||
         authUser.email?.split("@")[0] ||
         "there";
+
+      // Prompt password setup if user hasn't set one yet
+      if (!authUser.user_metadata?.password_set) {
+        setShowPasswordDialog(true);
+      }
 
       supabase
         .from("profiles")
@@ -249,6 +268,7 @@ export default function DashboardPage() {
               if (regs) {
                 setYearsAtNode(
                   regs
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     .map((r: any) => r.camp_years?.year)
                     .filter(Boolean).length
                 );
@@ -279,6 +299,32 @@ export default function DashboardPage() {
       label: `${incompleteDocs} document${incompleteDocs > 1 ? "s" : ""} still need to be completed`,
       urgent: false,
     });
+  }
+
+  async function handleSetPassword() {
+    setPasswordError("");
+    if (newPassword.length < 8) {
+      setPasswordError("Password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords don't match.");
+      return;
+    }
+    setSavingPassword(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+      data: { password_set: true },
+    });
+    setSavingPassword(false);
+    if (error) {
+      setPasswordError(error.message);
+    } else {
+      setShowPasswordDialog(false);
+      setNewPassword("");
+      setConfirmPassword("");
+    }
   }
 
   async function handleRegistrationResponse(response: "yes" | "no" | "maybe") {
@@ -335,8 +381,8 @@ export default function DashboardPage() {
       value:
         balance !== null
           ? `$${(balance / 100).toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-            })}`
+            minimumFractionDigits: 2,
+          })}`
           : "—",
       icon: CreditCard,
       color: "text-golden",
@@ -534,9 +580,8 @@ export default function DashboardPage() {
                     className="flex items-center gap-3 text-sm"
                   >
                     <span
-                      className={`h-2 w-2 rounded-full ${
-                        item.urgent ? "bg-coral" : "bg-amber"
-                      }`}
+                      className={`h-2 w-2 rounded-full ${item.urgent ? "bg-coral" : "bg-amber"
+                        }`}
                     />
                     <span className="text-sand-200">{item.label}</span>
                   </li>
@@ -641,18 +686,16 @@ export default function DashboardPage() {
                 {documents.map((doc) => (
                   <li key={doc.label} className="flex items-center gap-3">
                     <span
-                      className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
-                        doc.done
+                      className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${doc.done
                           ? "bg-green-500/20 text-green-400"
                           : "bg-sand-700/30 text-sand-500"
-                      }`}
+                        }`}
                     >
                       {doc.done ? "✓" : ""}
                     </span>
                     <span
-                      className={`text-sm ${
-                        doc.done ? "text-sand-400 line-through" : "text-sand-200"
-                      }`}
+                      className={`text-sm ${doc.done ? "text-sand-400 line-through" : "text-sand-200"
+                        }`}
                     >
                       {doc.label}
                     </span>
@@ -668,6 +711,72 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Set Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="glass border-pink-500/10 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <Lock className="h-5 w-5 text-pink-400" />
+              Set Your Password
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-sand-400">
+            Set a password so you can sign in anytime without a magic link.
+          </p>
+          {passwordError && (
+            <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              {passwordError}
+            </div>
+          )}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password" className="text-sand-300">
+                New Password
+              </Label>
+              <Input
+                id="new-password"
+                type="password"
+                placeholder="At least 8 characters"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password" className="text-sand-300">
+                Confirm Password
+              </Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                placeholder="Re-enter your password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSetPassword()}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleSetPassword}
+                disabled={savingPassword}
+                className="flex-1 rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
+              >
+                {savingPassword && (
+                  <Spinner className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {savingPassword ? "Saving..." : "Set Password"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setShowPasswordDialog(false)}
+                className="text-sand-400 hover:text-sand-200"
+              >
+                Skip
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
