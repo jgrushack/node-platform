@@ -5,78 +5,92 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, ArrowRight, CheckCircle, Loader2 } from "lucide-react";
+import { Mail, Lock, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [usePassword, setUsePassword] = useState(false);
-  const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState<"password" | "magic">("magic");
+  const [magicSent, setMagicSent] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     const supabase = createClient();
-
-    if (usePassword) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      setLoading(false);
-      if (error) {
-        setError(error.message);
-      } else {
-        window.location.href = "/dashboard";
-      }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
     } else {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      setLoading(false);
-      if (error) {
-        setError(error.message);
-      } else {
-        setSent(true);
-      }
+      window.location.href = "/dashboard";
     }
   }
 
-  if (sent) {
+  async function handleMagicLink(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+      },
+    });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      setMagicSent(true);
+    }
+  }
+
+  if (magicSent) {
     return (
-      <div className="flex flex-col items-center text-center">
-        <CheckCircle className="mb-4 h-12 w-12 text-pink-400" />
-        <h1 className="text-2xl font-bold text-sand-100">Check your email</h1>
-        <p className="mt-2 text-sm text-sand-300">
-          We sent a magic link to{" "}
-          <span className="text-pink-400">{email}</span>
-        </p>
+      <div className="space-y-6 text-center">
+        <div>
+          <Mail className="mx-auto h-12 w-12 text-pink-400" />
+          <h1 className="mt-4 text-2xl font-bold text-sand-100">
+            Check your email
+          </h1>
+          <p className="mt-2 text-sm text-sand-300">
+            We sent a magic link to{" "}
+            <span className="font-medium text-sand-100">{email}</span>.
+            <br />
+            Click the link to sign in.
+          </p>
+        </div>
         <Button
           variant="ghost"
-          className="mt-6 text-pink-400 hover:text-pink-300"
-          onClick={() => setSent(false)}
+          className="text-sand-400 hover:text-sand-200"
+          onClick={() => {
+            setMagicSent(false);
+            setEmail("");
+          }}
         >
-          Try a different email
+          Use a different email
         </Button>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form
+      onSubmit={mode === "password" ? handlePasswordLogin : handleMagicLink}
+      className="space-y-6"
+    >
       <div className="text-center">
         <h1 className="text-2xl font-bold text-sand-100">Welcome back</h1>
-        <p className="mt-1 text-sm text-sand-300">
-          Sign in with your email
-        </p>
+        <p className="mt-1 text-sm text-sand-300">Sign in to your account</p>
       </div>
 
       {error && (
@@ -103,19 +117,23 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {usePassword && (
+      {mode === "password" && (
         <div className="space-y-2">
           <Label htmlFor="password" className="text-sand-200">
             Password
           </Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="Your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sand-400" />
+            <Input
+              id="password"
+              type="password"
+              placeholder="Your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="pl-10"
+              required
+            />
+          </div>
         </div>
       )}
 
@@ -126,18 +144,31 @@ export default function LoginPage() {
       >
         {loading ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : mode === "magic" ? (
+          <Sparkles className="mr-2 h-4 w-4" />
         ) : (
           <ArrowRight className="mr-2 h-4 w-4" />
         )}
-        {loading ? (usePassword ? "Signing in..." : "Sending...") : (usePassword ? "Sign In" : "Send Magic Link")}
+        {loading
+          ? mode === "magic"
+            ? "Sending link..."
+            : "Signing in..."
+          : mode === "magic"
+            ? "Send Magic Link"
+            : "Sign In"}
       </Button>
 
       <button
         type="button"
-        onClick={() => setUsePassword(!usePassword)}
-        className="w-full text-center text-xs text-sand-500 hover:text-sand-300 transition-colors"
+        onClick={() => {
+          setMode(mode === "password" ? "magic" : "password");
+          setError("");
+        }}
+        className="w-full text-center text-sm text-sand-400 hover:text-sand-200 transition-colors"
       >
-        {usePassword ? "Use magic link instead" : "Use password instead"}
+        {mode === "password"
+          ? "Sign in with a magic link instead"
+          : "Sign in with password instead"}
       </button>
 
       <p className="text-center text-sm text-sand-400">
