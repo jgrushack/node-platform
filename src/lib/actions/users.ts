@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type UserRole =
   | "member"
@@ -131,4 +132,69 @@ export async function updateUserProfile(
   }
 
   return { success: true };
+}
+
+export interface InviteResult {
+  userId: string;
+  email: string;
+  name: string;
+  link?: string;
+  error?: string;
+}
+
+export async function generateInviteLinks(
+  userIds: string[]
+): Promise<{ results: InviteResult[] } | { error: string }> {
+  const { error, supabase } = await requireSuperAdmin();
+  if (error || !supabase) return { error: error ?? "Not authenticated" };
+
+  if (userIds.length === 0) return { error: "No users selected." };
+  if (userIds.length > 100) return { error: "Max 100 users at a time." };
+
+  // Fetch profiles for the selected users
+  const { data: profiles, error: dbError } = await supabase
+    .from("profiles")
+    .select("id, email, first_name, last_name")
+    .in("id", userIds);
+
+  if (dbError || !profiles) {
+    return { error: "Failed to fetch user profiles." };
+  }
+
+  const adminClient = createAdminClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
+
+  const results: InviteResult[] = [];
+
+  for (const profile of profiles) {
+    const name = [profile.first_name, profile.last_name]
+      .filter(Boolean)
+      .join(" ") || profile.email.split("@")[0];
+
+    const { data, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: "magiclink",
+      email: profile.email,
+      options: {
+        redirectTo: `${siteUrl}/auth/callback?next=/dashboard`,
+      },
+    });
+
+    if (linkError || !data?.properties?.action_link) {
+      results.push({
+        userId: profile.id,
+        email: profile.email,
+        name,
+        error: linkError?.message || "Failed to generate link",
+      });
+    } else {
+      results.push({
+        userId: profile.id,
+        email: profile.email,
+        name,
+        link: data.properties.action_link,
+      });
+    }
+  }
+
+  return { results };
 }

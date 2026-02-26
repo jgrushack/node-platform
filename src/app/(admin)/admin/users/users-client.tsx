@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,17 +24,27 @@ import {
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Search,
   Eye,
   Pencil,
-  Shield,
-  Users,
   Loader2,
+  Link2,
+  Copy,
+  Check,
+  AlertCircle,
+  Mail,
 } from "lucide-react";
-import type { UserProfile, UserRole } from "@/lib/actions/users";
-import { updateUserRole, updateUserProfile } from "@/lib/actions/users";
+import type { UserProfile, UserRole, InviteResult } from "@/lib/actions/users";
+import { updateUserRole, updateUserProfile, generateInviteLinks } from "@/lib/actions/users";
 
 const ROLE_CONFIG: Record<
   UserRole,
@@ -88,6 +97,10 @@ export function UsersClient({
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
   const [savingProfile, setSavingProfile] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [inviting, setInviting] = useState(false);
+  const [inviteResults, setInviteResults] = useState<InviteResult[] | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Filter users
   const filtered = users.filter((u) => {
@@ -151,7 +164,7 @@ export function UsersClient({
       "instagram",
     ] as const;
     for (const key of fields) {
-      const val = (editForm as any)[key];
+      const val = (editForm as Record<string, string>)[key];
       payload[key] = val || null;
     }
 
@@ -177,6 +190,52 @@ export function UsersClient({
     router.push("/dashboard");
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((u) => u.id)));
+    }
+  }
+
+  async function handleInvite(userIds: string[]) {
+    setInviting(true);
+    const result = await generateInviteLinks(userIds);
+    setInviting(false);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    setInviteResults(result.results);
+    const successCount = result.results.filter((r) => r.link).length;
+    toast.success(`Generated ${successCount} invite link${successCount !== 1 ? "s" : ""}`);
+  }
+
+  async function copyLink(link: string, userId: string) {
+    await navigator.clipboard.writeText(link);
+    setCopiedId(userId);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  async function copyAllLinks() {
+    if (!inviteResults) return;
+    const text = inviteResults
+      .filter((r) => r.link)
+      .map((r) => `${r.name} (${r.email})\n${r.link}`)
+      .join("\n\n");
+    await navigator.clipboard.writeText(text);
+    toast.success("All links copied to clipboard");
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -190,6 +249,22 @@ export function UsersClient({
           <p className="mt-1 text-sand-400">
             {users.length} total member{users.length !== 1 ? "s" : ""}
           </p>
+        </div>
+        <div className="flex gap-2">
+          {selectedIds.size > 0 && (
+            <Button
+              onClick={() => handleInvite(Array.from(selectedIds))}
+              disabled={inviting}
+              className="bg-pink-500/20 hover:bg-pink-500/30 text-pink-400 border border-pink-500/20"
+            >
+              {inviting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Mail className="mr-2 h-4 w-4" />
+              )}
+              {inviting ? "Generating..." : `Invite Selected (${selectedIds.size})`}
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -293,6 +368,13 @@ export function UsersClient({
             <table className="w-full">
               <thead>
                 <tr className="border-b border-pink-500/10">
+                  <th className="w-10 px-4 py-3">
+                    <Checkbox
+                      checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                      onCheckedChange={toggleSelectAll}
+                      className="border-sand-500 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-sand-500">
                     User
                   </th>
@@ -318,6 +400,13 @@ export function UsersClient({
                       key={user.id}
                       className="transition-colors hover:bg-pink-500/5"
                     >
+                      <td className="w-10 px-4 py-3">
+                        <Checkbox
+                          checked={selectedIds.has(user.id)}
+                          onCheckedChange={() => toggleSelect(user.id)}
+                          className="border-sand-500 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500"
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8 border border-pink-500/20">
@@ -390,15 +479,27 @@ export function UsersClient({
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-sand-400 hover:text-sand-100"
-                          onClick={() => openEdit(user)}
-                        >
-                          <Pencil className="mr-1 h-3 w-3" />
-                          Edit
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-sand-400 hover:text-pink-400"
+                            onClick={() => handleInvite([user.id])}
+                            disabled={inviting}
+                          >
+                            <Link2 className="mr-1 h-3 w-3" />
+                            Invite
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-sand-400 hover:text-sand-100"
+                            onClick={() => openEdit(user)}
+                          >
+                            <Pencil className="mr-1 h-3 w-3" />
+                            Edit
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -406,7 +507,7 @@ export function UsersClient({
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-4 py-12 text-center text-sm text-sand-500"
                     >
                       No users found.
@@ -585,6 +686,80 @@ export function UsersClient({
           </ScrollArea>
         </SheetContent>
       </Sheet>
+
+      {/* Invite Results Dialog */}
+      <Dialog
+        open={inviteResults !== null}
+        onOpenChange={(open) => !open && setInviteResults(null)}
+      >
+        <DialogContent className="glass border-pink-500/10 max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-sand-100 flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-pink-400" />
+              Invite Links
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-sand-400">
+              {inviteResults?.filter((r) => r.link).length} link{inviteResults?.filter((r) => r.link).length !== 1 ? "s" : ""} generated.
+              Share these with your members to give them access.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-sand-300 border-sand-500/30 hover:text-sand-100"
+              onClick={copyAllLinks}
+            >
+              <Copy className="mr-1.5 h-3 w-3" />
+              Copy All
+            </Button>
+          </div>
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <div className="space-y-2 pb-2">
+              {inviteResults?.map((result) => (
+                <div
+                  key={result.userId}
+                  className="flex items-center gap-3 rounded-lg border border-pink-500/10 bg-pink-500/5 p-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-sand-100 truncate">
+                      {result.name}
+                    </p>
+                    <p className="text-xs text-sand-500 truncate">
+                      {result.email}
+                    </p>
+                  </div>
+                  {result.link ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 shrink-0 text-sand-400 hover:text-sand-100"
+                      onClick={() => copyLink(result.link!, result.userId)}
+                    >
+                      {copiedId === result.userId ? (
+                        <>
+                          <Check className="mr-1 h-3 w-3 text-green-400" />
+                          <span className="text-green-400">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="mr-1 h-3 w-3" />
+                          Copy Link
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs text-red-400">
+                      <AlertCircle className="h-3 w-3" />
+                      {result.error}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
