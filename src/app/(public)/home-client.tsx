@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 
 const manifesto = [
-  "We show up and we do the work.",
+  "We build together.",
   "We share what we have.",
-  "We leave the desert better than we found it.",
-  "We pull strangers into the dance circle.",
+  "We leave better than we found it.",
+  "We dance until sunrise.",
   "This is NODE.",
 ];
 
@@ -41,7 +41,7 @@ export default function HomeClient() {
 
         {/* Title */}
         <motion.h1
-          className="text-7xl font-bold tracking-tighter text-gradient-warm sm:text-8xl md:text-9xl"
+          className="text-5xl font-bold tracking-tighter text-gradient-warm sm:text-7xl md:text-8xl lg:text-9xl"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
@@ -51,13 +51,13 @@ export default function HomeClient() {
 
         {/* Subtitle */}
         <motion.div
-          className="mt-6 flex max-w-md flex-col gap-1 text-xl text-sand-300"
+          className="mt-6 flex max-w-md flex-col gap-1 text-lg text-sand-300 sm:text-xl"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
         >
-          <p>Art, music, and communal effort on the playa.</p>
-          <p>The point where you connect to something larger.</p>
+          <p>A community of creators, builders, and dreamers.</p>
+          <p>Born in the desert. Built for the future.</p>
         </motion.div>
 
         {/* CTA */}
@@ -91,7 +91,7 @@ export default function HomeClient() {
       </section>
 
       {/* Manifesto Section */}
-      <section className="px-6 py-32">
+      <section className="px-6 py-16 md:py-32">
         <div className="mx-auto max-w-3xl">
           <motion.h2
             className="mb-16 text-center text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
@@ -105,7 +105,7 @@ export default function HomeClient() {
             {manifesto.map((line, i) => (
               <motion.p
                 key={i}
-                className="text-3xl font-bold leading-tight text-sand-100 sm:text-4xl md:text-5xl"
+                className="text-2xl font-bold leading-tight text-sand-100 sm:text-3xl md:text-4xl lg:text-5xl"
                 initial={{ opacity: 0, x: -40 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
@@ -133,17 +133,17 @@ export default function HomeClient() {
           {[
             {
               title: "Create",
-              desc: "Installations, music curation, fashion, whatever you've got. Express it here.",
+              desc: "Installations, music curation, fashion, whatever you're into. Express it at NODE.",
               gradient: "from-pink-500/20 to-orange/20",
             },
             {
               title: "Connect",
-              desc: "Strangers become soulmates. Groups of friends become family. That's the whole point.",
+              desc: "Strangers become soulmates. Friends become family. A year-round community.",
               gradient: "from-amber/20 to-golden/20",
             },
             {
               title: "Contribute",
-              desc: "Everyone has a role. Build week, kitchen shifts, strike day — we rise by lifting others.",
+              desc: "Everyone has a role. Everyone has responsibility. We rise by lifting others.",
               gradient: "from-coral/20 to-pink-500/20",
             },
           ].map((card, i) => (

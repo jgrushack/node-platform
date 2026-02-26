@@ -7,7 +7,7 @@ const timeline = [
     year: "2017",
     title: "The Genesis",
     description:
-      'A few colleagues sat around in the heat of 2017 thinking, "What if we built our own camp?" The idea took root.',
+      'A few colleagues sat around in the peak heat of the 2017 burn thinking, "What if we built our own camp?" The idea took root.',
   },
   {
     year: "2018",
@@ -59,7 +59,7 @@ export default function AboutClient() {
       {/* Header */}
       <section className="mx-auto max-w-3xl text-center">
         <motion.h1
-          className="text-6xl font-bold text-gradient-warm sm:text-7xl"
+          className="text-5xl font-bold text-gradient-warm sm:text-6xl md:text-7xl"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
@@ -67,7 +67,7 @@ export default function AboutClient() {
           History
         </motion.h1>
         <motion.p
-          className="mt-6 flex items-baseline justify-center gap-3 text-sand-300"
+          className="mt-6 flex flex-wrap items-baseline justify-center gap-2 text-sand-300 sm:gap-3"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
@@ -82,7 +82,7 @@ export default function AboutClient() {
       </section>
 
       {/* Timeline */}
-      <section className="relative mx-auto mt-24 max-w-3xl">
+      <section className="relative mx-auto mt-12 max-w-3xl md:mt-24">
         {/* Glowing center line — hidden on mobile */}
         <div className="absolute left-4 top-0 h-full w-px bg-gradient-to-b from-pink-500/50 via-amber/30 to-transparent md:left-1/2 md:-translate-x-1/2" />
 
@@ -92,9 +92,8 @@ export default function AboutClient() {
             return (
               <motion.div
                 key={item.year}
-                className={`relative flex items-start gap-8 pl-12 md:pl-0 ${
-                  isLeft ? "md:flex-row" : "md:flex-row-reverse"
-                }`}
+                className={`relative flex items-start gap-8 pl-12 md:pl-0 ${isLeft ? "md:flex-row" : "md:flex-row-reverse"
+                  }`}
                 initial={{ opacity: 0, x: isLeft ? -40 : 40 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-80px" }}
