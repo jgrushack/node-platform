@@ -6,7 +6,7 @@ import {
   useSpring,
   useTransform,
 } from "framer-motion";
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 
 const placeholderImages = [
   { id: 1, color: "from-pink-500/40 to-orange/40", label: "Sunset Ceremony" },
@@ -32,6 +32,11 @@ function TiltCard({
   const ref = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
+  const isTouch = useRef(false);
+
+  useEffect(() => {
+    isTouch.current = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  }, []);
 
   const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [8, -8]), {
     stiffness: 300,
@@ -43,6 +48,7 @@ function TiltCard({
   });
 
   function handleMouseMove(e: React.MouseEvent) {
+    if (isTouch.current) return;
     const rect = ref.current?.getBoundingClientRect();
     if (!rect) return;
     mouseX.set((e.clientX - rect.left) / rect.width - 0.5);
@@ -57,7 +63,7 @@ function TiltCard({
   return (
     <motion.div
       ref={ref}
-      className="glass-tilt relative aspect-square cursor-pointer rounded-2xl"
+      className="glass-tilt relative aspect-[4/3] cursor-pointer rounded-2xl sm:aspect-square"
       style={{
         rotateX,
         rotateY,
@@ -65,10 +71,10 @@ function TiltCard({
       }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.5, delay: index * 0.08 }}
+      transition={{ duration: 0.4, delay: index * 0.05 }}
     >
       {/* Gradient placeholder */}
       <div className={`absolute inset-0 bg-gradient-to-br ${color} rounded-2xl`} />
@@ -84,7 +90,7 @@ function TiltCard({
 
 export default function PicsClient() {
   return (
-    <main className="min-h-screen px-6 py-24">
+    <main className="min-h-screen px-4 py-20 sm:px-6 sm:py-24">
       {/* Header */}
       <section className="mx-auto max-w-3xl text-center">
         <motion.h1

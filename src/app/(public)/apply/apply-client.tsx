@@ -185,7 +185,7 @@ export default function ApplyClient() {
   const progress = ((step + 1) / steps.length) * 100;
 
   return (
-    <main className="min-h-screen px-6 py-24">
+    <main className="min-h-screen px-4 py-20 sm:px-6 sm:py-24">
       <div className="mx-auto max-w-xl">
         {/* Progress */}
         <div className="mb-8">
@@ -201,19 +201,19 @@ export default function ApplyClient() {
             {steps.map((s, i) => (
               <div
                 key={s.label}
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs transition-colors ${i <= step
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs transition-colors sm:h-8 sm:w-8 ${i <= step
                   ? "bg-pink-500/20 text-pink-400"
                   : "bg-blue-900/30 text-sand-500"
                   }`}
               >
-                <s.icon className="h-3.5 w-3.5" />
+                <s.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               </div>
             ))}
           </div>
         </div>
 
         {/* Step content */}
-        <div className="glass-card relative min-h-[400px] overflow-hidden rounded-2xl p-8">
+        <div className="glass-card relative min-h-[400px] overflow-hidden rounded-2xl p-4 sm:p-8">
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div
               key={step}
@@ -310,7 +310,7 @@ function PersonalStep({ form, update }: FormStepProps) {
   return (
     <div className="space-y-5">
       <h2 className="text-2xl font-bold text-sand-100">Personal Info</h2>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label className="text-sand-300">First Name *</Label>
           <Input
@@ -487,10 +487,10 @@ function VideoStep({ form, update }: FormStepProps) {
   useEffect(() => {
     if (form.videoFile) {
       const url = URL.createObjectURL(form.videoFile);
-      setPreviewUrl(url);
+      setTimeout(() => setPreviewUrl(url), 0);
       return () => URL.revokeObjectURL(url);
     }
-    setPreviewUrl(null);
+    setTimeout(() => setPreviewUrl(null), 0);
   }, [form.videoFile]);
 
   // Cleanup stream on unmount
@@ -597,7 +597,7 @@ function VideoStep({ form, update }: FormStepProps) {
           We want to meet the real you. Record or upload a short video (1-2 min) introducing yourself.
         </p>
       </div>
-      <div className="space-y-4 rounded-xl border border-blue-900/30 bg-blue-900/10 p-6">
+      <div className="space-y-4 rounded-xl border border-blue-900/30 bg-blue-900/10 p-4 sm:p-6">
         <div className="space-y-3 text-sm text-sand-200">
           <p className="font-semibold text-pink-400">Answer these prompts:</p>
           <ol className="list-decimal list-inside space-y-2 ml-2">
@@ -679,7 +679,7 @@ function VideoStep({ form, update }: FormStepProps) {
               </div>
             </div>
           ) : (
-            <div className="p-8 flex flex-col md:flex-row items-center justify-center gap-4 hover:bg-blue-900/10">
+            <div className="p-4 flex flex-col md:flex-row items-center justify-center gap-4 hover:bg-blue-900/10 sm:p-8">
               <Button
                 variant="outline"
                 className="w-full md:w-auto border-blue-800 bg-blue-950/50 hover:bg-pink-500/20 hover:text-pink-400 hover:border-pink-500/50 h-16 px-6"

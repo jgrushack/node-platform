@@ -6,37 +6,41 @@ export function GradientMesh() {
 
       {/* Blob 1 — Pink glow top-right */}
       <div
-        className="absolute -top-1/4 -right-1/4 h-[60vh] w-[60vh] rounded-full opacity-30"
+        className="absolute -top-[10%] right-[-10%] h-[40vh] w-[40vh] rounded-full opacity-30 sm:h-[60vh] sm:w-[60vh] sm:-top-1/4 sm:-right-1/4"
         style={{
           background: "radial-gradient(circle, #F90077 0%, transparent 70%)",
           animation: "blob-float-1 20s ease-in-out infinite",
+          willChange: "transform",
         }}
       />
 
       {/* Blob 2 — Amber glow center-left */}
       <div
-        className="absolute top-1/3 -left-1/4 h-[50vh] w-[50vh] rounded-full opacity-20"
+        className="absolute top-1/3 left-[-10%] h-[35vh] w-[35vh] rounded-full opacity-20 sm:h-[50vh] sm:w-[50vh] sm:-left-1/4"
         style={{
           background: "radial-gradient(circle, #FFB800 0%, transparent 70%)",
           animation: "blob-float-2 25s ease-in-out infinite",
+          willChange: "transform",
         }}
       />
 
       {/* Blob 3 — Orange glow bottom-center */}
       <div
-        className="absolute -bottom-1/4 left-1/3 h-[55vh] w-[55vh] rounded-full opacity-20"
+        className="absolute -bottom-[10%] left-1/4 h-[35vh] w-[35vh] rounded-full opacity-20 sm:h-[55vh] sm:w-[55vh] sm:left-1/3 sm:-bottom-1/4"
         style={{
           background: "radial-gradient(circle, #FF6B2C 0%, transparent 70%)",
           animation: "blob-float-3 22s ease-in-out infinite",
+          willChange: "transform",
         }}
       />
 
-      {/* Blob 4 — Pink soft glow bottom-right */}
+      {/* Blob 4 — Pink soft glow bottom-right (hidden on small mobile for perf) */}
       <div
-        className="absolute bottom-1/4 -right-1/6 h-[45vh] w-[45vh] rounded-full opacity-15"
+        className="absolute bottom-1/4 right-[-5%] hidden h-[45vh] w-[45vh] rounded-full opacity-15 sm:block"
         style={{
           background: "radial-gradient(circle, #FF73A5 0%, transparent 70%)",
           animation: "blob-float-4 28s ease-in-out infinite",
+          willChange: "transform",
         }}
       />
 

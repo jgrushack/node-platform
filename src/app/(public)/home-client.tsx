@@ -16,7 +16,7 @@ const manifesto = [
 
 export default function HomeClient() {
   return (
-    <main className="relative min-h-screen overflow-hidden">
+    <main className="relative min-h-screen overflow-x-hidden">
       {/* Hero Section */}
       <section className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
         {/* Logo Mark with glow */}
@@ -106,9 +106,9 @@ export default function HomeClient() {
               <motion.p
                 key={i}
                 className="text-2xl font-bold leading-tight text-sand-100 sm:text-3xl md:text-4xl lg:text-5xl"
-                initial={{ opacity: 0, x: -40 }}
+                initial={{ opacity: 0, x: -20 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
+                viewport={{ once: true, margin: "-50px" }}
                 transition={{ duration: 0.6, delay: i * 0.1 }}
               >
                 {line.includes("NODE")
@@ -128,7 +128,7 @@ export default function HomeClient() {
       </section>
 
       {/* Info Cards */}
-      <section className="px-6 pb-32">
+      <section className="px-4 pb-24 sm:px-6 sm:pb-32">
         <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
           {[
             {

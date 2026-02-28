@@ -55,7 +55,7 @@ const timeline = [
 
 export default function AboutClient() {
   return (
-    <main className="min-h-screen px-6 py-24">
+    <main className="min-h-screen overflow-x-hidden px-4 py-20 sm:px-6 sm:py-24">
       {/* Header */}
       <section className="mx-auto max-w-3xl text-center">
         <motion.h1
@@ -94,10 +94,10 @@ export default function AboutClient() {
                 key={item.year}
                 className={`relative flex items-start gap-8 pl-12 md:pl-0 ${isLeft ? "md:flex-row" : "md:flex-row-reverse"
                   }`}
-                initial={{ opacity: 0, x: isLeft ? -40 : 40 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{ duration: 0.6, delay: 0.1 }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: 0.1 }}
               >
                 {/* Card side */}
                 <div className="w-full md:w-[calc(50%-2rem)]">

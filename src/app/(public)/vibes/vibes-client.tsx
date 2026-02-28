@@ -1,9 +1,9 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 
-const statements = [
+const statements: Array<{ text: string; color: string; hasBrand?: boolean }> = [
   { text: "RADICAL INCLUSION", color: "text-gradient-warm" },
   { text: "GIFTING", color: "text-gradient-pink" },
   { text: "DECOMMODIFICATION", color: "text-gradient-golden" },
@@ -16,16 +16,29 @@ const statements = [
   { text: "IMMEDIACY", color: "text-gradient-warm" },
 ];
 
+function useIsMobile(breakpoint = 640) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 function KineticStatement({
   text,
   color,
   index,
   hasBrand,
+  isMobile,
 }: {
   text: string;
   color: string;
   index: number;
   hasBrand?: boolean;
+  isMobile: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -33,14 +46,13 @@ function KineticStatement({
     offset: ["start end", "end start"],
   });
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
-  const range = isMobile ? 30 : 100;
+  const range = isMobile ? 15 : 80;
   const x = useTransform(
     scrollYProgress,
     [0, 0.5, 1],
     [index % 2 === 0 ? -range : range, 0, index % 2 === 0 ? range : -range]
   );
-  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.8, 1, 0.8]);
+  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.85, 1, 0.85]);
   const opacity = useTransform(
     scrollYProgress,
     [0, 0.3, 0.7, 1],
@@ -53,23 +65,23 @@ function KineticStatement({
   return (
     <motion.div
       ref={ref}
-      className="flex min-h-[30vh] items-center justify-center overflow-hidden"
+      className="flex min-h-[25vh] items-center justify-center overflow-hidden px-4"
       style={{ opacity }}
     >
       <motion.h2
-        className={`text-3xl font-bold tracking-tighter sm:text-5xl md:text-7xl lg:text-9xl ${color}`}
+        className={`text-center text-[clamp(1.25rem,5vw,2rem)] font-bold tracking-tighter sm:text-4xl md:text-6xl lg:text-8xl ${color}`}
         style={{ x, scale }}
       >
         {text.split("").map((char, i) => (
           <motion.span
             key={i}
             className={i >= brandStart && i < brandEnd ? "font-brand" : undefined}
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{
-              duration: 0.4,
-              delay: i * 0.03,
+              duration: 0.3,
+              delay: isMobile ? Math.min(i * 0.015, 0.3) : i * 0.03,
               ease: "easeOut",
             }}
           >
@@ -82,10 +94,12 @@ function KineticStatement({
 }
 
 export default function VibesClient() {
+  const isMobile = useIsMobile();
+
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen overflow-hidden">
       {/* Header */}
-      <section className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
+      <section className="flex min-h-[50vh] flex-col items-center justify-center px-6 text-center sm:min-h-[60vh]">
         <motion.p
           className="text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
           initial={{ opacity: 0 }}
@@ -113,6 +127,7 @@ export default function VibesClient() {
             color={statement.color}
             index={i}
             hasBrand={statement.hasBrand ?? false}
+            isMobile={isMobile}
           />
         ))}
       </div>
@@ -170,7 +185,7 @@ export default function VibesClient() {
       {/* Closing Statement */}
       <section className="mx-auto mt-16 max-w-3xl px-6 md:mt-32">
         <motion.p
-          className="text-lg leading-relaxed text-sand-300"
+          className="text-base leading-relaxed text-sand-300 sm:text-lg"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
