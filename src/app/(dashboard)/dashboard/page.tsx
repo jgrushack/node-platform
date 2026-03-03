@@ -641,11 +641,11 @@ export default function DashboardPage() {
                     @node_brc
                   </span>
                 </div>
-                <div className="overflow-hidden rounded-xl border border-pink-500/10">
+                <div className="overflow-hidden rounded-xl border border-pink-500/10 mx-auto" style={{ maxWidth: "480px" }}>
                   <iframe
                     src="https://www.instagram.com/p/DVTzj2NEbhB/embed"
-                    className="w-full border-0"
-                    style={{ height: "750px" }}
+                    className="border-0"
+                    style={{ width: "480px", height: "580px", maxWidth: "100%" }}
                     loading="lazy"
                     scrolling="no"
                     title="NODE Instagram"
