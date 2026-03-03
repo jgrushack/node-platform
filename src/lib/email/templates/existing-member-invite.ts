@@ -72,10 +72,10 @@ export function existingMemberInviteEmail({
           <tr>
             <td style="padding:32px;background-color:#0F0120;border-top:1px solid rgba(249,0,119,0.3);border-radius:0 0 16px 16px;">
               <p style="margin:0 0 8px;font-size:14px;color:#F9EDD8;text-align:center;opacity:0.7;">
-                NODE &mdash; Where Connection Meets the Desert
+                node &mdash; a network of dreamers &amp; explorers
               </p>
               <p style="margin:0;font-size:12px;color:#F9EDD8;text-align:center;opacity:0.4;line-height:1.6;">
-                This is a one-time account setup email from NODE.
+                This is a one-time account setup email from node. You&rsquo;re receiving this email because you were part of node in the past. If you don&rsquo;t plan on attending in 2026 and want to be removed from future emails, enter the portal and delete your account. Otherwise, sign in and explore!
               </p>
             </td>
           </tr>
