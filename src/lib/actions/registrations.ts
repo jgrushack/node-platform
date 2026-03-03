@@ -140,3 +140,37 @@ export async function respondToPrebuild(
 
   return { success: true };
 }
+
+export async function updateTicketStatus(carPass: boolean = false) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: campYear } = await supabase
+    .from("camp_years")
+    .select("id")
+    .eq("year", 2026)
+    .single();
+
+  if (!campYear) {
+    return { error: "No camp year found for 2026" };
+  }
+
+  const { error } = await supabase
+    .from("registrations")
+    .update({ has_ticket: true, has_car_pass: carPass })
+    .eq("profile_id", user.id)
+    .eq("camp_year_id", campYear.id)
+    .eq("status", "confirmed");
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { success: true };
+}

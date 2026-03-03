@@ -29,7 +29,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Lock, Loader2 as Spinner } from "lucide-react";
+import { Lock, Loader2 as Spinner, Ticket } from "lucide-react";
+import { updateTicketStatus } from "@/lib/actions/registrations";
 
 interface UserData {
   firstName: string;
@@ -132,8 +133,12 @@ export default function DashboardPage() {
   const [campStatus, setCampStatus] = useState<CampStatus | null>(null);
   const [yearsAtNode, setYearsAtNode] = useState<number | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
+  const [hasTicket, setHasTicket] = useState<boolean | null>(null);
+  const [hasCarPass, setHasCarPass] = useState<boolean | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showTicketPopup, setShowTicketPopup] = useState(false);
+  const [savingTicket, setSavingTicket] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -190,12 +195,21 @@ export default function DashboardPage() {
               // Check registration
               supabase
                 .from("registrations")
-                .select("status")
+                .select("status, has_ticket, has_car_pass")
                 .eq("profile_id", authUser.id)
                 .eq("camp_year_id", campYear.id)
                 .maybeSingle()
                 .then(({ data: reg }) => {
                   if (reg && reg.status === "confirmed") {
+                    setHasTicket(!!reg.has_ticket);
+                    setHasCarPass(!!reg.has_car_pass);
+                    // Check if ticket sale popup should show
+                    const now = Date.now();
+                    const saleStart = Date.UTC(2026, 2, 4, 7, 0, 0); // Mar 4 00:00 PDT
+                    const saleEnd = Date.UTC(2026, 2, 11, 19, 0, 0); // Mar 11 12:00 PDT
+                    if (!reg.has_ticket && now >= saleStart && now <= saleEnd) {
+                      setShowTicketPopup(true);
+                    }
                     // Registration confirmed — check invoices for payment state
                     supabase
                       .from("invoices")
@@ -333,6 +347,15 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleTicketConfirm(carPass: boolean) {
+    setSavingTicket(true);
+    await updateTicketStatus(carPass);
+    setSavingTicket(false);
+    setShowTicketPopup(false);
+    setHasTicket(true);
+    setHasCarPass(carPass);
+  }
+
   function refreshDashboardData() {
     // Re-fetch camp status after onboarding changes
     const supabase = createClient();
@@ -457,9 +480,16 @@ export default function DashboardPage() {
                 <div className={`text-xl sm:text-2xl font-bold ${stat.valueColor}`}>
                   {stat.value}
                 </div>
-                {stat.subtext && (
-                  <p className={`text-xs mt-0.5 ${stat.valueColor}`}>
-                    {stat.subtext}
+                {(stat.subtext || (stat.label === "2026 Status" && hasTicket !== null)) && (
+                  <p className="text-xs mt-0.5 flex items-center gap-1.5">
+                    {stat.subtext && (
+                      <span className={stat.valueColor}>{stat.subtext}</span>
+                    )}
+                    {stat.label === "2026 Status" && hasTicket !== null && campStatus?.label === "Attending" && (
+                      <span className={hasTicket ? "text-green-400" : "text-red-400"}>
+                        {stat.subtext ? "· " : ""}{hasTicket ? (hasCarPass ? "Ticket + Car Pass" : "Ticket") : "No Ticket"}
+                      </span>
+                    )}
                   </p>
                 )}
               </CardContent>
@@ -645,7 +675,7 @@ export default function DashboardPage() {
                   <iframe
                     src="https://www.instagram.com/p/DVTzj2NEbhB/embed"
                     className="border-0"
-                    style={{ width: "480px", height: "580px", maxWidth: "100%" }}
+                    style={{ width: "480px", height: "640px", maxWidth: "100%" }}
                     loading="lazy"
                     scrolling="no"
                     title="NODE Instagram"
@@ -739,6 +769,49 @@ export default function DashboardPage() {
               loading="lazy"
               title="NODE 2026 Budget"
             />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ticket Sale Popup */}
+      <Dialog open={showTicketPopup} onOpenChange={setShowTicketPopup}>
+        <DialogContent className="glass border-pink-500/10 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <Ticket className="h-5 w-5 text-amber" />
+              Steward Tickets Are Now On Sale!
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-sand-300">
+            Steward tickets are now on sale! Have you purchased yours?
+          </p>
+          <p className="text-xs text-sand-500">
+            Sale ends March 11 at 12pm PDT
+          </p>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button
+              onClick={() => handleTicketConfirm(false)}
+              disabled={savingTicket}
+              className="w-full rounded-full bg-green-600 text-white hover:bg-green-700"
+            >
+              {savingTicket ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Yes
+            </Button>
+            <Button
+              onClick={() => handleTicketConfirm(true)}
+              disabled={savingTicket}
+              className="w-full rounded-full bg-green-600 text-white hover:bg-green-700"
+            >
+              {savingTicket ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Yes + Car Pass
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setShowTicketPopup(false)}
+              className="w-full text-sand-400 hover:text-sand-200"
+            >
+              Not yet
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
