@@ -601,9 +601,9 @@ function VideoStep({ form, update }: FormStepProps) {
         <div className="space-y-3 text-sm text-sand-200">
           <p className="font-semibold text-pink-400">Answer these prompts:</p>
           <ol className="list-decimal list-inside space-y-2 ml-2">
+            <li>Who are you and what do you bring to the table?</li>
             <li>Why do you want to go to Burning Man?</li>
             <li>Why do you want to camp with NODE?</li>
-            <li>Who are you and what do you bring?</li>
           </ol>
           <p className="text-sand-400 text-xs mt-2">Show us your personality — we care about vibe.</p>
         </div>
