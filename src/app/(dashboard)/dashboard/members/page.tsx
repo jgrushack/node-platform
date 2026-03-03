@@ -369,7 +369,7 @@ export default function MembersPage() {
                 transition={{ delay: Math.min(i * 0.03, 0.5) }}
               >
                 <Card
-                  className={`glass-card border-0 cursor-pointer transition-colors hover:bg-pink-500/5 ${!member.is_active ? "opacity-60" : ""
+                  className={`glass-card border-0 cursor-pointer transition-colors hover:bg-pink-500/5 ${isAdmin && !member.is_active ? "opacity-60" : ""
                     }`}
                   onClick={() => openMemberDetail(member)}
                 >
@@ -387,7 +387,7 @@ export default function MembersPage() {
                         <p className="font-medium text-sand-100 truncate">
                           {getDisplayName(member)}
                         </p>
-                        {!member.is_active && (
+                        {isAdmin && !member.is_active && (
                           <Badge className="shrink-0 bg-sand-700/30 text-sand-500 text-[10px]">
                             Inactive
                           </Badge>
@@ -476,7 +476,7 @@ export default function MembersPage() {
                       <Badge className="bg-pink-500/20 text-pink-400 text-[10px] capitalize">
                         {selectedMember.role.replace("_", " ")}
                       </Badge>
-                      {!selectedMember.is_active && (
+                      {isAdmin && !selectedMember.is_active && (
                         <Badge className="bg-sand-700/30 text-sand-500 text-[10px]">
                           Inactive
                         </Badge>

@@ -51,7 +51,7 @@ const EVENT_TYPE_CONFIG = {
   event: { dot: "bg-pink-400", label: "Event", color: "text-pink-400" },
   call: { dot: "bg-blue-400", label: "Call", color: "text-blue-400" },
   deadline: { dot: "bg-amber", label: "Deadline", color: "text-amber" },
-  bm: { dot: "bg-sand-500", label: "BM Official", color: "text-sand-400" },
+  bm: { dot: "bg-white", label: "BM Official", color: "text-white" },
 };
 
 interface CalendarClientProps {
@@ -556,10 +556,10 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
                     {bmSelectedEvents.map((event) => (
                       <div
                         key={event.id}
-                        className="rounded-lg bg-sand-500/5 border border-sand-500/10 px-3 py-2.5"
+                        className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sand-500" />
+                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" />
                           <span className="text-sm text-sand-400">
                             {event.title}
                           </span>
