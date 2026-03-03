@@ -46,12 +46,15 @@ export function existingMemberInviteEmail({
           </tr>
           <!-- Body -->
           <tr>
-            <td style="padding:40px 32px;background-color:#1a0a2e;border-left:1px solid rgba(249,0,119,0.2);border-right:1px solid rgba(249,0,119,0.2);">
+            <td style="padding:40px 32px;background-color:#1a0a2e;border:1px solid rgba(249,0,119,0.2);border-bottom:none;">
               <p style="margin:0 0 24px;font-size:18px;line-height:1.6;color:#F9EDD8;">
                 Hey ${firstName},
               </p>
               <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#F9EDD8;">
-                The dust is calling. Your NODE portal is ready &mdash; manage your profile, RSVP for prebuild, check your camp status, and connect with the crew.
+                The dust is calling. The new node portal is ready.
+              </p>
+              <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#F9EDD8;">
+                Manage your profile, RSVP for events (like our return to Black Rock City), check your camp status, pay your dues, sign up for jobs and connect with the camp. No more notion, this is your one stop shop for all things node.
               </p>
               <p style="margin:0 0 40px;font-size:16px;line-height:1.7;color:#F9EDD8;">
                 One click and you&rsquo;re in.
