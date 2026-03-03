@@ -320,6 +320,11 @@ export async function castVote(
 export async function approveApplication(
   applicationId: string
 ): Promise<{ success: true } | { error: string }> {
+  const { error: authError } = await requireAdminOrSuperAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
   const adminClient = createAdminClient();
 
   // Fetch application data
@@ -335,10 +340,12 @@ export async function approveApplication(
   }
 
   // Check if user already exists for this email
-  const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-  const existingUser = existingUsers?.users?.find(
-    (u) => u.email === application.email
-  );
+  const { data: existingProfile } = await adminClient
+    .from("profiles")
+    .select("id")
+    .eq("email", application.email)
+    .maybeSingle();
+  const existingUser = existingProfile;
 
   let profileId: string;
 
@@ -554,6 +561,13 @@ export async function addApplicationComment(
   applicationId: string,
   body: string
 ): Promise<{ success: true } | { error: string }> {
+  if (!body || body.trim().length === 0) {
+    return { error: "Comment cannot be empty." };
+  }
+  if (body.length > 5000) {
+    return { error: "Comment must be under 5000 characters." };
+  }
+
   const { error: authError, supabase, user } = await requireAdmin();
   if (authError || !user) {
     return { error: authError ?? "Not authenticated" };
@@ -564,7 +578,7 @@ export async function addApplicationComment(
     .insert({
       application_id: applicationId,
       author_id: user.id,
-      body,
+      body: body.trim(),
     });
 
   if (error) {

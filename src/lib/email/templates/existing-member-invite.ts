@@ -1,3 +1,7 @@
+function esc(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 export function existingMemberInviteEmail({
   firstName,
   magicLink,
@@ -5,6 +9,8 @@ export function existingMemberInviteEmail({
   firstName: string;
   magicLink: string;
 }): string {
+  const safeName = esc(firstName);
+  const safeLink = esc(magicLink);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -40,7 +46,7 @@ export function existingMemberInviteEmail({
           <tr>
             <td style="padding:40px 32px;background-color:#1a0a2e;border-left:1px solid rgba(249,0,119,0.2);border-right:1px solid rgba(249,0,119,0.2);">
               <p style="margin:0 0 24px;font-size:18px;line-height:1.6;color:#F9EDD8;">
-                Hey ${firstName},
+                Hey ${safeName},
               </p>
               <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#F9EDD8;">
                 The dust is calling. The new Node portal is ready.
@@ -55,7 +61,7 @@ export function existingMemberInviteEmail({
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
                 <tr>
                   <td align="center" style="border-radius:12px;background:linear-gradient(135deg,#F90077,#FF3399,#FFB800);">
-                    <a href="${magicLink}" target="_blank" style="display:inline-block;padding:16px 48px;font-family:'Exo 2',Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;color:#FFFFFF;text-decoration:none;letter-spacing:1px;">
+                    <a href="${safeLink}" target="_blank" style="display:inline-block;padding:16px 48px;font-family:'Exo 2',Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;color:#FFFFFF;text-decoration:none;letter-spacing:1px;">
                       Enter the Portal
                     </a>
                   </td>
