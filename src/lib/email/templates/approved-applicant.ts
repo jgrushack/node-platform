@@ -64,10 +64,10 @@ export function approvedApplicantEmail({
           <tr>
             <td style="padding:32px;background-color:#0F0120;border-top:1px solid rgba(249,0,119,0.3);border-radius:0 0 16px 16px;">
               <p style="margin:0 0 8px;font-size:14px;color:#F9EDD8;text-align:center;opacity:0.7;">
-                Node &mdash; a network of dreamers &amp; explorers
+                NODE &mdash; Where Connection Meets the Desert
               </p>
               <p style="margin:0;font-size:12px;color:#F9EDD8;text-align:center;opacity:0.4;line-height:1.6;">
-                You are receiving this email because you applied to Node. If you did not apply, please disregard this email.
+                This is a one-time account setup email from NODE.
               </p>
             </td>
           </tr>

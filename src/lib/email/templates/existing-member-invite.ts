@@ -43,10 +43,7 @@ export function existingMemberInviteEmail({
                 Hey ${firstName},
               </p>
               <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#F9EDD8;">
-                The dust is calling. The new Node portal is ready.
-              </p>
-              <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#F9EDD8;">
-                Manage your profile, RSVP for events (like our return to Black Rock City), check your camp status, pay your dues, sign up for jobs and connect with the crew. No more Notion, this is your one stop shop for all things Node.
+                The dust is calling. Your NODE portal is ready &mdash; manage your profile, RSVP for prebuild, check your camp status, and connect with the crew.
               </p>
               <p style="margin:0 0 40px;font-size:16px;line-height:1.7;color:#F9EDD8;">
                 One click and you&rsquo;re in.
@@ -67,10 +64,10 @@ export function existingMemberInviteEmail({
           <tr>
             <td style="padding:32px;background-color:#0F0120;border-top:1px solid rgba(249,0,119,0.3);border-radius:0 0 16px 16px;">
               <p style="margin:0 0 8px;font-size:14px;color:#F9EDD8;text-align:center;opacity:0.7;">
-                node &mdash; a network of dreamers &amp; explorers
+                NODE &mdash; Where Connection Meets the Desert
               </p>
               <p style="margin:0;font-size:12px;color:#F9EDD8;text-align:center;opacity:0.4;line-height:1.6;">
-                This is a one-time account setup email from node. You&rsquo;re receiving this because you were part of node in the past. If you don&rsquo;t plan on attending in 2026 and want to be removed from future emails, enter the portal and delete your account. Otherwise, sign in and explore!
+                This is a one-time account setup email from NODE.
               </p>
             </td>
           </tr>
