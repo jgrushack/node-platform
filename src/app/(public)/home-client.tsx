@@ -56,7 +56,7 @@ export default function HomeClient() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
         >
-          <p>A community of creators, builders, and dreamers.</p>
+          <p>A network of dreamers and explorers.</p>
           <p>Born in the desert. Built for the future.</p>
         </motion.div>
 
