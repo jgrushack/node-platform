@@ -35,6 +35,8 @@ import {
   Calendar,
   Hammer,
   Wrench,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -117,6 +119,7 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -311,24 +314,48 @@ export default function MembersPage() {
             className="pl-10"
           />
         </div>
-        {isAdmin && (
-          <Button
-            variant="outline"
-            size="sm"
-            className={`shrink-0 gap-2 border-pink-500/20 ${showInactive
-                ? "bg-pink-500/15 text-pink-400"
-                : "text-sand-400 hover:text-sand-200"
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-pink-500/20 overflow-hidden">
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`p-2 transition-colors ${
+                viewMode === "cards"
+                  ? "bg-pink-500/15 text-pink-400"
+                  : "text-sand-400 hover:text-sand-200"
               }`}
-            onClick={() => setShowInactive(!showInactive)}
-          >
-            {showInactive ? (
-              <Eye className="h-4 w-4" />
-            ) : (
-              <EyeOff className="h-4 w-4" />
-            )}
-            {showInactive ? "Showing Inactive" : "Show Inactive"}
-          </Button>
-        )}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-2 transition-colors ${
+                viewMode === "list"
+                  ? "bg-pink-500/15 text-pink-400"
+                  : "text-sand-400 hover:text-sand-200"
+              }`}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className={`shrink-0 gap-2 border-pink-500/20 ${showInactive
+                  ? "bg-pink-500/15 text-pink-400"
+                  : "text-sand-400 hover:text-sand-200"
+                }`}
+              onClick={() => setShowInactive(!showInactive)}
+            >
+              {showInactive ? (
+                <Eye className="h-4 w-4" />
+              ) : (
+                <EyeOff className="h-4 w-4" />
+              )}
+              {showInactive ? "Showing Inactive" : "Show Inactive"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -349,6 +376,56 @@ export default function MembersPage() {
         <p className="py-12 text-center text-sand-400">
           {search ? "No members match your search." : "No members found."}
         </p>
+      ) : viewMode === "list" ? (
+        <div className="glass-card rounded-2xl divide-y divide-pink-500/10 overflow-hidden">
+          {filtered.map((member, i) => (
+            <motion.div
+              key={member.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: Math.min(i * 0.02, 0.4) }}
+              className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-pink-500/5 ${
+                isAdmin && !member.is_active ? "opacity-60" : ""
+              }`}
+              onClick={() => openMemberDetail(member)}
+            >
+              <Avatar className="h-9 w-9 shrink-0 border border-pink-500/20">
+                {member.avatar_url && (
+                  <AvatarImage src={member.avatar_url} alt="" />
+                )}
+                <AvatarFallback className="bg-pink-500/20 text-pink-400 text-xs">
+                  {getInitials(member)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-sand-100 text-sm truncate">
+                    {getDisplayName(member)}
+                  </p>
+                  {member.playa_name && (
+                    <span className="text-xs text-pink-400 truncate hidden sm:inline">
+                      &quot;{member.playa_name}&quot;
+                    </span>
+                  )}
+                  {isAdmin && !member.is_active && (
+                    <Badge className="shrink-0 bg-sand-700/30 text-sand-500 text-[10px]">
+                      Inactive
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                <TenureBadge yearsCount={member.yearsCount} />
+                {member.yearsCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-medium text-amber">
+                    <Flame className="h-2.5 w-2.5" />
+                    {member.yearsCount} yr{member.yearsCount > 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((member, i) => {
