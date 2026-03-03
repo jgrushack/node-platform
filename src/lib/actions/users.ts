@@ -89,22 +89,14 @@ export async function updateUserRole(
   userId: string,
   role: UserRole
 ): Promise<{ success: true } | { error: string }> {
+  const parsed = roleSchema.safeParse(role);
+  if (!parsed.success) return { error: "Invalid role." };
+
   const { error, supabase, user } = await requireSuperAdmin();
   if (error || !supabase || !user) return { error: error ?? "Not authenticated" };
 
   if (userId === user.id) {
     return { error: "Cannot change your own role." };
-  }
-
-  const validRoles: UserRole[] = [
-    "member",
-    "lead",
-    "committee",
-    "admin",
-    "super_admin",
-  ];
-  if (!validRoles.includes(role)) {
-    return { error: "Invalid role." };
   }
 
   const { error: dbError } = await supabase
@@ -135,12 +127,15 @@ export async function updateUserProfile(
     node_events_attended?: string[];
   }
 ): Promise<{ success: true } | { error: string }> {
+  const parsed = userProfileSchema.safeParse(data);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
   const { error, supabase } = await requireSuperAdmin();
   if (error || !supabase) return { error: error ?? "Not authenticated" };
 
   const { error: dbError } = await supabase
     .from("profiles")
-    .update(data)
+    .update(parsed.data)
     .eq("id", userId);
 
   if (dbError) {
@@ -192,10 +187,15 @@ export async function getCommitteeRequests(): Promise<
   return data as unknown as CommitteeRequestWithProfile[];
 }
 
+const committeeActionSchema = z.enum(["approved", "rejected"]);
+
 export async function handleCommitteeRequest(
   requestId: string,
   action: "approved" | "rejected"
 ): Promise<{ success: true } | { error: string }> {
+  const parsed = committeeActionSchema.safeParse(action);
+  if (!parsed.success) return { error: "Invalid action." };
+
   const { error, supabase } = await requireSuperAdmin();
   if (error || !supabase) return { error: error ?? "Not authenticated" };
 

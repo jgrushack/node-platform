@@ -147,6 +147,18 @@ export async function uploadApplicationVideo(
 
   const supabase = await createClient();
 
+  // Verify application exists before uploading
+  const adminClient = createAdminClient();
+  const { data: app, error: appError } = await adminClient
+    .from("applications")
+    .select("id")
+    .eq("id", applicationId)
+    .single();
+
+  if (appError || !app) {
+    return { error: "Application not found." };
+  }
+
   // Sanitize filename
   const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const filePath = `${applicationId}/${safeFilename}`;
@@ -160,8 +172,7 @@ export async function uploadApplicationVideo(
     return { error: "Failed to upload video. Please try again." };
   }
 
-  // Use Admin Client to bypass RLS when updating the application row
-  const adminClient = createAdminClient();
+  // Reuse admin client to bypass RLS when updating the application row
   const { error: updateError } = await adminClient
     .from("applications")
     .update({ video_url: filePath })
