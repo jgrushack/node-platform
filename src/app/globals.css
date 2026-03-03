@@ -343,3 +343,8 @@
   33% { transform: translate(-25px, -40px) scale(1.05); }
   66% { transform: translate(40px, 15px) scale(0.95); }
 }
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { TenureBadge } from "@/components/ui/tenure-badge";
 
 type Standing =
   | "good_standing"
@@ -405,6 +406,7 @@ export default function MembersPage() {
                       )}
                       {/* Fun decorative badges */}
                       <div className="mt-2 flex flex-wrap gap-1.5">
+                        <TenureBadge yearsCount={member.yearsCount} />
                         {member.yearsCount > 0 && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-medium text-amber">
                             <Flame className="h-2.5 w-2.5" />
@@ -595,6 +597,10 @@ export default function MembersPage() {
                           {memberDetail.referredBy}
                         </span>
                       </div>
+                    )}
+
+                    {memberDetail?.yearsAttended && (
+                      <TenureBadge yearsCount={memberDetail.yearsAttended.length} />
                     )}
 
                     <div className="space-y-1.5">

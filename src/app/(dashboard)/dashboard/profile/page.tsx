@@ -21,6 +21,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
+import { TenureBadge } from "@/components/ui/tenure-badge";
 import { deleteAccount } from "@/lib/actions/account";
 import { completeOnboarding } from "@/lib/actions/onboarding";
 import { useRouter } from "next/navigation";
@@ -559,6 +560,8 @@ export default function ProfilePage() {
             </div>
 
             <Separator className="bg-pink-500/10" />
+
+            <TenureBadge yearsCount={readOnly.yearsAttended.length} />
 
             {/* Years Attended NODE */}
             <div className="space-y-2">
