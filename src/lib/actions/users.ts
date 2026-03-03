@@ -1,8 +1,24 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendExistingMemberInvite } from "@/lib/email/send";
+
+const userProfileSchema = z.object({
+  first_name: z.string().max(100).nullable().optional(),
+  last_name: z.string().max(100).nullable().optional(),
+  playa_name: z.string().max(100).nullable().optional(),
+  phone: z.string().max(30).nullable().optional(),
+  bio: z.string().max(2000).nullable().optional(),
+  emergency_contact: z.string().max(500).nullable().optional(),
+  dietary_restrictions: z.string().max(500).nullable().optional(),
+  instagram: z.string().max(100).nullable().optional(),
+  skills: z.array(z.string().max(100)).max(50).optional(),
+  node_events_attended: z.array(z.string().max(100)).max(50).optional(),
+}).strict();
+
+const roleSchema = z.enum(["member", "lead", "committee", "admin", "super_admin"]);
 
 export type UserRole =
   | "member"

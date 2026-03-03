@@ -1,8 +1,15 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
+const yesNoSchema = z.enum(["yes", "no"]);
+const prebuildSchema = z.enum(["yes", "no", "maybe"]);
+
 export async function respondToNodeYear(response: "yes" | "no") {
+  const parsed = yesNoSchema.safeParse(response);
+  if (!parsed.success) return { error: "Invalid response." };
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -44,6 +51,9 @@ export async function respondToNodeYearExtended(
   response: "yes" | "no",
   stayActive?: boolean
 ) {
+  const parsed = yesNoSchema.safeParse(response);
+  if (!parsed.success) return { error: "Invalid response." };
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -96,6 +106,9 @@ export async function respondToNodeYearExtended(
 export async function respondToPrebuild(
   response: "yes" | "no" | "maybe"
 ) {
+  const parsed = prebuildSchema.safeParse(response);
+  if (!parsed.success) return { error: "Invalid response." };
+
   const supabase = await createClient();
   const {
     data: { user },
