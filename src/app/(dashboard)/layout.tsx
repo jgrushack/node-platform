@@ -10,8 +10,9 @@ import {
   User,
   LogOut,
   FileText,
+  FolderOpen,
+  CalendarDays,
   Menu,
-  X,
   UsersRound,
   Eye,
   ArrowLeft,
@@ -30,6 +31,8 @@ import { createClient } from "@/lib/supabase/client";
 const baseSidebarItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/members", label: "Members", icon: UsersRound },
+  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/dashboard/documents", label: "Documents", icon: FolderOpen },
   { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
   { href: "/dashboard/profile", label: "Profile", icon: User },
 ];
@@ -56,7 +59,7 @@ export default function DashboardLayout({
   useEffect(() => {
     // Check for view-as mode
     const stored = localStorage.getItem("viewAsRole");
-    if (stored) setViewAsRole(stored);
+    if (stored) setTimeout(() => setViewAsRole(stored), 0);
 
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -100,9 +103,7 @@ export default function DashboardLayout({
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const sidebarItems = isCommittee
-    ? [baseSidebarItems[0], committeeItem, ...baseSidebarItems.slice(1)]
-    : baseSidebarItems;
+  const sidebarItems = [baseSidebarItems[0], committeeItem, ...baseSidebarItems.slice(1)];
 
   const navLinks = (onNavigate?: () => void) =>
     sidebarItems.map((item) => {
@@ -112,11 +113,10 @@ export default function DashboardLayout({
           key={item.href}
           href={item.href}
           onClick={onNavigate}
-          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-            isActive
+          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${isActive
               ? "bg-pink-500/15 text-pink-400"
               : "text-sand-300 hover:bg-pink-500/5 hover:text-sand-100"
-          }`}
+            }`}
         >
           <item.icon className="h-4 w-4" />
           {item.label}
