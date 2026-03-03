@@ -53,7 +53,7 @@ export default function DocumentsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-sand-100">Documents</h1>
-        <p className="mt-1 text-sand-400">
+        <p className="mt-1 text-sm text-sand-400">
           Camp documents, agreements, and resources for NODE 2026.
         </p>
       </div>
@@ -92,22 +92,22 @@ export default function DocumentsPage() {
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-sand-100">
+              <h3 className="text-base font-semibold text-sand-100">
                 {doc.label}
               </h3>
-              <p className="mt-1 text-xs text-sand-400 leading-relaxed">
+              <p className="mt-1.5 text-sm text-sand-400 leading-relaxed">
                 {doc.description}
               </p>
             </div>
 
             <div className="mt-auto pt-2">
               {doc.comingSoon ? (
-                <span className="text-xs text-sand-500">
+                <span className="text-sm text-sand-500">
                   This document will be available soon.
                 </span>
               ) : doc.type === "view" ? (
                 <button
-                  className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
                   onClick={() => setBudgetOpen(true)}
                 >
                   View Document
