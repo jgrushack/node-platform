@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { deleteAccount } from "@/lib/actions/account";
+import { completeOnboarding } from "@/lib/actions/onboarding";
 import { useRouter } from "next/navigation";
 
 const ONBOARDING_REQUIRED_FIELDS = [
@@ -278,6 +279,20 @@ export default function ProfilePage() {
       toast.error("Failed to save profile");
     } else {
       toast.success("Profile saved!");
+
+      // If onboarding was incomplete, check if required fields are now filled
+      if (onboardingIncomplete) {
+        const allFilled = ONBOARDING_REQUIRED_FIELDS.every((field) => {
+          const val = profile[field as keyof ProfileData];
+          return val && typeof val === "string" && val.trim() !== "";
+        });
+        if (allFilled) {
+          const result = await completeOnboarding();
+          if ("success" in result) {
+            setOnboardingIncomplete(false);
+          }
+        }
+      }
     }
   }
 
