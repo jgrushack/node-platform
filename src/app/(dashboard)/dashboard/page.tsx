@@ -639,10 +639,11 @@ export default function DashboardPage() {
                 </div>
                 <div className="overflow-hidden rounded-xl border border-pink-500/10">
                   <iframe
-                    src="https://www.instagram.com/node_brc/embed"
+                    src="https://www.instagram.com/p/DVTzj2NEbhB/embed"
                     className="w-full border-0"
-                    style={{ minHeight: "400px" }}
+                    style={{ height: "480px" }}
                     loading="lazy"
+                    scrolling="no"
                     title="NODE Instagram"
                   />
                 </div>
