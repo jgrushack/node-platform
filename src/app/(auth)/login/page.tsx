@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"password" | "magic">("magic");
   const [magicSent, setMagicSent] = useState(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("error") === "link_expired") {
+      setError("Your magic link has expired. Please request a new one.");
+    }
+  }, [searchParams]);
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();

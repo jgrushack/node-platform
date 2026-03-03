@@ -19,5 +19,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/verify?error=auth_error`);
+  return NextResponse.redirect(`${origin}/login?error=link_expired`);
 }
