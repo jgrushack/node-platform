@@ -1,6 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   FileText,
   ClipboardList,
@@ -8,6 +15,9 @@ import {
   Clock,
   Eye,
 } from "lucide-react";
+
+const BUDGET_EMBED_URL =
+  "https://docs.google.com/spreadsheets/d/1r-21HgEud7MnJqEanASO2JaC7AEJyav19bbEEJ97Abo/htmlview?widget=true";
 
 const documents = [
   {
@@ -37,6 +47,8 @@ const documents = [
 ];
 
 export default function DocumentsPage() {
+  const [budgetOpen, setBudgetOpen] = useState(false);
+
   return (
     <div className="space-y-6">
       <div>
@@ -96,9 +108,7 @@ export default function DocumentsPage() {
               ) : doc.type === "view" ? (
                 <button
                   className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
-                  onClick={() => {
-                    // Will link to actual budget doc when available
-                  }}
+                  onClick={() => setBudgetOpen(true)}
                 >
                   View Document
                 </button>
@@ -107,6 +117,26 @@ export default function DocumentsPage() {
           </div>
         ))}
       </div>
+
+      {/* Budget Dialog */}
+      <Dialog open={budgetOpen} onOpenChange={setBudgetOpen}>
+        <DialogContent className="glass border-pink-500/10 sm:max-w-5xl h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <DollarSign className="h-5 w-5 text-blue-400" />
+              NODE 2026 Budget
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden px-6 pb-6">
+            <iframe
+              src={BUDGET_EMBED_URL}
+              className="h-full w-full rounded-xl border border-pink-500/10"
+              loading="lazy"
+              title="NODE 2026 Budget"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

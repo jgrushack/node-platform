@@ -83,6 +83,9 @@ function getStatusSubtext(status: CampStatus): string | null {
   return "Unpaid";
 }
 
+const BUDGET_EMBED_URL =
+  "https://docs.google.com/spreadsheets/d/1r-21HgEud7MnJqEanASO2JaC7AEJyav19bbEEJ97Abo/htmlview?widget=true";
+
 const FILTERED_BM_KEYWORDS = ["office hours", "campfire talk"];
 
 function formatEventDate(dateStr: string, tz: string): string {
@@ -131,6 +134,7 @@ export default function DashboardPage() {
   const [balance, setBalance] = useState<number | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -677,7 +681,19 @@ export default function DashboardPage() {
             <CardContent>
               <ul className="space-y-3">
                 {documents.map((doc) => (
-                  <li key={doc.label} className="flex items-center gap-3">
+                  <li
+                    key={doc.label}
+                    className={`flex items-center gap-3 ${
+                      !doc.comingSoon && doc.type === "view"
+                        ? "cursor-pointer hover:bg-white/5 -mx-2 px-2 py-1.5 rounded-lg transition-colors"
+                        : ""
+                    }`}
+                    onClick={
+                      !doc.comingSoon && doc.type === "view"
+                        ? () => setBudgetOpen(true)
+                        : undefined
+                    }
+                  >
                     <span
                       className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
                         doc.type === "view"
@@ -706,6 +722,26 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Budget Dialog */}
+      <Dialog open={budgetOpen} onOpenChange={setBudgetOpen}>
+        <DialogContent className="glass border-pink-500/10 sm:max-w-5xl h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <CreditCard className="h-5 w-5 text-blue-400" />
+              NODE 2026 Budget
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden px-6 pb-6">
+            <iframe
+              src={BUDGET_EMBED_URL}
+              className="h-full w-full rounded-xl border border-pink-500/10"
+              loading="lazy"
+              title="NODE 2026 Budget"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Set Password Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
