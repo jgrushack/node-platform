@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendExistingMemberInvite } from "@/lib/email/send";
 
 export type UserRole =
   | "member"
@@ -139,7 +140,85 @@ export interface InviteResult {
   email: string;
   name: string;
   link?: string;
+  sent?: boolean;
   error?: string;
+}
+
+export interface CommitteeRequestWithProfile {
+  id: string;
+  profile_id: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  profile: {
+    first_name: string | null;
+    last_name: string | null;
+    playa_name: string | null;
+    email: string;
+  };
+}
+
+export async function getCommitteeRequests(): Promise<
+  CommitteeRequestWithProfile[] | { error: string }
+> {
+  const { error, supabase } = await requireSuperAdmin();
+  if (error || !supabase) return { error: error ?? "Not authenticated" };
+
+  const { data, error: dbError } = await supabase
+    .from("committee_requests")
+    .select("*, profile:profiles!profile_id(first_name, last_name, playa_name, email)")
+    .order("created_at", { ascending: false });
+
+  if (dbError) {
+    console.error("[getCommitteeRequests]", dbError);
+    return { error: "Failed to load committee requests." };
+  }
+
+  return data as unknown as CommitteeRequestWithProfile[];
+}
+
+export async function handleCommitteeRequest(
+  requestId: string,
+  action: "approved" | "rejected"
+): Promise<{ success: true } | { error: string }> {
+  const { error, supabase } = await requireSuperAdmin();
+  if (error || !supabase) return { error: error ?? "Not authenticated" };
+
+  // Get the request to find the profile_id
+  const { data: request, error: fetchError } = await supabase
+    .from("committee_requests")
+    .select("profile_id")
+    .eq("id", requestId)
+    .single();
+
+  if (fetchError || !request) {
+    return { error: "Request not found." };
+  }
+
+  // Update request status
+  const { error: updateError } = await supabase
+    .from("committee_requests")
+    .update({ status: action })
+    .eq("id", requestId);
+
+  if (updateError) {
+    console.error("[handleCommitteeRequest]", updateError);
+    return { error: "Failed to update request." };
+  }
+
+  // On approve, set user's role to committee
+  if (action === "approved") {
+    const { error: roleError } = await supabase
+      .from("profiles")
+      .update({ role: "committee" })
+      .eq("id", request.profile_id);
+
+    if (roleError) {
+      console.error("[handleCommitteeRequest] role update", roleError);
+      return { error: "Request approved but failed to update role." };
+    }
+  }
+
+  return { success: true };
 }
 
 export async function generateInviteLinks(
@@ -187,11 +266,22 @@ export async function generateInviteLinks(
         error: linkError?.message || "Failed to generate link",
       });
     } else {
+      const magicLink = data.properties.action_link;
+
+      // Send branded invite email via Resend
+      const emailResult = await sendExistingMemberInvite({
+        email: profile.email,
+        firstName: profile.first_name || name,
+        magicLink,
+      });
+
       results.push({
         userId: profile.id,
         email: profile.email,
         name,
-        link: data.properties.action_link,
+        link: magicLink,
+        sent: "success" in emailResult,
+        error: "error" in emailResult ? emailResult.error : undefined,
       });
     }
   }
