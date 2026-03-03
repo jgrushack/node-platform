@@ -21,8 +21,8 @@ export function existingMemberInviteEmail({
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
           <!-- Header -->
           <tr>
-            <td align="center" style="padding:48px 32px 32px;background:linear-gradient(135deg,#F90077 0%,#FF3399 40%,#FF6B9D 70%,#FFB800 100%);border-radius:16px 16px 0 0;">
-              <img src="https://www.node.family/email/node-2026-header.png" alt="NODE 2026" width="400" style="display:block;max-width:400px;width:100%;height:auto;" />
+            <td align="center" style="padding:24px 32px;background-color:#0F0120;border-radius:16px 16px 0 0;">
+              <img src="https://www.node.family/email/node-2026-header.png" alt="NODE 2026" width="536" style="display:block;max-width:536px;width:100%;height:auto;border-radius:12px;" />
             </td>
           </tr>
           <!-- Body -->
