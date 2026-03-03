@@ -22,7 +22,7 @@ export function existingMemberInviteEmail({
           <!-- Header -->
           <tr>
             <td align="center" style="padding:48px 32px 32px;background:linear-gradient(135deg,#F90077 0%,#FF3399 40%,#FF6B9D 70%,#FFB800 100%);border-radius:16px 16px 0 0;">
-              <img src="https://nodev0.vercel.app/email/node-2026-header.png" alt="NODE 2026" width="400" style="display:block;max-width:400px;width:100%;height:auto;" />
+              <img src="https://www.node.family/email/node-2026-header.png" alt="NODE 2026" width="400" style="display:block;max-width:400px;width:100%;height:auto;" />
             </td>
           </tr>
           <!-- Body -->
