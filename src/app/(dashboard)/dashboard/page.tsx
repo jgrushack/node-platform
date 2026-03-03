@@ -645,7 +645,7 @@ export default function DashboardPage() {
                   <iframe
                     src="https://www.instagram.com/p/DVTzj2NEbhB/embed"
                     className="w-full border-0"
-                    style={{ height: "480px" }}
+                    style={{ height: "750px" }}
                     loading="lazy"
                     scrolling="no"
                     title="NODE Instagram"
