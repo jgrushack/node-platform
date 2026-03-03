@@ -53,3 +53,45 @@ export interface ApplicationComment {
     email: string;
   };
 }
+
+export type VoteValue = "yes" | "no" | "waitlist";
+
+export interface ApplicationVote {
+  id: string;
+  application_id: string;
+  voter_id: string;
+  vote: VoteValue;
+  created_at: string;
+  voter: {
+    first_name: string | null;
+    last_name: string | null;
+    playa_name: string | null;
+    email: string;
+    avatar_url: string | null;
+  };
+}
+
+export interface VoteSummary {
+  yes: number;
+  no: number;
+  waitlist: number;
+}
+
+export interface ApplicationWithVotes extends ApplicationRow {
+  votes: ApplicationVote[];
+  vote_summary: VoteSummary;
+  current_user_vote: VoteValue | null;
+}
+
+export interface CommitteeRequest {
+  id: string;
+  profile_id: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+}
+
+export interface ApplicationSummaryData {
+  pendingCount: number;
+  approvedCount: number;
+  slotsRemaining: number;
+}

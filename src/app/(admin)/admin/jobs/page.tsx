@@ -70,7 +70,7 @@ const jobs = [
 export default function AdminJobsPage() {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -97,7 +97,7 @@ export default function AdminJobsPage() {
                 <Label className="text-sand-300">Title</Label>
                 <Input placeholder="Job title" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="text-sand-300">Category</Label>
                   <Input placeholder="e.g. Infrastructure" />
@@ -107,7 +107,7 @@ export default function AdminJobsPage() {
                   <Input placeholder="e.g. Mon AM" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="text-sand-300">Location</Label>
                   <Input placeholder="e.g. Main Stage" />
@@ -132,8 +132,8 @@ export default function AdminJobsPage() {
         </Dialog>
       </div>
 
-      <div className="glass-card overflow-hidden rounded-2xl">
-        <Table>
+      <div className="glass-card overflow-x-auto rounded-2xl">
+        <Table className="min-w-[600px]">
           <TableHeader>
             <TableRow className="border-amber/10 hover:bg-transparent">
               <TableHead className="text-sand-400">Title</TableHead>

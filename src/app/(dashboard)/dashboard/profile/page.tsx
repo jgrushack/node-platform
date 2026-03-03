@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,8 +12,33 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Instagram, X, Plus, Loader2, Camera } from "lucide-react";
+import { Instagram, X, Plus, Loader2, Camera, AlertCircle, Trash2, Cake } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
+import { deleteAccount } from "@/lib/actions/account";
+import { useRouter } from "next/navigation";
+
+const ONBOARDING_REQUIRED_FIELDS = [
+  "first_name",
+  "last_name",
+  "phone",
+  "dietary_restrictions",
+  "emergency_contact",
+] as const;
+
+function RequiredBadge() {
+  return (
+    <span className="ml-1.5 inline-flex items-center rounded-full bg-coral/15 px-1.5 py-0.5 text-[10px] font-medium text-coral">
+      Required
+    </span>
+  );
+}
 
 interface ProfileData {
   first_name: string;
@@ -21,6 +47,7 @@ interface ProfileData {
   email: string;
   phone: string;
   bio: string;
+  birthday: string;
   emergency_contact: string;
   dietary_restrictions: string;
   instagram: string;
@@ -47,6 +74,22 @@ export default function ProfilePage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [onboardingIncomplete, setOnboardingIncomplete] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const isFieldMissing = useCallback(
+    (field: string) => {
+      if (!onboardingIncomplete || !profile) return false;
+      const value = profile[field as keyof ProfileData];
+      if (Array.isArray(value)) return value.length === 0;
+      return !value || (typeof value === "string" && value.trim() === "");
+    },
+    [onboardingIncomplete, profile]
+  );
 
   useEffect(() => {
     const supabase = createClient();
@@ -58,7 +101,7 @@ export default function ProfilePage() {
       supabase
         .from("profiles")
         .select(
-          "first_name, last_name, playa_name, email, phone, bio, emergency_contact, dietary_restrictions, instagram, skills, node_events_attended, avatar_url"
+          "first_name, last_name, playa_name, email, phone, bio, birthday, emergency_contact, dietary_restrictions, instagram, skills, node_events_attended, avatar_url, onboarding_completed_at"
         )
         .eq("id", user.id)
         .single()
@@ -71,6 +114,7 @@ export default function ProfilePage() {
             email: data.email || "",
             phone: data.phone || "",
             bio: data.bio || "",
+            birthday: data.birthday || "",
             emergency_contact: data.emergency_contact || "",
             dietary_restrictions: data.dietary_restrictions || "",
             instagram: data.instagram || "",
@@ -81,6 +125,11 @@ export default function ProfilePage() {
             nodeEventsAttended: data.node_events_attended || [],
           }));
           setAvatarUrl(data.avatar_url || null);
+
+          // Show required badges if onboarding is incomplete
+          if (!data.onboarding_completed_at) {
+            setOnboardingIncomplete(true);
+          }
 
           const fn = data.first_name || "";
           const ln = data.last_name || "";
@@ -100,6 +149,7 @@ export default function ProfilePage() {
         .then(({ data: regs }) => {
           if (regs) {
             const years = regs
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               .map((r: any) => r.camp_years?.year)
               .filter(Boolean)
               .sort((a: number, b: number) => a - b);
@@ -215,6 +265,7 @@ export default function ProfilePage() {
         playa_name: profile.playa_name || null,
         phone: profile.phone || null,
         bio: profile.bio || null,
+        birthday: profile.birthday || null,
         emergency_contact: profile.emergency_contact || null,
         dietary_restrictions: profile.dietary_restrictions || null,
         instagram: profile.instagram || null,
@@ -230,6 +281,21 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleDeleteAccount() {
+    if (deleteConfirmText.toLowerCase() !== "delete") return;
+    setDeleting(true);
+    const result = await deleteAccount();
+    if ("error" in result) {
+      toast.error(result.error);
+      setDeleting(false);
+      return;
+    }
+    // Sign out client-side and redirect to home
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <motion.div
@@ -239,6 +305,20 @@ export default function ProfilePage() {
         <h1 className="text-3xl font-bold text-sand-100">Profile</h1>
         <p className="mt-1 text-sand-400">Manage your NODE identity.</p>
       </motion.div>
+
+      {/* Onboarding banner */}
+      {onboardingIncomplete && searchParams.get("onboarding") === "1" && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 rounded-xl border border-amber/20 bg-amber/5 px-4 py-3"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber" />
+          <p className="text-sm text-sand-300">
+            Complete the required fields below to finish your onboarding.
+          </p>
+        </motion.div>
+      )}
 
       {/* Editable Profile Card */}
       <Card className="glass-card border-0">
@@ -273,7 +353,7 @@ export default function ProfilePage() {
               <CardTitle className="text-sand-100">
                 {profile
                   ? `${profile.first_name} ${profile.last_name}`.trim() ||
-                    profile.email
+                  profile.email
                   : "Loading..."}
               </CardTitle>
               <p className="text-sm text-sand-400">{profile?.email || ""}</p>
@@ -285,14 +365,20 @@ export default function ProfilePage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label className="text-sand-300">First Name</Label>
+              <Label className="text-sand-300">
+                First Name
+                {isFieldMissing("first_name") && <RequiredBadge />}
+              </Label>
               <Input
                 value={profile?.first_name ?? ""}
                 onChange={(e) => updateField("first_name", e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sand-300">Last Name</Label>
+              <Label className="text-sand-300">
+                Last Name
+                {isFieldMissing("last_name") && <RequiredBadge />}
+              </Label>
               <Input
                 value={profile?.last_name ?? ""}
                 onChange={(e) => updateField("last_name", e.target.value)}
@@ -306,6 +392,18 @@ export default function ProfilePage() {
               placeholder="Your playa name (optional)"
               value={profile?.playa_name ?? ""}
               onChange={(e) => updateField("playa_name", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sand-300">
+              <Cake className="mr-1.5 inline h-3.5 w-3.5 text-sand-400" />
+              Birthday
+              <span className="ml-1.5 text-xs text-sand-500 font-normal">(optional, no year)</span>
+            </Label>
+            <BirthdayPicker
+              value={profile?.birthday ?? ""}
+              onChange={(val) => updateField("birthday", val)}
             />
           </div>
 
@@ -333,7 +431,10 @@ export default function ProfilePage() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sand-300">Dietary Restrictions</Label>
+            <Label className="text-sand-300">
+              Dietary Restrictions
+              {isFieldMissing("dietary_restrictions") && <RequiredBadge />}
+            </Label>
             <Input
               placeholder="e.g. Vegetarian, Gluten-free, Nut allergy..."
               value={profile?.dietary_restrictions ?? ""}
@@ -344,7 +445,10 @@ export default function ProfilePage() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sand-300">Phone</Label>
+            <Label className="text-sand-300">
+              Phone
+              {isFieldMissing("phone") && <RequiredBadge />}
+            </Label>
             <Input
               type="tel"
               placeholder="+1 (555) 000-0000"
@@ -354,7 +458,10 @@ export default function ProfilePage() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sand-300">Emergency Contact</Label>
+            <Label className="text-sand-300">
+              Emergency Contact
+              {isFieldMissing("emergency_contact") && <RequiredBadge />}
+            </Label>
             <Input
               placeholder="Name — Phone"
               value={profile?.emergency_contact ?? ""}
@@ -484,6 +591,177 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Delete Account */}
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+      >
+        <Card className="glass-card border-0 border-t border-red-500/10">
+          <CardContent className="flex items-center justify-between py-6">
+            <div>
+              <p className="text-sm font-medium text-sand-300">
+                Delete Account
+              </p>
+              <p className="text-xs text-sand-500 mt-0.5">
+                Permanently remove your account and all associated data.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Account
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          setShowDeleteDialog(open);
+          if (!open) {
+            setDeleteConfirmText("");
+          }
+        }}
+      >
+        <DialogContent className="glass border-red-500/10 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <Trash2 className="h-5 w-5 text-red-400" />
+              Delete Your Account
+            </DialogTitle>
+            <DialogDescription className="text-sand-400">
+              This action is permanent and cannot be undone. All your data
+              including your profile, registrations, and application history
+              will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirm" className="text-sand-300">
+                Type <span className="font-mono text-red-400">delete</span> to confirm
+              </Label>
+              <Input
+                id="delete-confirm"
+                placeholder="delete"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleDeleteAccount()}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleDeleteAccount}
+                disabled={
+                  deleting || deleteConfirmText.toLowerCase() !== "delete"
+                }
+                className="flex-1 bg-red-500 text-white hover:bg-red-600 disabled:opacity-40"
+              >
+                {deleting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {deleting ? "Deleting..." : "Permanently Delete Account"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setShowDeleteDialog(false)}
+                className="text-sand-400 hover:text-sand-200"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+const MONTHS = [
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
+const DAYS_IN_MONTH: Record<string, number> = {
+  "01": 31, "02": 29, "03": 31, "04": 30, "05": 31, "06": 30,
+  "07": 31, "08": 31, "09": 30, "10": 31, "11": 30, "12": 31,
+};
+
+function BirthdayPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [month, day] = value ? value.split("-") : ["", ""];
+
+  function handleMonth(m: string) {
+    if (!m) {
+      onChange("");
+      return;
+    }
+    const maxDay = DAYS_IN_MONTH[m] || 31;
+    const d = day && parseInt(day, 10) <= maxDay ? day : "";
+    onChange(d ? `${m}-${d}` : "");
+  }
+
+  function handleDay(d: string) {
+    if (!d || !month) {
+      if (month && !d) onChange("");
+      return;
+    }
+    onChange(`${month}-${d}`);
+  }
+
+  const maxDay = month ? DAYS_IN_MONTH[month] || 31 : 31;
+
+  return (
+    <div className="flex gap-3">
+      <select
+        value={month}
+        onChange={(e) => handleMonth(e.target.value)}
+        className="flex-1 rounded-md border border-pink-500/20 bg-transparent px-3 py-2 text-sm text-sand-200 focus:outline-none focus:ring-2 focus:ring-pink-500/30"
+      >
+        <option value="" className="bg-blue-950">Month</option>
+        {MONTHS.map((m) => (
+          <option key={m.value} value={m.value} className="bg-blue-950">
+            {m.label}
+          </option>
+        ))}
+      </select>
+      <select
+        value={day}
+        onChange={(e) => handleDay(e.target.value)}
+        disabled={!month}
+        className="w-24 rounded-md border border-pink-500/20 bg-transparent px-3 py-2 text-sm text-sand-200 focus:outline-none focus:ring-2 focus:ring-pink-500/30 disabled:opacity-40"
+      >
+        <option value="" className="bg-blue-950">Day</option>
+        {Array.from({ length: maxDay }, (_, i) => {
+          const d = String(i + 1).padStart(2, "0");
+          return (
+            <option key={d} value={d} className="bg-blue-950">
+              {i + 1}
+            </option>
+          );
+        })}
+      </select>
     </div>
   );
 }

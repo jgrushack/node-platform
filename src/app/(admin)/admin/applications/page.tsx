@@ -1,30 +1,5 @@
-import { getApplications } from "@/lib/actions/applications";
-import { ApplicationsTable } from "./applications-table";
+import { redirect } from "next/navigation";
 
-export default async function ApplicationsPage() {
-  const result = await getApplications();
-
-  if ("error" in result) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-sand-100">Applications</h1>
-          <p className="mt-1 text-red-400">{result.error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-sand-100">Applications</h1>
-        <p className="mt-1 text-sand-400">
-          Review and manage membership applications.
-        </p>
-      </div>
-
-      <ApplicationsTable applications={result} />
-    </div>
-  );
+export default function ApplicationsPage() {
+  redirect("/dashboard/applications");
 }

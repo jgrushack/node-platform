@@ -14,10 +14,12 @@ import {
   CheckCircle2,
   AlertCircle,
   FileCheck,
+  Instagram,
+  Megaphone,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
-import { respondToNodeYear } from "@/lib/actions/registrations";
+import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,19 +116,10 @@ function getUpcomingBmEvents(tz: string) {
     });
 }
 
-// NODE-specific events — placeholder until wired to a real source
-const nodeEvents = [
-  { date: "TBD", label: "NODE Town Hall" },
-  { date: "TBD", label: "Dues Deadline" },
-  { date: "TBD", label: "Build Week Planning" },
-];
-
-const documents = [
-  { label: "Camp Agreement", done: false },
-  { label: "Liability Waiver", done: false },
-  { label: "Emergency Contact Form", done: false },
-  { label: "Ticket Proof of Purchase", done: false },
-  { label: "Vehicle Pass (if applicable)", done: false },
+const documents: { label: string; type: "action" | "view"; comingSoon: boolean }[] = [
+  { label: "Camp Agreement / Liability", type: "action", comingSoon: true },
+  { label: "Ticket Purchased Questionnaire", type: "action", comingSoon: true },
+  { label: "Budget", type: "view", comingSoon: false },
 ];
 
 export default function DashboardPage() {
@@ -136,8 +129,7 @@ export default function DashboardPage() {
   const [campStatus, setCampStatus] = useState<CampStatus | null>(null);
   const [yearsAtNode, setYearsAtNode] = useState<number | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
-  const [showRegistrationPrompt, setShowRegistrationPrompt] = useState(false);
-  const [registrationLoading, setRegistrationLoading] = useState<string | null>(null);
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -167,11 +159,12 @@ export default function DashboardPage() {
 
       supabase
         .from("profiles")
-        .select("role")
+        .select("role, onboarding_completed_at")
         .eq("id", authUser.id)
         .single()
         .then(({ data: profile }) => {
           const realRole = profile?.role || "member";
+          setOnboardingComplete(!!profile?.onboarding_completed_at);
           // Support view-as mode for super_admins
           const viewAs = localStorage.getItem("viewAsRole");
           const role =
@@ -225,8 +218,7 @@ export default function DashboardPage() {
                     // Registration exists but not confirmed (pending/waitlisted)
                     setCampStatus({ label: "Undecided", payment: null });
                   } else {
-                    // No registration — show the registration prompt
-                    setShowRegistrationPrompt(true);
+                    // No registration yet
                     setCampStatus({ label: "Undecided", payment: null });
                   }
                 });
@@ -248,13 +240,23 @@ export default function DashboardPage() {
               });
           }
 
-          // Fetch total campers for super_admin
+          // Fetch 2026 campers (confirmed registrations) for super_admin
           if (role === "super_admin") {
             supabase
-              .from("profiles")
-              .select("id", { count: "exact", head: true })
-              .then(({ count }) => {
-                setTotalCampers(count ?? 0);
+              .from("camp_years")
+              .select("id")
+              .eq("year", 2026)
+              .single()
+              .then(({ data: cy }) => {
+                if (!cy) { setTotalCampers(0); return; }
+                supabase
+                  .from("registrations")
+                  .select("id", { count: "exact", head: true })
+                  .eq("camp_year_id", cy.id)
+                  .eq("status", "confirmed")
+                  .then(({ count }) => {
+                    setTotalCampers(count ?? 0);
+                  });
               });
           }
 
@@ -292,11 +294,11 @@ export default function DashboardPage() {
       urgent: true,
     });
   }
-  // Placeholder attention items — these would come from real data
-  const incompleteDocs = documents.filter((d) => !d.done).length;
-  if (incompleteDocs > 0) {
+  // Documents attention items — will be enabled when docs are completable
+  const actionDocs = documents.filter((d) => d.type === "action" && !d.comingSoon);
+  if (actionDocs.length > 0) {
     attentionItems.push({
-      label: `${incompleteDocs} document${incompleteDocs > 1 ? "s" : ""} still need to be completed`,
+      label: `${actionDocs.length} document${actionDocs.length > 1 ? "s" : ""} still need to be completed`,
       urgent: false,
     });
   }
@@ -327,19 +329,35 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleRegistrationResponse(response: "yes" | "no" | "maybe") {
-    if (response === "maybe") return; // Do nothing — banner stays until next login
-    setRegistrationLoading(response);
-    const result = await respondToNodeYear(response);
-    setRegistrationLoading(null);
-    if (result.success) {
-      setShowRegistrationPrompt(false);
-      if (response === "yes") {
-        setCampStatus({ label: "Attending", payment: null });
-      } else {
-        setCampStatus({ label: "Not Attending", payment: null });
-      }
-    }
+  function refreshDashboardData() {
+    // Re-fetch camp status after onboarding changes
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      if (!authUser) return;
+      supabase
+        .from("camp_years")
+        .select("id")
+        .eq("year", 2026)
+        .single()
+        .then(({ data: campYear }) => {
+          if (!campYear) return;
+          supabase
+            .from("registrations")
+            .select("status")
+            .eq("profile_id", authUser.id)
+            .eq("camp_year_id", campYear.id)
+            .maybeSingle()
+            .then(({ data: reg }) => {
+              if (reg?.status === "confirmed") {
+                setCampStatus({ label: "Attending", payment: null });
+              } else if (reg?.status === "cancelled") {
+                setCampStatus({ label: "Not Attending", payment: null });
+              } else {
+                setCampStatus({ label: "Undecided", payment: null });
+              }
+            });
+        });
+    });
   }
 
   const statusDisplay = campStatus ? getStatusDisplay(campStatus) : "—";
@@ -407,47 +425,12 @@ export default function DashboardPage() {
         </p>
       </motion.div>
 
-      {/* Registration prompt */}
-      {showRegistrationPrompt && (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
-        >
-          <Card className="glass-card border-0 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 via-amber/5 to-pink-500/5" />
-            <CardContent className="relative py-6 px-6 sm:px-8">
-              <h2 className="text-xl sm:text-2xl font-bold text-sand-100 mb-4">
-                Are you joining NODE in 2026?
-              </h2>
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  onClick={() => handleRegistrationResponse("yes")}
-                  disabled={registrationLoading !== null}
-                  className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/20 hover:border-green-500/30"
-                >
-                  {registrationLoading === "yes" ? "Saving..." : "Yes, I'm in!"}
-                </Button>
-                <Button
-                  onClick={() => handleRegistrationResponse("maybe")}
-                  disabled={registrationLoading !== null}
-                  variant="ghost"
-                  className="text-sand-400 hover:text-sand-200 hover:bg-sand-700/20"
-                >
-                  Still on the fence
-                </Button>
-                <Button
-                  onClick={() => handleRegistrationResponse("no")}
-                  disabled={registrationLoading !== null}
-                  variant="ghost"
-                  className="text-sand-500 hover:text-sand-300 hover:bg-sand-700/20"
-                >
-                  {registrationLoading === "no" ? "Saving..." : "No, not this year"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+      {/* Onboarding Checklist */}
+      {onboardingComplete === false && (
+        <OnboardingChecklist
+          onStatusChange={refreshDashboardData}
+          onComplete={() => setOnboardingComplete(true)}
+        />
       )}
 
       {/* Stats grid */}
@@ -522,7 +505,7 @@ export default function DashboardPage() {
             </motion.div>
           )}
 
-          {/* Total Campers — super_admin only */}
+          {/* 2026 Campers — super_admin only */}
           {isSuperAdmin && (
             <motion.div
               initial={{ opacity: 0, y: 15 }}
@@ -532,7 +515,7 @@ export default function DashboardPage() {
               <Card className="glass-card border-0">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-sand-400">
-                    Total Campers
+                    2026 Campers
                   </CardTitle>
                   <Users className="h-4 w-4 text-amber" />
                 </CardHeader>
@@ -630,9 +613,9 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {/* Bottom grid: Upcoming NODE Events + Documents */}
+      {/* Bottom grid: Recent Updates + Documents */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Upcoming Events (NODE) */}
+        {/* Recent Updates */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -641,29 +624,38 @@ export default function DashboardPage() {
           <Card className="glass-card border-0">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sand-200">
-                <CalendarDays className="h-4 w-4 text-pink-400" />
-                Upcoming Events
+                <Megaphone className="h-4 w-4 text-pink-400" />
+                Recent Updates
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              {nodeEvents.length === 0 ? (
-                <p className="py-2 text-sm text-sand-400">
-                  No upcoming events.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {nodeEvents.map((event) => (
-                    <li key={event.label} className="flex items-start gap-3">
-                      <span className="w-20 sm:w-28 flex-shrink-0 text-xs font-medium text-sand-400 pt-0.5">
-                        {event.date}
-                      </span>
-                      <span className="text-sm text-sand-200">
-                        {event.label}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <CardContent className="space-y-4">
+              {/* Latest Instagram post */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Instagram className="h-3.5 w-3.5 text-pink-400" />
+                  <span className="text-xs font-medium text-sand-400">
+                    @node_brc
+                  </span>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-pink-500/10">
+                  <iframe
+                    src="https://www.instagram.com/node_brc/embed"
+                    className="w-full border-0"
+                    style={{ minHeight: "400px" }}
+                    loading="lazy"
+                    title="NODE Instagram"
+                  />
+                </div>
+                <a
+                  href="https://www.instagram.com/node_brc/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-pink-400 hover:text-pink-300 transition-colors"
+                >
+                  <Instagram className="h-3 w-3" />
+                  Follow @node_brc on Instagram
+                </a>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -686,24 +678,26 @@ export default function DashboardPage() {
                 {documents.map((doc) => (
                   <li key={doc.label} className="flex items-center gap-3">
                     <span
-                      className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${doc.done
-                          ? "bg-green-500/20 text-green-400"
+                      className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
+                        doc.type === "view"
+                          ? "bg-blue-500/20 text-blue-400"
                           : "bg-sand-700/30 text-sand-500"
-                        }`}
+                      }`}
                     >
-                      {doc.done ? "✓" : ""}
+                      {doc.type === "view" ? "!" : ""}
                     </span>
-                    <span
-                      className={`text-sm ${doc.done ? "text-sand-400 line-through" : "text-sand-200"
-                        }`}
-                    >
+                    <span className="text-sm text-sand-200">
                       {doc.label}
                     </span>
-                    {!doc.done && (
-                      <Badge className="ml-auto bg-sand-700/30 text-sand-400 text-[10px]">
-                        Incomplete
+                    {doc.comingSoon ? (
+                      <Badge className="ml-auto bg-sand-700/30 text-sand-500 text-[10px]">
+                        Coming Soon
                       </Badge>
-                    )}
+                    ) : doc.type === "view" ? (
+                      <Badge className="ml-auto bg-blue-500/15 text-blue-400 text-[10px]">
+                        View Only
+                      </Badge>
+                    ) : null}
                   </li>
                 ))}
               </ul>

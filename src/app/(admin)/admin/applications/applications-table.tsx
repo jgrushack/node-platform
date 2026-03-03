@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+
 import {
   Table,
   TableBody,
@@ -94,12 +94,12 @@ export function ApplicationsTable({
 
   return (
     <>
-      <div className="glass-card overflow-hidden rounded-2xl">
-        <Table>
+      <div className="glass-card overflow-x-auto rounded-2xl">
+        <Table className="min-w-[500px]">
           <TableHeader>
             <TableRow className="border-pink-500/10 hover:bg-transparent">
               <TableHead className="text-sand-400">Name</TableHead>
-              <TableHead className="text-sand-400">Email</TableHead>
+              <TableHead className="text-sand-400 hidden sm:table-cell">Email</TableHead>
               <TableHead className="text-sand-400">Date</TableHead>
               <TableHead className="text-sand-400">Status</TableHead>
               <TableHead className="text-right text-sand-400">
@@ -126,7 +126,7 @@ export function ApplicationsTable({
                   <TableCell className="font-medium text-sand-100">
                     {app.first_name} {app.last_name}
                   </TableCell>
-                  <TableCell className="text-sand-300">{app.email}</TableCell>
+                  <TableCell className="text-sand-300 hidden sm:table-cell">{app.email}</TableCell>
                   <TableCell className="text-sand-400">
                     {new Date(app.created_at).toLocaleDateString()}
                   </TableCell>
@@ -227,7 +227,7 @@ export function ApplicationsTable({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-col gap-2 pt-2 sm:flex-row">
               <Button
                 onClick={() => handleStatusUpdate("approved")}
                 disabled={isPending}

@@ -42,7 +42,7 @@ export default function VerifyPage() {
     }
 
     verify();
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   return (
     <div className="flex flex-col items-center text-center">

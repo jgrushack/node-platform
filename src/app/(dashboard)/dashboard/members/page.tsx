@@ -33,6 +33,8 @@ import {
   AlertTriangle,
   Flame,
   Calendar,
+  Hammer,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -79,6 +81,8 @@ interface Member {
   role: string;
   is_active: boolean;
   avatar_url: string | null;
+  node_events_attended: string[];
+  yearsCount: number;
 }
 
 interface MemberDetail {
@@ -155,12 +159,40 @@ export default function MembersPage() {
       supabase
         .from("profiles")
         .select(
-          "id, first_name, last_name, playa_name, email, bio, role, is_active, avatar_url"
+          "id, first_name, last_name, playa_name, email, bio, role, is_active, avatar_url, node_events_attended"
         )
         .eq("hide_from_directory", false)
         .order("first_name", { ascending: true })
-        .then(({ data }) => {
-          if (data) setMembers(data);
+        .then(async ({ data }) => {
+          if (!data) {
+            setLoading(false);
+            return;
+          }
+
+          // Batch-fetch confirmed registration counts per member
+          const { data: regs } = await supabase
+            .from("registrations")
+            .select("profile_id, camp_years(year)")
+            .eq("status", "confirmed");
+
+          const yearsByProfile: Record<string, number> = {};
+          if (regs) {
+            for (const r of regs) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((r as any).camp_years?.year) {
+                yearsByProfile[r.profile_id] =
+                  (yearsByProfile[r.profile_id] || 0) + 1;
+              }
+            }
+          }
+
+          setMembers(
+            data.map((m) => ({
+              ...m,
+              node_events_attended: m.node_events_attended || [],
+              yearsCount: yearsByProfile[m.id] || 0,
+            }))
+          );
           setLoading(false);
         });
     });
@@ -188,6 +220,7 @@ export default function MembersPage() {
       .eq("status", "confirmed");
 
     const yearsAttended = (regs || [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((r: any) => r.camp_years?.year)
       .filter(Boolean)
       .sort((a: number, b: number) => a - b);
@@ -281,11 +314,10 @@ export default function MembersPage() {
           <Button
             variant="outline"
             size="sm"
-            className={`shrink-0 gap-2 border-pink-500/20 ${
-              showInactive
+            className={`shrink-0 gap-2 border-pink-500/20 ${showInactive
                 ? "bg-pink-500/15 text-pink-400"
                 : "text-sand-400 hover:text-sand-200"
-            }`}
+              }`}
             onClick={() => setShowInactive(!showInactive)}
           >
             {showInactive ? (
@@ -319,8 +351,15 @@ export default function MembersPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((member, i) => {
-            const standing = standings[member.id] || "good_standing";
-            const standingCfg = STANDING_CONFIG[standing];
+            // Parse Build/Strike events into badge data
+            const buildYears = member.node_events_attended
+              .filter((e) => e.startsWith("Build"))
+              .map((e) => e.replace("Build ", ""))
+              .sort();
+            const strikeYears = member.node_events_attended
+              .filter((e) => e.startsWith("Strike"))
+              .map((e) => e.replace("Strike ", ""))
+              .sort();
 
             return (
               <motion.div
@@ -330,9 +369,8 @@ export default function MembersPage() {
                 transition={{ delay: Math.min(i * 0.03, 0.5) }}
               >
                 <Card
-                  className={`glass-card border-0 cursor-pointer transition-colors hover:bg-pink-500/5 ${
-                    !member.is_active ? "opacity-60" : ""
-                  }`}
+                  className={`glass-card border-0 cursor-pointer transition-colors hover:bg-pink-500/5 ${!member.is_active ? "opacity-60" : ""
+                    }`}
                   onClick={() => openMemberDetail(member)}
                 >
                   <CardContent className="flex items-start gap-4 p-4">
@@ -365,18 +403,33 @@ export default function MembersPage() {
                           {member.bio}
                         </p>
                       )}
-                      {isSuperAdmin && (
-                        <div
-                          className="mt-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Badge
-                            className={`text-[10px] ${standingCfg.bg} ${standingCfg.color}`}
+                      {/* Fun decorative badges */}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {member.yearsCount > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-medium text-amber">
+                            <Flame className="h-2.5 w-2.5" />
+                            {member.yearsCount} yr{member.yearsCount > 1 ? "s" : ""}
+                          </span>
+                        )}
+                        {buildYears.map((yr) => (
+                          <span
+                            key={`build-${yr}`}
+                            className="inline-flex items-center gap-1 rounded-full bg-pink-500/15 px-2 py-0.5 text-[10px] font-medium text-pink-400"
                           >
-                            {standingCfg.label}
-                          </Badge>
-                        </div>
-                      )}
+                            <Hammer className="h-2.5 w-2.5" />
+                            {yr}
+                          </span>
+                        ))}
+                        {strikeYears.map((yr) => (
+                          <span
+                            key={`strike-${yr}`}
+                            className="inline-flex items-center gap-1 rounded-full bg-coral/15 px-2 py-0.5 text-[10px] font-medium text-coral"
+                          >
+                            <Wrench className="h-2.5 w-2.5" />
+                            {yr}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -550,7 +603,7 @@ export default function MembersPage() {
                         <span>Years at NODE</span>
                       </div>
                       {memberDetail?.yearsAttended &&
-                      memberDetail.yearsAttended.length > 0 ? (
+                        memberDetail.yearsAttended.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {memberDetail.yearsAttended.map((year) => (
                             <Badge
