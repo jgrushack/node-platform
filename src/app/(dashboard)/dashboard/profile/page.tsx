@@ -399,7 +399,7 @@ export default function ProfilePage() {
             <Label className="text-sand-300">
               <Cake className="mr-1.5 inline h-3.5 w-3.5 text-sand-400" />
               Birthday
-              <span className="ml-1.5 text-xs text-sand-500 font-normal">(optional, no year)</span>
+              <span className="ml-1.5 text-xs text-sand-500 font-normal">(optional)</span>
             </Label>
             <BirthdayPicker
               value={profile?.birthday ?? ""}
@@ -710,21 +710,35 @@ function BirthdayPicker({
   value: string;
   onChange: (val: string) => void;
 }) {
-  const [month, day] = value ? value.split("-") : ["", ""];
+  const [savedMonth, savedDay] = value ? value.split("-") : ["", ""];
+  const [selectedMonth, setSelectedMonth] = useState(savedMonth);
+
+  // Sync internal month state when value changes externally
+  useEffect(() => {
+    const [m] = value ? value.split("-") : [""];
+    setSelectedMonth(m);
+  }, [value]);
+
+  const month = selectedMonth;
+  const day = savedDay;
 
   function handleMonth(m: string) {
+    setSelectedMonth(m);
     if (!m) {
       onChange("");
       return;
     }
-    const maxDay = DAYS_IN_MONTH[m] || 31;
-    const d = day && parseInt(day, 10) <= maxDay ? day : "";
-    onChange(d ? `${m}-${d}` : "");
+    // If there's already a valid day, keep it (adjust if needed)
+    if (day) {
+      const maxDay = DAYS_IN_MONTH[m] || 31;
+      const d = parseInt(day, 10) <= maxDay ? day : "";
+      onChange(d ? `${m}-${d}` : "");
+    }
   }
 
   function handleDay(d: string) {
     if (!d || !month) {
-      if (month && !d) onChange("");
+      onChange("");
       return;
     }
     onChange(`${month}-${d}`);
