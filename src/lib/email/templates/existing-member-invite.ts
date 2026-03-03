@@ -13,6 +13,14 @@ export function existingMemberInviteEmail({
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <title>Welcome to the NODE Portal</title>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    @font-face {
+      font-family: 'SciFied';
+      src: url('https://nodev0.vercel.app/fonts/SciFied.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }
+  </style>
 </head>
 <body style="margin:0;padding:0;background-color:#0F0120;font-family:'Exo 2',Arial,Helvetica,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0F0120;">
@@ -32,7 +40,7 @@ export function existingMemberInviteEmail({
                 <path fill-rule="evenodd" clip-rule="evenodd" d="M2451.82 1213.3C2362.37 1156.25 2336.11 1037.48 2393.16 948.033L2840.12 170.031C2897.17 80.581 3015.93 54.3172 3105.38 111.369C3194.84 168.422 3221.1 287.186 3164.05 376.636L2717.09 1154.64C2660.04 1244.09 2541.27 1270.35 2451.82 1213.3Z" fill="url(#ng)"/>
                 <path fill-rule="evenodd" clip-rule="evenodd" d="M1998.58 424.295C1914.55 359.53 1898.92 238.904 1963.69 154.87L1965.78 152.157C2030.55 68.1225 2151.17 52.5019 2235.21 117.267C2319.24 182.033 2334.86 302.659 2270.1 386.693L2268.01 389.406C2203.24 473.44 2082.61 489.061 1998.58 424.295Z" fill="url(#ng)"/>
               </svg>
-              <p style="margin:12px 0 0;font-family:'Exo 2',Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:3px;color:#F9EDD8;text-transform:uppercase;">NODE 2026</p>
+              <p style="margin:12px 0 0;font-family:'SciFied','Exo 2',Arial,Helvetica,sans-serif;font-size:18px;font-weight:400;letter-spacing:4px;color:#F9EDD8;text-transform:uppercase;">NODE 2026</p>
               <!--[if mso]></v:textbox></v:rect><![endif]-->
             </td>
           </tr>
