@@ -9,6 +9,7 @@ import {
   FileText,
   Briefcase,
   UsersRound,
+  BarChart3,
   LogOut,
   Menu,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const baseSidebarItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/applications", label: "Applications", icon: FileText },
   { href: "/admin/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/admin/reports", label: "Reports", icon: BarChart3 },
 ];
 
 const usersItem = { href: "/admin/users", label: "Users", icon: UsersRound };
