@@ -29,8 +29,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Lock, Loader2 as Spinner, Ticket } from "lucide-react";
+import { Lock, Loader2 as Spinner, Ticket, HandHeart } from "lucide-react";
 import { updateTicketStatus } from "@/lib/actions/registrations";
+import { requestCommitteeMembership, getMyCommitteeRequest } from "@/lib/actions/applications";
 
 interface UserData {
   firstName: string;
@@ -139,6 +140,9 @@ export default function DashboardPage() {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showTicketPopup, setShowTicketPopup] = useState(false);
   const [savingTicket, setSavingTicket] = useState(false);
+  const [showCommitteePopup, setShowCommitteePopup] = useState(false);
+  const [savingCommittee, setSavingCommittee] = useState(false);
+  const [committeeRequestStatus, setCommitteeRequestStatus] = useState<string | null>(null);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -241,6 +245,22 @@ export default function DashboardPage() {
                   }
                 });
             });
+
+          // Show committee popup for members/leads who haven't requested yet
+          if (["member", "lead"].includes(role)) {
+            getMyCommitteeRequest().then((result) => {
+              if (result && "error" in result) return;
+              if (!result) {
+                // No existing request — check if user previously dismissed
+                const dismissed = localStorage.getItem("committeePopupDismissed");
+                if (!dismissed) {
+                  setShowCommitteePopup(true);
+                }
+              } else {
+                setCommitteeRequestStatus(result.status);
+              }
+            });
+          }
 
           // Fetch application counts for committee/admin/super_admin
           if (["committee", "admin", "super_admin"].includes(role)) {
@@ -345,6 +365,23 @@ export default function DashboardPage() {
       setNewPassword("");
       setConfirmPassword("");
     }
+  }
+
+  async function handleCommitteeRequest(interested: boolean) {
+    if (!interested) {
+      localStorage.setItem("committeePopupDismissed", "true");
+      setShowCommitteePopup(false);
+      return;
+    }
+    setSavingCommittee(true);
+    const result = await requestCommitteeMembership();
+    setSavingCommittee(false);
+    if ("error" in result) {
+      setShowCommitteePopup(false);
+      return;
+    }
+    setCommitteeRequestStatus("pending");
+    setShowCommitteePopup(false);
   }
 
   async function handleTicketConfirm(carPass: boolean) {
@@ -811,6 +848,43 @@ export default function DashboardPage() {
               className="w-full text-sand-400 hover:text-sand-200"
             >
               Not yet
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Committee Request Popup */}
+      <Dialog open={showCommitteePopup} onOpenChange={setShowCommitteePopup}>
+        <DialogContent className="glass border-pink-500/10 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <HandHeart className="h-5 w-5 text-pink-400" />
+              Join the Membership Committee?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-sand-300">
+            The membership committee reviews applications and votes on new members
+            joining NODE. Committee members get access to full application details
+            and participate in decisions about our community.
+          </p>
+          <p className="text-xs text-sand-500">
+            A super admin will review your request.
+          </p>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button
+              onClick={() => handleCommitteeRequest(true)}
+              disabled={savingCommittee}
+              className="w-full rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
+            >
+              {savingCommittee ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : <HandHeart className="mr-2 h-4 w-4" />}
+              {savingCommittee ? "Submitting..." : "Yes, I'm Interested"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => handleCommitteeRequest(false)}
+              className="w-full text-sand-400 hover:text-sand-200"
+            >
+              Not right now
             </Button>
           </div>
         </DialogContent>

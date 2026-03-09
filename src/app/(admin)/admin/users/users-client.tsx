@@ -42,9 +42,13 @@ import {
   Check,
   AlertCircle,
   Mail,
+  HandHeart,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import type { UserProfile, UserRole, InviteResult } from "@/lib/actions/users";
-import { updateUserRole, updateUserProfile, generateInviteLinks } from "@/lib/actions/users";
+import { updateUserRole, updateUserProfile, generateInviteLinks, handleCommitteeRequest } from "@/lib/actions/users";
 
 const ROLE_CONFIG: Record<
   UserRole,
@@ -85,13 +89,30 @@ function getDisplayName(user: UserProfile): string {
   return name || user.email.split("@")[0];
 }
 
+interface CommitteeRequestWithProfile {
+  id: string;
+  profile_id: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  profile: {
+    first_name: string | null;
+    last_name: string | null;
+    playa_name: string | null;
+    email: string;
+  };
+}
+
 export function UsersClient({
   initialUsers,
+  initialCommitteeRequests,
 }: {
   initialUsers: UserProfile[];
+  initialCommitteeRequests: CommitteeRequestWithProfile[];
 }) {
   const router = useRouter();
   const [users, setUsers] = useState(initialUsers);
+  const [committeeRequests, setCommitteeRequests] = useState(initialCommitteeRequests);
+  const [processingRequest, setProcessingRequest] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all");
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -220,6 +241,29 @@ export function UsersClient({
     toast.success(`Generated ${successCount} invite link${successCount !== 1 ? "s" : ""}`);
   }
 
+  async function handleCommitteeAction(requestId: string, action: "approved" | "rejected") {
+    setProcessingRequest(requestId);
+    const result = await handleCommitteeRequest(requestId, action);
+    setProcessingRequest(null);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    setCommitteeRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, status: action } : r))
+    );
+    if (action === "approved") {
+      // Update user role in local state too
+      const req = committeeRequests.find((r) => r.id === requestId);
+      if (req) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === req.profile_id ? { ...u, role: "committee" as UserRole } : u))
+        );
+      }
+    }
+    toast.success(action === "approved" ? "Request approved — user is now a committee member" : "Request rejected");
+  }
+
   async function copyLink(link: string, userId: string) {
     await navigator.clipboard.writeText(link);
     setCopiedId(userId);
@@ -305,6 +349,81 @@ export function UsersClient({
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Committee Requests */}
+      {committeeRequests.filter((r) => r.status === "pending").length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+        >
+          <Card className="glass-card border-0 border-l-2 border-l-pink-500/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-sand-400">
+                <HandHeart className="h-4 w-4 text-pink-400" />
+                Committee Requests
+                <Badge className="ml-auto bg-pink-500/20 text-pink-400 text-xs">
+                  {committeeRequests.filter((r) => r.status === "pending").length} pending
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {committeeRequests
+                  .filter((r) => r.status === "pending")
+                  .map((req) => {
+                    const name = [req.profile.first_name, req.profile.last_name]
+                      .filter(Boolean)
+                      .join(" ") || req.profile.email;
+                    return (
+                      <div
+                        key={req.id}
+                        className="flex items-center gap-3 rounded-xl bg-pink-500/5 border border-pink-500/10 px-4 py-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-sand-100 truncate">
+                            {name}
+                            {req.profile.playa_name && (
+                              <span className="ml-1.5 text-sand-500">
+                                &ldquo;{req.profile.playa_name}&rdquo;
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-sand-500 truncate">{req.profile.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            onClick={() => handleCommitteeAction(req.id, "approved")}
+                            disabled={processingRequest === req.id}
+                            className="h-8 bg-green-600 text-white hover:bg-green-700"
+                          >
+                            {processingRequest === req.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                            )}
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleCommitteeAction(req.id, "rejected")}
+                            disabled={processingRequest === req.id}
+                            className="h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          >
+                            <XCircle className="mr-1 h-3.5 w-3.5" />
+                            Deny
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Search + Filter */}
       <motion.div
