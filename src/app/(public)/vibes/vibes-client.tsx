@@ -98,42 +98,28 @@ export default function VibesClient() {
 
   return (
     <main className="min-h-screen overflow-hidden">
-      {/* Header */}
-      <section className="flex min-h-[50vh] flex-col items-center justify-center px-6 text-center sm:min-h-[60vh]">
-        <motion.p
+      {/* Opening — "What we're about" */}
+      <section className="mx-auto max-w-3xl px-6 pt-24 text-center sm:pt-32">
+        <motion.h1
           className="text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1 }}
         >
-          Feel the energy
-        </motion.p>
-        <motion.h1
-          className="mt-4 text-5xl font-bold text-gradient-warm sm:text-6xl md:text-7xl"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-        >
-          VIBES
+          What we&apos;re about
         </motion.h1>
+        <motion.p
+          className="mt-8 text-base leading-relaxed text-sand-300 sm:text-lg"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.3 }}
+        >
+          Node is a future home, a brighter space where we envision a world that&apos;s not a dystopian nightmare. If love is our religion, building is our church. In the act of coming together to raise Node, each of us (Nodes) is at the core of our practice. We believe that building together is the ultimate communion. Here we learn about each other and we learn about ourselves. In the challenge of &quot;figuring it out,&quot; we grow as leaders, friends, lovers, and humans. We meet each other on the playing field. The game starts and ends with working together. If we can build an optimistic future home on the playa - we can build anything in the real world. This is where masters from around the world - who are already building the technologies of the future come to play with the ultimate technology. Love.
+        </motion.p>
       </section>
 
-      {/* Kinetic Statements */}
-      <div className="relative">
-        {statements.map((statement, i) => (
-          <KineticStatement
-            key={statement.text}
-            text={statement.text}
-            color={statement.color}
-            index={i}
-            hasBrand={statement.hasBrand ?? false}
-            isMobile={isMobile}
-          />
-        ))}
-      </div>
-
-      {/* Our Principles */}
-      <section className="mx-auto mt-16 max-w-4xl px-6 md:mt-32">
+      {/* Our Values */}
+      <section className="mx-auto mt-12 max-w-4xl px-6 md:mt-20">
         <motion.h2
           className="mb-12 text-center text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
           initial={{ opacity: 0 }}
@@ -162,7 +148,7 @@ export default function VibesClient() {
             },
             {
               title: "Consent",
-              desc: "Not just important — sacred. Zero-strike policy. Anyone who violates this will be asked to leave NODE immediately. This is non-negotiable.",
+              desc: "Not just important. Sacred. Zero-strike policy. Anyone who violates this will be asked to leave NODE immediately. This is non-negotiable.",
             },
           ].map((value, i) => (
             <motion.div
@@ -182,18 +168,40 @@ export default function VibesClient() {
         </div>
       </section>
 
-      {/* Closing Statement */}
-      <section className="mx-auto mt-16 max-w-3xl px-6 md:mt-32">
+      {/* 10 Principles intro */}
+      <section className="mx-auto mt-16 max-w-3xl px-6 text-center md:mt-32">
+        <motion.h2
+          className="text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          The 10 Principles
+        </motion.h2>
         <motion.p
-          className="text-base leading-relaxed text-sand-300 sm:text-lg"
+          className="mt-4 text-base leading-relaxed text-sand-300 sm:text-lg"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
         >
-          Node is a future home, a brighter space where we envision a world that&apos;s not a dystopian nightmare. If love is our religion, building is our church. In the act of coming together to raise Node, each of us (Nodes) is at the core of our practice. We believe that building together is the ultimate communion. Here we learn about each other and we learn about ourselves. In the challenge of &quot;figuring it out,&quot; we grow as leaders, friends, lovers, and humans. We meet each other on the playing field. The game starts and ends with working together. If we can build an optimistic future home on the playa - we can build anything in the real world. This is where masters from around the world - who are already building the technologies of the future come to play with the ultimate technology. Love.
+          Everything we do at <span className="font-brand text-sand-100">NODE</span> is rooted in the 10 Principles of Burning Man. They&apos;re not rules — they&apos;re how we show up for each other and the world we&apos;re building.
         </motion.p>
       </section>
+
+      {/* Kinetic Statements */}
+      <div className="relative mt-12 md:mt-20">
+        {statements.map((statement, i) => (
+          <KineticStatement
+            key={statement.text}
+            text={statement.text}
+            color={statement.color}
+            index={i}
+            hasBrand={statement.hasBrand ?? false}
+            isMobile={isMobile}
+          />
+        ))}
+      </div>
 
       {/* Bottom breathing space */}
       <section className="flex min-h-[30vh] items-center justify-center px-6">

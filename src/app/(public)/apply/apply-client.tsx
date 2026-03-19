@@ -92,7 +92,7 @@ function canAdvance(step: number, form: ApplyFormData): boolean {
     case 0: return true; // Welcome
     case 1: return !!(form.firstName && form.lastName && form.email);
     case 2: return !!form.yearsAttended;
-    case 3: return true; // Contribution (optional fields)
+    case 3: return !!(form.skills && form.referredBy);
     case 4: return true; // Video (optional)
     case 5: return true; // Review
     default: return true;
@@ -188,7 +188,7 @@ export default function ApplyClient() {
     <main className="min-h-screen px-4 py-20 sm:px-6 sm:py-24">
       <div className="mx-auto max-w-xl">
         {/* Progress */}
-        <div className="mb-8">
+        <div className="mb-8 glass-card rounded-2xl p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between text-sm">
             <span className="text-sand-400">
               Step {step + 1} of {steps.length}
@@ -289,17 +289,45 @@ function WelcomeStep() {
       </h2>
       <p className="mt-4 max-w-md text-sand-300 leading-relaxed">
         We want to get to know you. This quick application helps us understand
-        what you&apos;d bring to camp — whether you&apos;re a dusty veteran or
+        what you&apos;d bring to camp, whether you&apos;re a dusty veteran or
         this is your first burn. We&apos;re not looking for a resume. We&apos;re
         looking for people who show up, contribute, and give a shit.
       </p>
-      <div className="mt-8 space-y-2 text-left text-sm text-sand-400">
-        <p>What we&apos;ll ask:</p>
-        <ul className="list-inside list-disc space-y-1">
-          <li>Basic info</li>
-          <li>Your burn experience</li>
-          <li>What you bring to the table</li>
-          <li>A short video so we can meet the real you</li>
+
+      <div className="mt-8 max-w-md rounded-xl border border-sand-400/10 bg-sand-400/5 p-5 text-left">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-sand-200">
+          What to expect at <span className="font-brand">NODE</span>
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-sand-300">
+          NODE is a participation camp. We build together, clean together, and
+          look out for each other. Everyone works a few fun shifts, everyone
+          contributes. There are <em>no spectators</em>.
+        </p>
+        <p className="mt-3 text-sm leading-relaxed text-sand-300">
+          We provide a third space for Node and all burners; morning coffee &amp; yoga,
+          a daytime party, the annual Hip Hop BBQ, and art car takeovers.
+        </p>
+        <ul className="mt-3 space-y-1.5 text-sm text-sand-400">
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 text-pink-400">•</span>
+            <span>Camp dues cover shared infrastructure, water, two meals a day, and most services. Please pay on time. Sponsorship and reduced dues are available through the Node Foundation.</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 text-pink-400">•</span>
+            <span>You&apos;ll pre-select volunteer shifts to help Node come to life. All campers will participate in equal shifts but there&apos;s plenty of variety and opportunities to pitch in.</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 text-pink-400">•</span>
+            <span>Consent is sacred. Zero-strike policy, no exceptions.</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 text-pink-400">•</span>
+            <span>Leave no trace. We leave the playa better than we found it as all campers are expected to help strike.</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 text-pink-400">•</span>
+            <span>You show up to community calls before the burn and show up in BRC ready to work, play, and build something real. Work hard, play harder.</span>
+          </li>
         </ul>
       </div>
     </div>
@@ -452,22 +480,24 @@ function ContributionStep({ form, update }: FormStepProps) {
     <div className="space-y-5">
       <h2 className="text-2xl font-bold text-sand-100">What You Bring</h2>
       <div className="space-y-2">
-        <Label className="text-sand-300">What hard skills do you bring to camp?</Label>
+        <Label className="text-sand-300">What skills do you bring to camp? *</Label>
         <Textarea
           value={form.skills}
           onChange={(e) => update("skills", e.target.value)}
-          placeholder="Construction, cooking, DJing, large-scale art, medical, electrical, heavy machinery..."
+          placeholder="Construction, cooking, DJing, yoga instruction, massage, sound healing, bartending, large-scale art, medical/first aid, electrical, heavy machinery, photography, hair/makeup, mixology, event production..."
           className="min-h-[80px]"
           maxLength={2000}
+          required
         />
       </div>
       <div className="space-y-2">
-        <Label className="text-sand-300">Who from NODE referred you?</Label>
+        <Label className="text-sand-300">Who from NODE referred you? *</Label>
         <Input
           value={form.referredBy}
           onChange={(e) => update("referredBy", e.target.value)}
           placeholder="Name of your connection to camp"
           maxLength={200}
+          required
         />
       </div>
     </div>

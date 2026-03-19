@@ -1,4 +1,6 @@
 import Image from "next/image";
+import Link from "next/link";
+import { X } from "lucide-react";
 
 export default function AuthLayout({
   children,
@@ -16,7 +18,14 @@ export default function AuthLayout({
           priority
         />
       </div>
-      <div className="glass-card w-full max-w-md rounded-2xl p-6 glow-pink sm:p-8">
+      <div className="glass-card relative w-full max-w-md rounded-2xl p-6 glow-pink sm:p-8">
+        <Link
+          href="/"
+          className="absolute right-4 top-4 rounded-full p-1.5 text-sand-400 transition-colors hover:bg-sand-400/10 hover:text-sand-200"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" />
+        </Link>
         {children}
       </div>
     </div>

@@ -1,55 +1,63 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 const timeline = [
-  {
-    year: "2017",
-    title: "The Genesis",
-    description:
-      'A few colleagues sat around in the peak heat of the 2017 burn thinking, "What if we built our own camp?" The idea took root.',
-  },
   {
     year: "2018",
     title: "Launch",
     description:
       "We overpromised, built an insane wooden temple and launched NODE Republik with 92 campers.",
+    image: "/images/camp/2018.webp",
   },
   {
     year: "2019",
     title: "Not Quite Dialed...Yet",
     description:
       "60 people, a patch of desert, and the concept that we're building an optimistic future home.",
+    image: "/images/camp/2019.png",
   },
   {
     year: "2020–2021",
     title: "The Pause",
     description:
       "No playa. We kept the thread alive with calls, hangs, shared playlists, and plans for what came next.",
+    image: "/images/camp/2020.jpg",
   },
   {
     year: "2022",
     title: "Finding Our Identity",
     description:
       "NODE returned to Black Rock City, with 50 souls and more ambition than ever.",
+    image: "/images/camp/2022.png",
   },
   {
     year: "2023",
     title: "Dialing It In",
     description:
       "With 55 nodes, we launched Big Petes' Hip-Hop BBQ, which became an instant hit.",
+    image: "/images/camp/2023.png",
   },
   {
     year: "2024",
     title: "Full Send",
     description:
       "Our best year yet, though the playa had bigger ideas. We iterated and the communal effort was stronger than ever.",
+    image: "/images/camp/2024.png",
+  },
+  {
+    year: "2025",
+    title: "Can we burn yet?",
+    description:
+      "The weather in Black Rock City hit hard and kept coming. The wind and rain may have destroyed some infrastructure but it did not destroy our spirit.",
+    image: "/images/camp/2025.png",
   },
   {
     year: "2026",
-    title: "What's Next",
+    title: "Axis Mundi",
     description:
-      "~60 campers. More interactivity, more art, and always more communal effort. This is where you come in.",
+      "60 campers. More interactivity, more art, and always more communal effort. This is where you come in.",
   },
 ];
 
@@ -82,7 +90,7 @@ export default function AboutClient() {
       </section>
 
       {/* Timeline */}
-      <section className="relative mx-auto mt-12 max-w-3xl md:mt-24">
+      <section className="relative mx-auto mt-12 max-w-4xl md:mt-24">
         {/* Glowing center line — hidden on mobile */}
         <div className="absolute left-4 top-0 h-full w-px bg-gradient-to-b from-pink-500/50 via-amber/30 to-transparent md:left-1/2 md:-translate-x-1/2" />
 
@@ -92,7 +100,7 @@ export default function AboutClient() {
             return (
               <motion.div
                 key={item.year}
-                className={`relative flex items-start gap-8 pl-12 md:pl-0 ${isLeft ? "md:flex-row" : "md:flex-row-reverse"
+                className={`relative flex flex-col gap-4 pl-12 md:flex-row md:items-start md:gap-8 md:pl-0 ${isLeft ? "md:flex-row" : "md:flex-row-reverse"
                   }`}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -121,8 +129,22 @@ export default function AboutClient() {
                   </div>
                 </div>
 
-                {/* Empty space for the other side — hidden on mobile */}
-                <div className="hidden w-[calc(50%-2rem)] md:block" />
+                {/* Photo side — opposite of card */}
+                <div className={`w-full md:w-[calc(50%-2rem)] ${isLeft ? "md:pl-6" : "md:pr-6"}`}>
+                  {item.image ? (
+                    <div className={`relative aspect-[4/3] max-w-[280px] overflow-hidden rounded-xl ${isLeft ? "" : "md:ml-auto"}`}>
+                      <Image
+                        src={item.image}
+                        alt={`NODE ${item.year}`}
+                        fill
+                        className="object-cover"
+                        sizes="280px"
+                      />
+                    </div>
+                  ) : (
+                    <div className="hidden md:block" />
+                  )}
+                </div>
               </motion.div>
             );
           })}

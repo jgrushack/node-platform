@@ -76,6 +76,9 @@ export default function RootLayout({
         <TooltipProvider>
           <GradientMesh />
           {children}
+          <footer className="py-6 text-center text-xs text-sand-500">
+            &copy; NODE 2026
+          </footer>
           <Toaster />
         </TooltipProvider>
       </body>

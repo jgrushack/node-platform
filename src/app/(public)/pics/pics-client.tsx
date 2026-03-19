@@ -1,94 +1,168 @@
 "use client";
 
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-} from "framer-motion";
-import { useRef, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
-const placeholderImages = [
-  { id: 1, color: "from-pink-500/40 to-orange/40", label: "Sunset Ceremony" },
-  { id: 2, color: "from-amber/40 to-golden/40", label: "Art Installation" },
-  { id: 3, color: "from-coral/40 to-pink-500/40", label: "Night Lights" },
-  { id: 4, color: "from-orange/40 to-amber/40", label: "Desert Dawn" },
-  { id: 5, color: "from-pink-500/40 to-coral/40", label: "The Build" },
-  { id: 6, color: "from-golden/40 to-orange/40", label: "Community" },
-  { id: 7, color: "from-amber/40 to-pink-500/40", label: "Sound Camp" },
-  { id: 8, color: "from-coral/40 to-golden/40", label: "Golden Hour" },
-  { id: 9, color: "from-pink-500/40 to-amber/40", label: "Playa Magic" },
-];
+const campPhotos = Array.from({ length: 47 }, (_, i) => ({
+  src: `/images/gallery/camp/camp-${String(i + 1).padStart(2, "0")}.jpg`,
+})).filter((p) => p.src !== "/images/gallery/camp/camp-30.jpg");
 
-function TiltCard({
-  color,
-  label,
+const bbqPhotos = Array.from({ length: 12 }, (_, i) => ({
+  src: `/images/gallery/bbq/bbq-${String(i + 1).padStart(2, "0")}.jpg`,
+}));
+
+const allPhotos = [...campPhotos, ...bbqPhotos];
+
+function Lightbox({
+  photos,
   index,
+  onClose,
+  onChange,
 }: {
-  color: string;
-  label: string;
+  photos: { src: string }[];
   index: number;
+  onClose: () => void;
+  onChange: (i: number) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const isTouch = useRef(false);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+
+  const prev = useCallback(
+    () => onChange(index > 0 ? index - 1 : photos.length - 1),
+    [index, photos.length, onChange]
+  );
+  const next = useCallback(
+    () => onChange(index < photos.length - 1 ? index + 1 : 0),
+    [index, photos.length, onChange]
+  );
 
   useEffect(() => {
-    isTouch.current = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-  }, []);
-
-  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [8, -8]), {
-    stiffness: 300,
-    damping: 30,
-  });
-  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-8, 8]), {
-    stiffness: 300,
-    damping: 30,
-  });
-
-  function handleMouseMove(e: React.MouseEvent) {
-    if (isTouch.current) return;
-    const rect = ref.current?.getBoundingClientRect();
-    if (!rect) return;
-    mouseX.set((e.clientX - rect.left) / rect.width - 0.5);
-    mouseY.set((e.clientY - rect.top) / rect.height - 0.5);
-  }
-
-  function handleMouseLeave() {
-    mouseX.set(0);
-    mouseY.set(0);
-  }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") prev();
+      if (e.key === "ArrowRight") next();
+    }
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose, prev, next]);
 
   return (
     <motion.div
-      ref={ref}
-      className="glass-tilt relative aspect-[4/3] cursor-pointer rounded-2xl sm:aspect-square"
-      style={{
-        rotateX,
-        rotateY,
-        transformStyle: "preserve-3d",
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      onTouchStart={(e) => setTouchStart(e.touches[0].clientX)}
+      onTouchEnd={(e) => {
+        if (touchStart === null) return;
+        const diff = e.changedTouches[0].clientX - touchStart;
+        if (Math.abs(diff) > 50) {
+          diff > 0 ? prev() : next();
+        }
+        setTouchStart(null);
       }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+    >
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-sand-300 transition-colors hover:text-white"
+        aria-label="Close"
+      >
+        <X className="h-6 w-6" />
+      </button>
+
+      {/* Counter */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 text-sm text-sand-400">
+        {index + 1} / {photos.length}
+      </div>
+
+      {/* Prev */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          prev();
+        }}
+        className="absolute left-3 z-10 rounded-full bg-black/50 p-2 text-sand-300 transition-colors hover:text-white sm:left-6"
+        aria-label="Previous photo"
+      >
+        <ChevronLeft className="h-6 w-6" />
+      </button>
+
+      {/* Image */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={photos[index].src}
+          className="relative h-[80vh] w-[90vw] max-w-5xl"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Image
+            src={photos[index].src}
+            alt=""
+            fill
+            className="object-contain"
+            sizes="90vw"
+            priority
+          />
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Next */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          next();
+        }}
+        className="absolute right-3 z-10 rounded-full bg-black/50 p-2 text-sand-300 transition-colors hover:text-white sm:right-6"
+        aria-label="Next photo"
+      >
+        <ChevronRight className="h-6 w-6" />
+      </button>
+    </motion.div>
+  );
+}
+
+function PhotoCard({
+  src,
+  index,
+  onClick,
+}: {
+  src: string;
+  index: number;
+  onClick: () => void;
+}) {
+  return (
+    <motion.div
+      className="relative aspect-square cursor-pointer overflow-hidden rounded-2xl"
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.4, delay: index * 0.05 }}
+      transition={{ duration: 0.4, delay: index * 0.03 }}
+      onClick={onClick}
     >
-      {/* Gradient placeholder */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${color} rounded-2xl`} />
-      <div className="absolute inset-0 bg-blue-950/30 rounded-2xl" />
-
-      {/* Label */}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-950/80 to-transparent p-4 pt-12 rounded-b-2xl">
-        <p className="text-sm font-medium text-sand-200">{label}</p>
-      </div>
+      <Image
+        src={src}
+        alt=""
+        fill
+        className="object-cover transition-transform duration-500 hover:scale-105"
+        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+      />
     </motion.div>
   );
 }
 
 export default function PicsClient() {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
   return (
     <main className="min-h-screen px-4 py-20 sm:px-6 sm:py-24">
       {/* Header */}
@@ -99,7 +173,7 @@ export default function PicsClient() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          Pics
+          Gallery
         </motion.h1>
         <motion.p
           className="mt-6 text-lg text-sand-300"
@@ -111,19 +185,69 @@ export default function PicsClient() {
         </motion.p>
       </section>
 
-      {/* Image Grid */}
+      {/* Camp Photos Gallery */}
       <section className="mx-auto mt-16 max-w-6xl">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {placeholderImages.map((img, i) => (
-            <TiltCard
-              key={img.id}
-              color={img.color}
-              label={img.label}
+        <motion.h2
+          className="mb-8 text-center text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          Camp Life
+        </motion.h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {campPhotos.map((photo, i) => (
+            <PhotoCard
+              key={photo.src}
+              src={photo.src}
               index={i}
+              onClick={() => setLightboxIndex(i)}
             />
           ))}
         </div>
       </section>
+
+      {/* Hip Hop BBQ Gallery */}
+      <section className="mx-auto mt-24 max-w-6xl">
+        <motion.h2
+          className="mb-4 text-center text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          Big Pete&apos;s Hip-Hop BBQ
+        </motion.h2>
+        <motion.p
+          className="mb-8 text-center text-sand-400"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          Our signature event — beats, eats, and community.
+        </motion.p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {bbqPhotos.map((photo, i) => (
+            <PhotoCard
+              key={photo.src}
+              src={photo.src}
+              index={i}
+              onClick={() => setLightboxIndex(campPhotos.length + i)}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Lightbox */}
+      <AnimatePresence>
+        {lightboxIndex !== null && (
+          <Lightbox
+            photos={allPhotos}
+            index={lightboxIndex}
+            onClose={() => setLightboxIndex(null)}
+            onChange={setLightboxIndex}
+          />
+        )}
+      </AnimatePresence>
     </main>
   );
 }

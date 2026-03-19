@@ -6,14 +6,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 
-const manifesto = [
-  "We build together.",
-  "We share what we have.",
-  "We leave better than we found it.",
-  "We dance until sunrise.",
-  "This is NODE.",
-];
-
 export default function HomeClient() {
   return (
     <main className="relative min-h-screen overflow-x-hidden">
@@ -78,53 +70,6 @@ export default function HomeClient() {
           </Link>
         </motion.div>
 
-        {/* Scroll indicator */}
-        <motion.div
-          className="absolute bottom-12 left-1/2 -translate-x-1/2"
-          animate={{ y: [0, 8, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          <div className="h-8 w-5 rounded-full border-2 border-sand-400/30 p-1">
-            <div className="mx-auto h-2 w-1.5 rounded-full bg-sand-400/50" />
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Manifesto Section */}
-      <section className="px-6 py-16 md:py-32">
-        <div className="mx-auto max-w-3xl">
-          <motion.h2
-            className="mb-16 text-center text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-          >
-            How We Camp
-          </motion.h2>
-          <div className="space-y-8">
-            {manifesto.map((line, i) => (
-              <motion.p
-                key={i}
-                className="text-2xl font-bold leading-tight text-sand-100 sm:text-3xl md:text-4xl lg:text-5xl"
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, delay: i * 0.1 }}
-              >
-                {line.includes("NODE")
-                  ? line.split("NODE").map((part, j, arr) => (
-                    <span key={j}>
-                      {part}
-                      {j < arr.length - 1 && (
-                        <span className="font-brand">NODE</span>
-                      )}
-                    </span>
-                  ))
-                  : line}
-              </motion.p>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* Info Cards */}
