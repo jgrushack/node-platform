@@ -38,11 +38,11 @@ async function requireAdmin() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, is_committee_member")
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["committee", "admin", "super_admin"].includes(profile.role)) {
+  if (!profile || (!profile.is_committee_member && !["admin", "super_admin"].includes(profile.role))) {
     return { error: "Unauthorized" as const, supabase, user: null };
   }
 
@@ -616,6 +616,26 @@ export async function getCurrentUserRole(): Promise<string | null> {
     .single();
 
   return data?.role ?? null;
+}
+
+export async function getCurrentUserProfile(): Promise<{ role: string; isCommitteeMember: boolean } | null> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("role, is_committee_member")
+    .eq("id", user.id)
+    .single();
+
+  if (!data) return null;
+
+  return { role: data.role, isCommitteeMember: data.is_committee_member ?? false };
 }
 
 export async function getApplicationSummary(): Promise<

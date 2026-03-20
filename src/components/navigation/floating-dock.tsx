@@ -11,7 +11,6 @@ import {
   FileText,
   LogIn,
   LayoutDashboard,
-  Briefcase,
   User,
   LogOut,
 } from "lucide-react";
@@ -45,7 +44,6 @@ const publicNavItems = [
 const memberNavItems = [
   { href: "/", label: "Home", icon: NodeIcon },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
   { href: "/dashboard/profile", label: "Profile", icon: User },
 ];
 

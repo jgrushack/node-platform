@@ -1,6 +1,6 @@
 import {
   getApplicationsWithVotes,
-  getCurrentUserRole,
+  getCurrentUserProfile,
   getApplicationSummary,
   getMyCommitteeRequest,
 } from "@/lib/actions/applications";
@@ -8,21 +8,28 @@ import { ApplicationReview } from "./application-review";
 import { ApplicationSummary } from "./application-summary";
 
 export default async function DashboardApplicationsPage() {
-  const role = await getCurrentUserRole();
-  const isCommittee = role
-    ? ["committee", "admin", "super_admin"].includes(role)
+  const profile = await getCurrentUserProfile();
+  const isCommittee = profile
+    ? profile.isCommitteeMember || ["admin", "super_admin"].includes(profile.role)
     : false;
 
   if (!isCommittee) {
-    const [summaryResult, requestResult] = await Promise.all([
-      getApplicationSummary(),
-      getMyCommitteeRequest(),
-    ]);
+    let summary = null;
+    let existingRequest = null;
 
-    const summary =
-      summaryResult && !("error" in summaryResult) ? summaryResult : null;
-    const existingRequest =
-      requestResult && !("error" in requestResult) ? requestResult : null;
+    try {
+      const [summaryResult, requestResult] = await Promise.all([
+        getApplicationSummary(),
+        getMyCommitteeRequest(),
+      ]);
+
+      summary =
+        summaryResult && !("error" in summaryResult) ? summaryResult : null;
+      existingRequest =
+        requestResult && !("error" in requestResult) ? requestResult : null;
+    } catch (e) {
+      console.error("[DashboardApplicationsPage] Error loading data:", e);
+    }
 
     return (
       <div className="space-y-6">
@@ -66,7 +73,7 @@ export default async function DashboardApplicationsPage() {
         </p>
       </div>
 
-      <ApplicationReview applications={result} userRole={role!} />
+      <ApplicationReview applications={result} userRole={profile!.role} />
     </div>
   );
 }

@@ -252,15 +252,7 @@ export function UsersClient({
     setCommitteeRequests((prev) =>
       prev.map((r) => (r.id === requestId ? { ...r, status: action } : r))
     );
-    if (action === "approved") {
-      // Update user role in local state too
-      const req = committeeRequests.find((r) => r.id === requestId);
-      if (req) {
-        setUsers((prev) =>
-          prev.map((u) => (u.id === req.profile_id ? { ...u, role: "committee" as UserRole } : u))
-        );
-      }
-    }
+    // Committee membership is now a flag, not a role change — no local role update needed
     toast.success(action === "approved" ? "Request approved — user is now a committee member" : "Request rejected");
   }
 

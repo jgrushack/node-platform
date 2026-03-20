@@ -6,16 +6,16 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  Briefcase,
   User,
   LogOut,
   FileText,
-  FolderOpen,
   CalendarDays,
   Menu,
   UsersRound,
   Eye,
   ArrowLeft,
+  BarChart3,
+  Shield,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -28,20 +28,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 
-const baseSidebarItems = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/members", label: "Members", icon: UsersRound },
-  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/dashboard/documents", label: "Documents", icon: FolderOpen },
-  { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/dashboard/profile", label: "Profile", icon: User },
-];
-
-const committeeItem = {
-  href: "/dashboard/applications",
-  label: "Applications",
-  icon: FileText,
-};
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
 export default function DashboardLayout({
   children,
@@ -50,21 +37,24 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isCommittee, setIsCommittee] = useState(false);
   const [userInitials, setUserInitials] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
   const [viewAsRole, setViewAsRole] = useState<string | null>(null);
   const [realRole, setRealRole] = useState<string | null>(null);
+  const [sidebarItems, setSidebarItems] = useState<NavItem[]>([
+    { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+    { href: "/dashboard/members", label: "Members", icon: UsersRound },
+    { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
+    { href: "/dashboard/profile", label: "Profile", icon: User },
+  ]);
 
   useEffect(() => {
-    // Check for view-as mode
     const stored = localStorage.getItem("viewAsRole");
     if (stored) setTimeout(() => setViewAsRole(stored), 0);
 
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      // Build initials from email or metadata
       const name = user.user_metadata?.full_name || user.email || "";
       const parts = name.split(/[\s@]/);
       setUserInitials(
@@ -74,22 +64,44 @@ export default function DashboardLayout({
       );
       supabase
         .from("profiles")
-        .select("role")
+        .select("role, is_committee_member")
         .eq("id", user.id)
         .single()
         .then(({ data }) => {
           const role = data?.role || "member";
+          const isCommitteeMember = data?.is_committee_member || false;
           setRealRole(role);
 
-          // Use viewAs role for UI if super_admin, otherwise real role
           const effectiveRole =
             stored && role === "super_admin" ? stored : role;
 
-          if (
-            ["committee", "admin", "super_admin"].includes(effectiveRole)
-          ) {
-            setIsCommittee(true);
+          const items: NavItem[] = [
+            { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+          ];
+
+          // Committee members OR admins can see applications
+          if (isCommitteeMember || ["admin", "super_admin"].includes(effectiveRole)) {
+            items.push({ href: "/dashboard/applications", label: "Applications", icon: FileText });
           }
+
+          items.push(
+            { href: "/dashboard/members", label: "Members", icon: UsersRound },
+            { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
+          );
+
+          // Admin/super_admin see Reports
+          if (["admin", "super_admin"].includes(effectiveRole)) {
+            items.push({ href: "/dashboard/reports", label: "Reports", icon: BarChart3 });
+          }
+
+          // Super admin sees Users
+          if (effectiveRole === "super_admin") {
+            items.push({ href: "/dashboard/users", label: "Users", icon: Shield });
+          }
+
+          items.push({ href: "/dashboard/profile", label: "Profile", icon: User });
+
+          setSidebarItems(items);
         });
     });
   }, []);
@@ -102,8 +114,6 @@ export default function DashboardLayout({
   }
 
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const sidebarItems = [baseSidebarItems[0], committeeItem, ...baseSidebarItems.slice(1)];
 
   const navLinks = (onNavigate?: () => void) =>
     sidebarItems.map((item) => {
@@ -221,7 +231,7 @@ export default function DashboardLayout({
               onClick={() => {
                 localStorage.removeItem("viewAsRole");
                 setViewAsRole(null);
-                router.push("/admin/users");
+                window.location.reload();
               }}
               className="flex items-center gap-1.5 rounded-full bg-amber/20 px-3 py-1 text-xs font-medium text-amber hover:bg-amber/30 transition-colors"
             >

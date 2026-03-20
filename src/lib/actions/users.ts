@@ -221,16 +221,16 @@ export async function handleCommitteeRequest(
     return { error: "Failed to update request." };
   }
 
-  // On approve, set user's role to committee
+  // On approve, set the committee member flag (role stays unchanged)
   if (action === "approved") {
-    const { error: roleError } = await supabase
+    const { error: flagError } = await supabase
       .from("profiles")
-      .update({ role: "committee" })
+      .update({ is_committee_member: true })
       .eq("id", request.profile_id);
 
-    if (roleError) {
-      console.error("[handleCommitteeRequest] role update", roleError);
-      return { error: "Request approved but failed to update role." };
+    if (flagError) {
+      console.error("[handleCommitteeRequest] flag update", flagError);
+      return { error: "Request approved but failed to update committee flag." };
     }
   }
 

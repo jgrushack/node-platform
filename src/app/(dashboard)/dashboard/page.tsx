@@ -36,6 +36,7 @@ import { requestCommitteeMembership, getMyCommitteeRequest } from "@/lib/actions
 interface UserData {
   firstName: string;
   role: string;
+  isCommitteeMember: boolean;
 }
 
 interface AppCounts {
@@ -172,7 +173,7 @@ export default function DashboardPage() {
 
       supabase
         .from("profiles")
-        .select("role, onboarding_completed_at")
+        .select("role, onboarding_completed_at, is_committee_member")
         .eq("id", authUser.id)
         .single()
         .then(({ data: profile }) => {
@@ -182,7 +183,7 @@ export default function DashboardPage() {
           const viewAs = localStorage.getItem("viewAsRole");
           const role =
             viewAs && realRole === "super_admin" ? viewAs : realRole;
-          setUser({ firstName: name.split(" ")[0], role });
+          setUser({ firstName: name.split(" ")[0], role, isCommitteeMember: !!profile?.is_committee_member });
 
           // Fetch 2026 camp status
           supabase
@@ -246,8 +247,8 @@ export default function DashboardPage() {
                 });
             });
 
-          // Show committee popup for members/leads who haven't requested yet
-          if (["member", "lead"].includes(role)) {
+          // Show committee popup for non-committee members who haven't requested yet
+          if (!profile?.is_committee_member) {
             getMyCommitteeRequest().then((result) => {
               if (result && "error" in result) return;
               if (!result) {
@@ -262,8 +263,8 @@ export default function DashboardPage() {
             });
           }
 
-          // Fetch application counts for committee/admin/super_admin
-          if (["committee", "admin", "super_admin"].includes(role)) {
+          // Fetch application counts for committee members or admins
+          if (profile?.is_committee_member || ["admin", "super_admin"].includes(role)) {
             supabase
               .from("applications")
               .select("status", { count: "exact", head: false })
@@ -319,7 +320,7 @@ export default function DashboardPage() {
   }, []);
 
   const isCommittee =
-    user && ["committee", "admin", "super_admin"].includes(user.role);
+    user && (user.isCommitteeMember || ["admin", "super_admin"].includes(user.role));
   const isSuperAdmin = user?.role === "super_admin";
   const canSeeBmEvents =
     user && ["lead", "admin", "super_admin"].includes(user.role);
