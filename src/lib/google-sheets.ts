@@ -35,7 +35,7 @@ export async function appendApplicationToSheet(data: {
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
     range: "Sheet1!A:L",
-    valueInputOption: "USER_ENTERED",
+    valueInputOption: "RAW",
     requestBody: {
       values: [
         [

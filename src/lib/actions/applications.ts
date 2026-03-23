@@ -147,16 +147,27 @@ export async function uploadApplicationVideo(
 
   const supabase = await createClient();
 
-  // Verify application exists before uploading
+  // Require authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Verify application exists AND belongs to this user
   const adminClient = createAdminClient();
   const { data: app, error: appError } = await adminClient
     .from("applications")
-    .select("id")
+    .select("id, email")
     .eq("id", applicationId)
     .single();
 
   if (appError || !app) {
     return { error: "Application not found." };
+  }
+
+  // Verify the authenticated user owns this application
+  if (app.email !== user.email) {
+    return { error: "Unauthorized" };
   }
 
   // Sanitize filename
@@ -501,7 +512,7 @@ export async function updateApplicationStatus(
   status: "approved" | "rejected" | "waitlist",
   notes?: string
 ): Promise<{ success: true } | { error: string }> {
-  const { error: authError, supabase, user } = await requireAdmin();
+  const { error: authError, supabase, user } = await requireAdminOrSuperAdmin();
   if (authError || !user) {
     return { error: authError ?? "Not authenticated" };
   }
@@ -519,6 +530,88 @@ export async function updateApplicationStatus(
   if (error) {
     console.error("[updateApplicationStatus]", error);
     return { error: "Failed to update application status." };
+  }
+
+  // When approving, create a profile for the applicant if they have an auth account
+  if (status === "approved") {
+    try {
+      const adminClient = createAdminClient();
+      const { data: application } = await adminClient
+        .from("applications")
+        .select("email, first_name, last_name, playa_name, phone, skills")
+        .eq("id", id)
+        .single();
+
+      if (application) {
+        // Find user by email via profiles table
+        const { data: existingProfile } = await adminClient
+          .from("profiles")
+          .select("id")
+          .ilike("email", application.email)
+          .limit(1)
+          .maybeSingle();
+        const authUser = existingProfile ? { id: existingProfile.id } : null;
+
+        if (authUser) {
+          // Create profile from application data
+          await adminClient.rpc("create_profile_from_application", {
+            p_user_id: authUser.id,
+            p_email: application.email,
+            p_first_name: application.first_name,
+            p_last_name: application.last_name,
+            p_playa_name: application.playa_name,
+            p_phone: application.phone,
+            p_skills: application.skills,
+          });
+
+          // Link application to profile
+          await adminClient
+            .from("applications")
+            .update({ profile_id: authUser.id })
+            .eq("id", id);
+        }
+      }
+    } catch (e) {
+      console.error("[updateApplicationStatus] Profile creation error:", e);
+      // Don't fail the approval — profile can be created later when they sign up
+    }
+  }
+
+  return { success: true };
+}
+
+export async function deleteApplication(
+  id: string
+): Promise<{ success: true } | { error: string }> {
+  const { error: authError, supabase, user } = await requireAdmin();
+  if (authError || !user) {
+    return { error: authError ?? "Not authenticated" };
+  }
+
+  const adminClient = createAdminClient();
+
+  // Delete any associated video files
+  const { data: app } = await adminClient
+    .from("applications")
+    .select("video_url")
+    .eq("id", id)
+    .single();
+
+  if (app?.video_url) {
+    await adminClient.storage
+      .from("application-videos")
+      .remove([app.video_url]);
+  }
+
+  // Delete the application (cascades to votes and comments)
+  const { error } = await adminClient
+    .from("applications")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("[deleteApplication]", error);
+    return { error: "Failed to delete application." };
   }
 
   return { success: true };

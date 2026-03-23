@@ -3,8 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 function getEnv(key: string): string {
     const value = process.env[key];
     if (!value) {
-        console.warn(`Missing env var: ${key}. Some admin functions will fail.`);
-        return "";
+        throw new Error(`Missing required env var: ${key}`);
     }
     return value;
 }
