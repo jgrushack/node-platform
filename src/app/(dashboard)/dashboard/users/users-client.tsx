@@ -56,11 +56,6 @@ const ROLE_CONFIG: Record<
 > = {
   member: { label: "Member", color: "text-sand-300", bg: "bg-sand-700/30" },
   lead: { label: "Lead", color: "text-blue-400", bg: "bg-blue-500/20" },
-  committee: {
-    label: "Committee",
-    color: "text-pink-400",
-    bg: "bg-pink-500/20",
-  },
   admin: { label: "Admin", color: "text-amber", bg: "bg-amber/20" },
   super_admin: {
     label: "Super Admin",
@@ -72,7 +67,6 @@ const ROLE_CONFIG: Record<
 const ALL_ROLES: UserRole[] = [
   "member",
   "lead",
-  "committee",
   "admin",
   "super_admin",
 ];

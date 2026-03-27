@@ -18,12 +18,11 @@ const userProfileSchema = z.object({
   node_events_attended: z.array(z.string().max(100)).max(50).optional(),
 }).strict();
 
-const roleSchema = z.enum(["member", "lead", "committee", "admin", "super_admin"]);
+const roleSchema = z.enum(["member", "lead", "admin", "super_admin"]);
 
 export type UserRole =
   | "member"
   | "lead"
-  | "committee"
   | "admin"
   | "super_admin";
 

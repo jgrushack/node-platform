@@ -31,16 +31,18 @@ import {
   Instagram,
   UtensilsCrossed,
   AlertTriangle,
-  Flame,
   Calendar,
-  Hammer,
-  Wrench,
   LayoutGrid,
   List,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { TenureBadge } from "@/components/ui/tenure-badge";
+import {
+  NodeYearsBadge,
+  BurnsBadge,
+  BuildBadge,
+  TenureBadge,
+} from "@/components/ui/tenure-badge";
 
 type Standing =
   | "good_standing"
@@ -86,6 +88,7 @@ interface Member {
   avatar_url: string | null;
   node_events_attended: string[];
   yearsCount: number;
+  other_burns: number;
 }
 
 interface MemberDetail {
@@ -97,6 +100,7 @@ interface MemberDetail {
   node_events_attended: string[];
   yearsAttended: number[];
   referredBy: string | null;
+  other_burns: number;
 }
 
 function getInitials(member: Member): string {
@@ -163,7 +167,7 @@ export default function MembersPage() {
       supabase
         .from("profiles")
         .select(
-          "id, first_name, last_name, playa_name, email, bio, role, is_active, avatar_url, node_events_attended"
+          "id, first_name, last_name, playa_name, email, bio, role, is_active, avatar_url, node_events_attended, other_burns"
         )
         .eq("hide_from_directory", false)
         .order("first_name", { ascending: true })
@@ -195,6 +199,7 @@ export default function MembersPage() {
               ...m,
               node_events_attended: m.node_events_attended || [],
               yearsCount: yearsByProfile[m.id] || 0,
+              other_burns: (m as Record<string, unknown>).other_burns as number || 0,
             }))
           );
           setLoading(false);
@@ -212,7 +217,7 @@ export default function MembersPage() {
     const { data: profile } = await supabase
       .from("profiles")
       .select(
-        "phone, dietary_restrictions, instagram, emergency_contact, skills, node_events_attended"
+        "phone, dietary_restrictions, instagram, emergency_contact, skills, node_events_attended, other_burns"
       )
       .eq("id", member.id)
       .single();
@@ -246,6 +251,7 @@ export default function MembersPage() {
       node_events_attended: profile?.node_events_attended || [],
       yearsAttended,
       referredBy: app?.referred_by || null,
+      other_burns: (profile as Record<string, unknown>)?.other_burns as number || 0,
     });
     setDetailLoading(false);
   }, []);
@@ -398,12 +404,12 @@ export default function MembersPage() {
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-sand-100 text-sm truncate">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="font-medium text-sand-100 text-sm truncate shrink-0">
                     {getDisplayName(member)}
                   </p>
                   {member.playa_name && (
-                    <span className="text-xs text-pink-400 truncate hidden sm:inline">
+                    <span className="text-[11px] text-pink-400 truncate hidden sm:inline min-w-0">
                       &quot;{member.playa_name}&quot;
                     </span>
                   )}
@@ -415,13 +421,9 @@ export default function MembersPage() {
                 </div>
               </div>
               <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-                <TenureBadge yearsCount={member.yearsCount} />
-                {member.yearsCount > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-medium text-amber">
-                    <Flame className="h-2.5 w-2.5" />
-                    {member.yearsCount} yr{member.yearsCount > 1 ? "s" : ""}
-                  </span>
-                )}
+                <NodeYearsBadge count={member.yearsCount} />
+                <BurnsBadge count={member.yearsCount + member.other_burns} />
+                <BuildBadge count={member.node_events_attended.filter((e) => e.startsWith("Build")).length} />
               </div>
             </motion.div>
           ))}
@@ -429,15 +431,8 @@ export default function MembersPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((member, i) => {
-            // Parse Build/Strike events into badge data
-            const buildYears = member.node_events_attended
-              .filter((e) => e.startsWith("Build"))
-              .map((e) => e.replace("Build ", ""))
-              .sort();
-            const strikeYears = member.node_events_attended
-              .filter((e) => e.startsWith("Strike"))
-              .map((e) => e.replace("Strike ", ""))
-              .sort();
+            const buildCount = member.node_events_attended.filter((e) => e.startsWith("Build")).length;
+            const totalBurns = member.yearsCount + member.other_burns;
 
             return (
               <motion.div
@@ -447,11 +442,11 @@ export default function MembersPage() {
                 transition={{ delay: Math.min(i * 0.03, 0.5) }}
               >
                 <Card
-                  className={`glass-card border-0 cursor-pointer transition-colors hover:bg-pink-500/5 ${isAdmin && !member.is_active ? "opacity-60" : ""
+                  className={`glass-card border-0 h-[140px] cursor-pointer transition-colors hover:bg-pink-500/5 ${isAdmin && !member.is_active ? "opacity-60" : ""
                     }`}
                   onClick={() => openMemberDetail(member)}
                 >
-                  <CardContent className="flex items-start gap-4 p-4">
+                  <CardContent className="flex items-start gap-4 p-4 h-full">
                     <Avatar className="h-12 w-12 shrink-0 border border-pink-500/20">
                       {member.avatar_url && (
                         <AvatarImage src={member.avatar_url} alt="" />
@@ -460,54 +455,31 @@ export default function MembersPage() {
                         {getInitials(member)}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-sand-100 truncate">
+                    <div className="min-w-0 flex-1 flex flex-col">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="font-medium text-sand-100 truncate shrink-0">
                           {getDisplayName(member)}
                         </p>
+                        {member.playa_name && (
+                          <span className="text-[11px] text-pink-400 truncate min-w-0">
+                            &quot;{member.playa_name}&quot;
+                          </span>
+                        )}
                         {isAdmin && !member.is_active && (
                           <Badge className="shrink-0 bg-sand-700/30 text-sand-500 text-[10px]">
                             Inactive
                           </Badge>
                         )}
                       </div>
-                      {member.playa_name && (
-                        <p className="text-sm text-pink-400 truncate">
-                          &quot;{member.playa_name}&quot;
-                        </p>
-                      )}
                       {member.bio && (
                         <p className="mt-1 text-xs text-sand-400 line-clamp-2">
                           {member.bio}
                         </p>
                       )}
-                      {/* Fun decorative badges */}
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        <TenureBadge yearsCount={member.yearsCount} />
-                        {member.yearsCount > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-medium text-amber">
-                            <Flame className="h-2.5 w-2.5" />
-                            {member.yearsCount} yr{member.yearsCount > 1 ? "s" : ""}
-                          </span>
-                        )}
-                        {buildYears.map((yr) => (
-                          <span
-                            key={`build-${yr}`}
-                            className="inline-flex items-center gap-1 rounded-full bg-pink-500/15 px-2 py-0.5 text-[10px] font-medium text-pink-400"
-                          >
-                            <Hammer className="h-2.5 w-2.5" />
-                            {yr}
-                          </span>
-                        ))}
-                        {strikeYears.map((yr) => (
-                          <span
-                            key={`strike-${yr}`}
-                            className="inline-flex items-center gap-1 rounded-full bg-coral/15 px-2 py-0.5 text-[10px] font-medium text-coral"
-                          >
-                            <Wrench className="h-2.5 w-2.5" />
-                            {yr}
-                          </span>
-                        ))}
+                      <div className="mt-auto pt-2 flex flex-wrap gap-1.5">
+                        <NodeYearsBadge count={member.yearsCount} />
+                        <BurnsBadge count={totalBurns} />
+                        <BuildBadge count={buildCount} />
                       </div>
                     </div>
                   </CardContent>
@@ -676,15 +648,16 @@ export default function MembersPage() {
                       </div>
                     )}
 
-                    {memberDetail?.yearsAttended && (
-                      <TenureBadge yearsCount={memberDetail.yearsAttended.length} />
-                    )}
+                    {/* Summary badges */}
+                    <div className="flex flex-wrap gap-2">
+                      <NodeYearsBadge count={memberDetail?.yearsAttended?.length ?? 0} />
+                      <BurnsBadge count={(memberDetail?.yearsAttended?.length ?? 0) + (memberDetail?.other_burns ?? 0)} />
+                      <BuildBadge count={memberDetail?.node_events_attended?.filter((e) => e.startsWith("Build")).length ?? 0} />
+                    </div>
 
+                    {/* NODE years detail */}
                     <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 text-sm text-sand-400">
-                        <Flame className="h-3.5 w-3.5" />
-                        <span>Years at NODE</span>
-                      </div>
+                      <p className="text-sm text-sand-400">Years at NODE</p>
                       {memberDetail?.yearsAttended &&
                         memberDetail.yearsAttended.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
@@ -704,22 +677,25 @@ export default function MembersPage() {
                       )}
                     </div>
 
+                    {/* Build events detail */}
                     {memberDetail?.node_events_attended &&
-                      memberDetail.node_events_attended.length > 0 && (
+                      memberDetail.node_events_attended.filter((e) => e.startsWith("Build")).length > 0 && (
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2 text-sm text-sand-400">
                             <Calendar className="h-3.5 w-3.5" />
-                            <span>Build & Strike</span>
+                            <span>Build Years</span>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
-                            {memberDetail.node_events_attended.map((event) => (
-                              <Badge
-                                key={event}
-                                className="bg-pink-500/20 text-pink-400 text-xs"
-                              >
-                                {event}
-                              </Badge>
-                            ))}
+                            {memberDetail.node_events_attended
+                              .filter((e) => e.startsWith("Build"))
+                              .map((event) => (
+                                <Badge
+                                  key={event}
+                                  className="bg-pink-500/20 text-pink-400 text-xs"
+                                >
+                                  {event.replace("Build ", "")}
+                                </Badge>
+                              ))}
                           </div>
                         </div>
                       )}

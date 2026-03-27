@@ -21,7 +21,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
-import { TenureBadge } from "@/components/ui/tenure-badge";
+import {
+  NodeYearsBadge,
+  BurnsBadge,
+  BuildBadge,
+  TenureBadge,
+} from "@/components/ui/tenure-badge";
 import { deleteAccount } from "@/lib/actions/account";
 import { completeOnboarding } from "@/lib/actions/onboarding";
 import { useRouter } from "next/navigation";
@@ -54,6 +59,7 @@ interface ProfileData {
   dietary_restrictions: string;
   instagram: string;
   skills: string[];
+  other_burns: number;
 }
 
 interface ReadOnlyData {
@@ -103,7 +109,7 @@ export default function ProfilePage() {
       supabase
         .from("profiles")
         .select(
-          "first_name, last_name, playa_name, email, phone, bio, birthday, emergency_contact, dietary_restrictions, instagram, skills, node_events_attended, avatar_url, onboarding_completed_at"
+          "first_name, last_name, playa_name, email, phone, bio, birthday, emergency_contact, dietary_restrictions, instagram, skills, node_events_attended, avatar_url, onboarding_completed_at, other_burns"
         )
         .eq("id", user.id)
         .single()
@@ -121,6 +127,7 @@ export default function ProfilePage() {
             dietary_restrictions: data.dietary_restrictions || "",
             instagram: data.instagram || "",
             skills: data.skills || [],
+            other_burns: (data as Record<string, unknown>).other_burns as number || 0,
           });
           setReadOnly((prev) => ({
             ...prev,
@@ -272,6 +279,7 @@ export default function ProfilePage() {
         dietary_restrictions: profile.dietary_restrictions || null,
         instagram: profile.instagram || null,
         skills: profile.skills,
+        other_burns: profile.other_burns,
       })
       .eq("id", user.id);
 
@@ -527,6 +535,27 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* Other Burns */}
+          <div className="space-y-2">
+            <Label className="text-sand-300">
+              Other Burns
+              <span className="ml-1.5 text-xs text-sand-500 font-normal">
+                (Burns / regionals without NODE)
+              </span>
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              max={30}
+              placeholder="0"
+              value={profile?.other_burns ?? 0}
+              onChange={(e) =>
+                updateField("other_burns", Math.max(0, parseInt(e.target.value) || 0))
+              }
+              className="w-24"
+            />
+          </div>
+
           <Button
             className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
             onClick={handleSave}
@@ -561,7 +590,12 @@ export default function ProfilePage() {
 
             <Separator className="bg-pink-500/10" />
 
-            <TenureBadge yearsCount={readOnly.yearsAttended.length} />
+            {/* Summary Badges */}
+            <div className="flex flex-wrap gap-2">
+              <NodeYearsBadge count={readOnly.yearsAttended.length} />
+              <BurnsBadge count={readOnly.yearsAttended.length + (profile?.other_burns ?? 0)} />
+              <BuildBadge count={readOnly.nodeEventsAttended.filter((e) => e.startsWith("Build")).length} />
+            </div>
 
             {/* Years Attended NODE */}
             <div className="space-y-2">
@@ -586,21 +620,23 @@ export default function ProfilePage() {
 
             <Separator className="bg-pink-500/10" />
 
-            {/* Other NODE Events Attended */}
+            {/* Build events */}
             <div className="space-y-2">
               <Label className="text-sand-400 text-xs uppercase tracking-wider">
-                Other NODE Events Attended
+                Build Years
               </Label>
-              {readOnly.nodeEventsAttended.length > 0 ? (
+              {readOnly.nodeEventsAttended.filter((e) => e.startsWith("Build")).length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {readOnly.nodeEventsAttended.map((event) => (
-                    <Badge
-                      key={event}
-                      className="bg-pink-500/20 text-pink-400"
-                    >
-                      {event}
-                    </Badge>
-                  ))}
+                  {readOnly.nodeEventsAttended
+                    .filter((e) => e.startsWith("Build"))
+                    .map((event) => (
+                      <Badge
+                        key={event}
+                        className="bg-pink-500/20 text-pink-400"
+                      >
+                        {event.replace("Build ", "")}
+                      </Badge>
+                    ))}
                 </div>
               ) : (
                 <p className="text-sm text-sand-500">None on record</p>
