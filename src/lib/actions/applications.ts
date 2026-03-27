@@ -197,26 +197,6 @@ export async function uploadApplicationVideo(
   return { success: true };
 }
 
-export async function getApplications(): Promise<
-  ApplicationRow[] | { error: string }
-> {
-  const { error: authError, supabase } = await requireAdmin();
-  if (authError) {
-    return { error: authError };
-  }
-
-  const { data, error } = await supabase
-    .from("applications")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("[getApplications]", error);
-    return { error: "Failed to load applications." };
-  }
-
-  return data as ApplicationRow[];
-}
 
 export async function getApplicationsWithVotes(): Promise<
   ApplicationWithVotes[] | { error: string }
@@ -507,78 +487,6 @@ export async function adminOverrideStatus(
   return { success: true };
 }
 
-export async function updateApplicationStatus(
-  id: string,
-  status: "approved" | "rejected" | "waitlist",
-  notes?: string
-): Promise<{ success: true } | { error: string }> {
-  const { error: authError, supabase, user } = await requireAdminOrSuperAdmin();
-  if (authError || !user) {
-    return { error: authError ?? "Not authenticated" };
-  }
-
-  const { error } = await supabase
-    .from("applications")
-    .update({
-      status,
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-      reviewer_notes: notes || null,
-    })
-    .eq("id", id);
-
-  if (error) {
-    console.error("[updateApplicationStatus]", error);
-    return { error: "Failed to update application status." };
-  }
-
-  // When approving, create a profile for the applicant if they have an auth account
-  if (status === "approved") {
-    try {
-      const adminClient = createAdminClient();
-      const { data: application } = await adminClient
-        .from("applications")
-        .select("email, first_name, last_name, playa_name, phone, skills")
-        .eq("id", id)
-        .single();
-
-      if (application) {
-        // Find user by email via profiles table
-        const { data: existingProfile } = await adminClient
-          .from("profiles")
-          .select("id")
-          .ilike("email", application.email)
-          .limit(1)
-          .maybeSingle();
-        const authUser = existingProfile ? { id: existingProfile.id } : null;
-
-        if (authUser) {
-          // Create profile from application data
-          await adminClient.rpc("create_profile_from_application", {
-            p_user_id: authUser.id,
-            p_email: application.email,
-            p_first_name: application.first_name,
-            p_last_name: application.last_name,
-            p_playa_name: application.playa_name,
-            p_phone: application.phone,
-            p_skills: application.skills,
-          });
-
-          // Link application to profile
-          await adminClient
-            .from("applications")
-            .update({ profile_id: authUser.id })
-            .eq("id", id);
-        }
-      }
-    } catch (e) {
-      console.error("[updateApplicationStatus] Profile creation error:", e);
-      // Don't fail the approval — profile can be created later when they sign up
-    }
-  }
-
-  return { success: true };
-}
 
 export async function deleteApplication(
   id: string
