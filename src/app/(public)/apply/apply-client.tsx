@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
@@ -40,6 +39,11 @@ const steps = [
   { label: "Confirm", icon: Send },
 ];
 
+const BURN_YEARS = [
+  ...Array.from({ length: 30 }, (_, i) => String(1990 + i)), // 1990–2019
+  "2022", "2023", "2024",
+];
+
 const TEN_PRINCIPLES = [
   "Radical Inclusion",
   "Gifting",
@@ -59,7 +63,7 @@ interface ApplyFormData {
   email: string;
   phone: string;
   playaName: string;
-  yearsAttended: string;
+  yearsAttended: string[];
   previousCamps: string;
   virginExpectations: string;
   favoritePrinciple: string;
@@ -91,7 +95,7 @@ function canAdvance(step: number, form: ApplyFormData): boolean {
   switch (step) {
     case 0: return true; // Welcome
     case 1: return !!(form.firstName && form.lastName && form.email);
-    case 2: return !!form.yearsAttended;
+    case 2: return true; // 0 years selected = virgin burner, still valid
     case 3: return !!(form.skills && form.referredBy);
     case 4: return true; // Video (optional)
     case 5: return true; // Review
@@ -108,7 +112,7 @@ export default function ApplyClient() {
     email: "",
     phone: "",
     playaName: "",
-    yearsAttended: "",
+    yearsAttended: [],
     previousCamps: "",
     virginExpectations: "",
     favoritePrinciple: "",
@@ -150,7 +154,9 @@ export default function ApplyClient() {
         email: form.email,
         phone: form.phone,
         playaName: form.playaName,
-        yearsAttended: form.yearsAttended,
+        yearsAttended: form.yearsAttended.length > 0
+          ? form.yearsAttended.slice().sort().join(", ")
+          : "Virgin Burner",
         previousCamps: form.previousCamps,
         favoritePrinciple: form.favoritePrinciple,
         principleReason: form.principleReason,
@@ -390,35 +396,60 @@ function PersonalStep({ form, update }: FormStepProps) {
 }
 
 function ExperienceStep({ form, update }: FormStepProps) {
+  const isVirgin = form.yearsAttended.length === 0;
+
+  function toggleYear(year: string) {
+    const current = form.yearsAttended;
+    if (current.includes(year)) {
+      update("yearsAttended", current.filter((y) => y !== year));
+    } else {
+      update("yearsAttended", [...current, year]);
+    }
+  }
+
   return (
     <div className="space-y-5">
-      <h2 className="text-2xl font-bold text-sand-100">
-        Burn Experience
-      </h2>
-      <div className="space-y-2">
-        <Label className="text-sand-300">
-          How many years have you attended? *
-        </Label>
-        <RadioGroup
-          value={form.yearsAttended}
-          onValueChange={(v) => update("yearsAttended", v)}
-          className="space-y-2"
-        >
-          {["0 (Virgin Burner)", "1-2", "3-5", "6+"].map((opt) => (
-            <div key={opt} className="flex items-center space-x-3">
-              <RadioGroupItem value={opt} id={opt} />
-              <Label htmlFor={opt} className="text-sand-300">
-                {opt}
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
-      </div>
-      {form.yearsAttended && form.yearsAttended !== "0 (Virgin Burner)" ? (
-        <div className="space-y-2">
+      <h2 className="text-2xl font-bold text-sand-100">Burn Experience</h2>
+      <div className="space-y-3">
+        <div>
           <Label className="text-sand-300">
-            Previous camps or communities
+            Which years have you attended Burning Man?
           </Label>
+          <p className="mt-1 text-xs text-sand-500">
+            Select all that apply — leave blank if this is your first burn
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {BURN_YEARS.map((year) => (
+            <button
+              key={year}
+              type="button"
+              onClick={() => toggleYear(year)}
+              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+                form.yearsAttended.includes(year)
+                  ? "border-pink-500 bg-pink-500/20 text-pink-400"
+                  : "border-blue-900/30 bg-blue-900/10 text-sand-300 hover:bg-blue-900/20"
+              }`}
+            >
+              {year}
+            </button>
+          ))}
+        </div>
+        {isVirgin ? (
+          <p className="text-xs text-amber-400/80">
+            First burn? Leave all years blank and answer the question below.
+          </p>
+        ) : (
+          <p className="text-xs text-sand-500">
+            {form.yearsAttended.length} year
+            {form.yearsAttended.length !== 1 ? "s" : ""} selected
+          </p>
+        )}
+      </div>
+
+      {!isVirgin ? (
+        <div className="space-y-2">
+          <Label className="text-sand-300">Previous camps or communities</Label>
           <Textarea
             value={form.previousCamps}
             onChange={(e) => update("previousCamps", e.target.value)}
@@ -427,20 +458,21 @@ function ExperienceStep({ form, update }: FormStepProps) {
             maxLength={2000}
           />
         </div>
-      ) : form.yearsAttended === "0 (Virgin Burner)" ? (
+      ) : (
         <div className="space-y-4">
           <div className="space-y-2">
             <Label className="text-sand-300">
               Which of the 10 Principles resonates with you the most?
             </Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-              {TEN_PRINCIPLES.map(principle => (
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+              {TEN_PRINCIPLES.map((principle) => (
                 <Label
                   key={principle}
-                  className={`flex items-center p-3 rounded-lg border transition-colors cursor-pointer ${form.favoritePrinciple === principle
-                    ? "border-pink-500 bg-pink-500/10 text-pink-400"
-                    : "border-blue-900/30 bg-blue-900/10 text-sand-300 hover:bg-blue-900/20"
-                    }`}
+                  className={`flex cursor-pointer items-center rounded-lg border p-3 transition-colors ${
+                    form.favoritePrinciple === principle
+                      ? "border-pink-500 bg-pink-500/10 text-pink-400"
+                      : "border-blue-900/30 bg-blue-900/10 text-sand-300 hover:bg-blue-900/20"
+                  }`}
                 >
                   <input
                     type="radio"
@@ -456,7 +488,7 @@ function ExperienceStep({ form, update }: FormStepProps) {
           </div>
 
           {form.favoritePrinciple && (
-            <div className="space-y-2 animate-in fade-in slide-in-from-top-4">
+            <div className="animate-in fade-in slide-in-from-top-4 space-y-2">
               <Label className="text-sand-300">
                 Why does {form.favoritePrinciple} matter to you?
               </Label>
@@ -470,7 +502,7 @@ function ExperienceStep({ form, update }: FormStepProps) {
             </div>
           )}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -751,8 +783,14 @@ function ReviewStep({ form }: { form: ApplyFormData }) {
     { label: "Email", value: form.email },
     { label: "Phone", value: form.phone || "—" },
     { label: "Playa Name", value: form.playaName || "—" },
-    { label: "Years Attended", value: form.yearsAttended || "—" },
-    ...(form.yearsAttended === "0 (Virgin Burner)"
+    {
+      label: "Years Attended",
+      value:
+        form.yearsAttended.length > 0
+          ? form.yearsAttended.slice().sort().join(", ")
+          : "Virgin Burner",
+    },
+    ...(form.yearsAttended.length === 0
       ? [
         {
           label: "Favorite Principle",

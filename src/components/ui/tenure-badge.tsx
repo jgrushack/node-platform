@@ -3,10 +3,11 @@
  *
  * Badge types:
  * - NodeYearsBadge: NODE registration count. ≥5 = gold shimmer with medal. <5 = orange.
- * - BurnsBadge: Total Burning Man attendance count (🔥).
- * - BuildBadge: Aggregated build count (🔨).
+ * - BurnsBadge: Total Burning Man attendance count.
+ * - BuildBadge: Aggregated build count.
  * - SecretSantaBadge / NodesgivingBadge: placeholders, data TBA.
  */
+import { Crown, Medal, Flame, Hammer, Gift, Utensils } from "lucide-react";
 
 /** Tiny inline NODE mark for use inside badges */
 function NodeMark({ className }: { className?: string }) {
@@ -88,7 +89,7 @@ export function NodeYearsBadge({ count }: NodeYearsBadgeProps) {
   if (isOG) {
     return (
       <span className="relative inline-flex items-center gap-1 overflow-hidden rounded-full border border-purple-500/40 bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.3)] px-2.5 py-1 text-xs font-bold">
-        <span>👑</span>
+        <Crown className="h-3.5 w-3.5" />
         NR1
         {shimmerOverlay}
       </span>
@@ -99,9 +100,9 @@ export function NodeYearsBadge({ count }: NodeYearsBadgeProps) {
   if (isVeteran) {
     return (
       <span className="relative inline-flex items-center gap-0.5 overflow-hidden rounded-full border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] px-2.5 py-1 text-xs font-bold">
-        <span className="mr-0.5">🏅</span>
+        <Medal className="mr-0.5 h-3.5 w-3.5" />
         {count}
-        <NodeMark className="h-3 w-3.5" />
+        <NodeMark className="h-3.5 w-4" />
         {shimmerOverlay}
       </span>
     );
@@ -111,7 +112,7 @@ export function NodeYearsBadge({ count }: NodeYearsBadgeProps) {
   return (
     <span className="inline-flex items-center gap-0.5 rounded-full bg-amber/15 border border-amber/20 px-2.5 py-1 text-xs font-bold text-amber">
       {count}
-      <NodeMark className="h-3 w-3.5" />
+      <NodeMark className="h-3.5 w-4" />
     </span>
   );
 }
@@ -128,7 +129,7 @@ export function BurnsBadge({ count }: BurnsBadgeProps) {
 
   return (
     <span className="inline-flex items-center gap-0.5 rounded-full bg-orange-500/15 border border-orange-500/20 px-2.5 py-1 text-xs font-bold text-orange-400">
-      <span>🔥</span>
+      <Flame className="h-3.5 w-3.5" />
       {count}
     </span>
   );
@@ -146,7 +147,7 @@ export function BuildBadge({ count }: BuildBadgeProps) {
 
   return (
     <span className="inline-flex items-center gap-0.5 rounded-full bg-pink-500/15 border border-pink-500/20 px-2.5 py-1 text-xs font-bold text-pink-400">
-      <span>🔨</span>
+      <Hammer className="h-3.5 w-3.5" />
       {count}
     </span>
   );
@@ -159,7 +160,7 @@ export function SecretSantaBadge({ participated }: { participated: boolean }) {
 
   return (
     <span className="inline-flex items-center gap-0.5 rounded-full bg-red-500/15 border border-red-500/20 px-2.5 py-1 text-xs font-bold text-red-400">
-      <span>🎅</span>
+      <Gift className="h-3.5 w-3.5" />
       Santa
     </span>
   );
@@ -172,7 +173,7 @@ export function NodesgivingBadge({ participated }: { participated: boolean }) {
 
   return (
     <span className="inline-flex items-center gap-0.5 rounded-full bg-amber/15 border border-amber/20 px-2.5 py-1 text-xs font-bold text-amber">
-      <span>🦃</span>
+      <Utensils className="h-3.5 w-3.5" />
       Nodesgiving
     </span>
   );
