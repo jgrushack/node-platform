@@ -11,11 +11,13 @@ const userProfileSchema = z.object({
   playa_name: z.string().max(100).nullable().optional(),
   phone: z.string().max(30).nullable().optional(),
   bio: z.string().max(2000).nullable().optional(),
+  birthday: z.string().max(10).nullable().optional(),
   emergency_contact: z.string().max(500).nullable().optional(),
   dietary_restrictions: z.string().max(500).nullable().optional(),
   instagram: z.string().max(100).nullable().optional(),
   skills: z.array(z.string().max(100)).max(50).optional(),
   node_events_attended: z.array(z.string().max(100)).max(50).optional(),
+  other_burns: z.number().int().min(0).max(30).optional(),
 }).strict();
 
 const roleSchema = z.enum(["member", "lead", "admin", "super_admin"]);
@@ -34,12 +36,14 @@ export interface UserProfile {
   email: string;
   phone: string | null;
   bio: string | null;
+  birthday: string | null;
   avatar_url: string | null;
   emergency_contact: string | null;
   dietary_restrictions: string | null;
   instagram: string | null;
   skills: string[];
   node_events_attended: string[];
+  other_burns: number;
   role: UserRole;
   created_at: string;
   updated_at: string;
@@ -119,11 +123,13 @@ export async function updateUserProfile(
     playa_name?: string | null;
     phone?: string | null;
     bio?: string | null;
+    birthday?: string | null;
     emergency_contact?: string | null;
     dietary_restrictions?: string | null;
     instagram?: string | null;
     skills?: string[];
     node_events_attended?: string[];
+    other_burns?: number;
   }
 ): Promise<{ success: true } | { error: string }> {
   const parsed = userProfileSchema.safeParse(data);

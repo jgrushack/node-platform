@@ -175,9 +175,11 @@ export function UsersClient({
       playa_name: user.playa_name || "",
       phone: user.phone || "",
       bio: user.bio || "",
+      birthday: user.birthday || "",
       emergency_contact: user.emergency_contact || "",
       dietary_restrictions: user.dietary_restrictions || "",
       instagram: user.instagram || "",
+      other_burns: user.other_burns || 0,
     });
   }
 
@@ -185,13 +187,14 @@ export function UsersClient({
     if (!editingUser) return;
     setSavingProfile(true);
 
-    const payload: Record<string, string | null> = {};
+    const payload: Record<string, string | number | null> = {};
     const fields = [
       "first_name",
       "last_name",
       "playa_name",
       "phone",
       "bio",
+      "birthday",
       "emergency_contact",
       "dietary_restrictions",
       "instagram",
@@ -200,6 +203,7 @@ export function UsersClient({
       const val = (editForm as Record<string, string>)[key];
       payload[key] = val || null;
     }
+    payload.other_burns = (editForm.other_burns as number) || 0;
 
     const result = await updateUserProfile(editingUser.id, payload);
     setSavingProfile(false);
@@ -758,6 +762,31 @@ export function UsersClient({
                       ...p,
                       instagram: e.target.value,
                     }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sand-300">Birthday <span className="text-xs text-sand-500 font-normal">(MM-DD)</span></Label>
+                <Input
+                  placeholder="e.g. 03-15"
+                  value={(editForm.birthday as string) ?? ""}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, birthday: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sand-300">Other Burns <span className="text-xs text-sand-500 font-normal">(non-NODE)</span></Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={30}
+                  className="w-24"
+                  value={(editForm.other_burns as number) ?? 0}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, other_burns: Math.max(0, parseInt(e.target.value) || 0) }))
                   }
                 />
               </div>
