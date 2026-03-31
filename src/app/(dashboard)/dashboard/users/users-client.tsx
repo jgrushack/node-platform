@@ -48,6 +48,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import type { UserProfile, UserRole, InviteResult } from "@/lib/actions/users";
 import { updateUserRole, updateUserProfile, generateInviteLinks, handleCommitteeRequest } from "@/lib/actions/users";
+import { createClient } from "@/lib/supabase/client";
 
 const ROLE_CONFIG: Record<
   UserRole,
@@ -97,17 +98,29 @@ interface CommitteeRequestWithProfile {
 
 const NODE_YEARS = [2018, 2019, 2022, 2023, 2024, 2025, 2026];
 
+type Standing = "good_standing" | "limited_referrals" | "reapply" | "not_invited_back";
+
+const STANDING_CONFIG: Record<Standing, { label: string; color: string }> = {
+  good_standing: { label: "Good Standing", color: "text-green-400" },
+  limited_referrals: { label: "Limited Referrals", color: "text-yellow-400" },
+  reapply: { label: "Reapply", color: "text-amber" },
+  not_invited_back: { label: "Not Invited Back", color: "text-red-400" },
+};
+
 export function UsersClient({
   initialUsers,
   initialCommitteeRequests,
   yearsByUser,
+  initialStandings,
 }: {
   initialUsers: UserProfile[];
   initialCommitteeRequests: CommitteeRequestWithProfile[];
   yearsByUser: Record<string, number[]>;
+  initialStandings: Record<string, string>;
 }) {
   const router = useRouter();
   const [users, setUsers] = useState(initialUsers);
+  const [standings, setStandings] = useState<Record<string, string>>(initialStandings);
   const [committeeRequests, setCommitteeRequests] = useState(initialCommitteeRequests);
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -203,6 +216,22 @@ export function UsersClient({
     );
     setEditingUser(null);
     toast.success("Profile updated");
+  }
+
+  async function updateStanding(profileId: string, standing: Standing) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase.from("camper_standings").upsert(
+      { profile_id: profileId, standing, updated_by: user.id },
+      { onConflict: "profile_id" }
+    );
+    if (error) {
+      toast.error("Failed to update standing");
+    } else {
+      setStandings((prev) => ({ ...prev, [profileId]: standing }));
+      toast.success("Standing updated");
+    }
   }
 
   function toggleSelect(id: string) {
@@ -758,6 +787,27 @@ export function UsersClient({
                           className="text-sand-200"
                         >
                           {ROLE_CONFIG[r].label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {editingUser && (
+                <div className="space-y-2">
+                  <Label className="text-sand-300">Camper Standing</Label>
+                  <Select
+                    value={(standings[editingUser.id] as Standing) || "good_standing"}
+                    onValueChange={(v) => updateStanding(editingUser.id, v as Standing)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="glass">
+                      {(Object.entries(STANDING_CONFIG) as [Standing, { label: string; color: string }][]).map(([key, cfg]) => (
+                        <SelectItem key={key} value={key} className={cfg.color}>
+                          {cfg.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

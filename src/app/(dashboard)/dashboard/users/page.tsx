@@ -33,6 +33,16 @@ export default async function UsersPage() {
     }
   }
 
+  // Fetch camper standings
+  const { data: standingsData } = await supabase
+    .from("camper_standings")
+    .select("profile_id, standing");
+
+  const standings: Record<string, string> = {};
+  for (const s of standingsData || []) {
+    standings[s.profile_id] = s.standing;
+  }
+
   const committeeRequests = "error" in requestsResult ? [] : requestsResult;
 
   return (
@@ -40,6 +50,7 @@ export default async function UsersPage() {
       initialUsers={usersResult}
       initialCommitteeRequests={committeeRequests}
       yearsByUser={yearsByUser}
+      initialStandings={standings}
     />
   );
 }
