@@ -82,10 +82,8 @@ export default function DashboardLayout({
             { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
           ];
 
-          // Committee members OR admins can see applications
-          if (isCommitteeMember || ["admin", "super_admin"].includes(effectiveRole)) {
-            items.push({ href: "/dashboard/applications", label: "Applications", icon: FileText });
-          }
+          // Everyone sees Applications — non-committee members get the join prompt
+          items.push({ href: "/dashboard/applications", label: "Applications", icon: FileText });
 
           items.push(
             { href: "/dashboard/members", label: "Members", icon: UsersRound },
