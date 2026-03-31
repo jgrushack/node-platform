@@ -249,23 +249,23 @@ export function MessagesClient({
   function toggleYear(year: number) { setSelectedYears((prev) => prev.includes(year) ? prev.filter((y) => y !== year) : [...prev, year]); setPreviewResult(null); }
   function toggleRole(role: string) { setSelectedRoles((prev) => prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]); setPreviewResult(null); }
 
-  /** Wrap selected text (or insert at cursor) with HTML tags */
+  /** Wrap selected text (or insert at cursor) with HTML tags.
+   *  Uses native insertText so Cmd/Ctrl+Z undo works. */
   const wrapSelection = useCallback((before: string, after: string) => {
     const ta = textareaRef.current;
     if (!ta) return;
+    ta.focus();
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
-    const selected = bodyHtml.slice(start, end);
+    const selected = ta.value.slice(start, end);
     const replacement = before + (selected || "text") + after;
-    const updated = bodyHtml.slice(0, start) + replacement + bodyHtml.slice(end);
-    setBodyHtml(updated);
-    // Restore focus and move cursor after the inserted text
-    requestAnimationFrame(() => {
-      ta.focus();
-      const cursorPos = start + replacement.length;
-      ta.setSelectionRange(cursorPos, cursorPos);
-    });
-  }, [bodyHtml]);
+    // Select the range we want to replace
+    ta.setSelectionRange(start, end);
+    // Insert via native command — preserves browser undo stack
+    document.execCommand("insertText", false, replacement);
+    // Sync React state from the now-updated textarea value
+    setBodyHtml(ta.value);
+  }, []);
 
   const unreadCount = myMessages.filter((m) => !m.read_at).length;
 
