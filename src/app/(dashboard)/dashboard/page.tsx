@@ -137,6 +137,7 @@ export default function DashboardPage() {
   const [hasTicket, setHasTicket] = useState<boolean | null>(null);
   const [hasCarPass, setHasCarPass] = useState<boolean | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  const [nextEvent, setNextEvent] = useState<{ title: string; date: string } | null>(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showTicketPopup, setShowTicketPopup] = useState(false);
   const [savingTicket, setSavingTicket] = useState(false);
@@ -295,6 +296,23 @@ export default function DashboardPage() {
                 );
               }
             });
+
+          // Fetch next upcoming event
+          supabase
+            .from("node_events")
+            .select("title, event_date")
+            .gte("event_date", new Date().toISOString().split("T")[0])
+            .order("event_date", { ascending: true })
+            .limit(1)
+            .maybeSingle()
+            .then(({ data: evt }) => {
+              if (evt) {
+                setNextEvent({
+                  title: evt.title,
+                  date: new Date(evt.event_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                });
+              }
+            });
         });
     });
   }, []);
@@ -416,11 +434,11 @@ export default function DashboardPage() {
     },
     {
       label: "Next Event",
-      value: "TBD",
+      value: nextEvent?.title ?? "TBD",
       icon: CalendarDays,
       color: "text-coral",
       valueColor: "text-sand-100",
-      subtext: null as string | null,
+      subtext: nextEvent?.date ?? null,
     },
     {
       label: "Balance",
