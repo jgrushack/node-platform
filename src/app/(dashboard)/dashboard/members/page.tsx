@@ -88,7 +88,7 @@ interface Member {
   avatar_url: string | null;
   node_events_attended: string[];
   yearsCount: number;
-  other_burns: number;
+  other_burns: string[];
 }
 
 interface MemberDetail {
@@ -100,7 +100,7 @@ interface MemberDetail {
   node_events_attended: string[];
   yearsAttended: number[];
   referredBy: string | null;
-  other_burns: number;
+  other_burns: string[];
 }
 
 function getInitials(member: Member): string {
@@ -199,7 +199,7 @@ export default function MembersPage() {
               ...m,
               node_events_attended: m.node_events_attended || [],
               yearsCount: yearsByProfile[m.id] || 0,
-              other_burns: (m as Record<string, unknown>).other_burns as number || 0,
+              other_burns: (m as Record<string, unknown>).other_burns as string[] || [],
             }))
           );
           setLoading(false);
@@ -251,7 +251,7 @@ export default function MembersPage() {
       node_events_attended: profile?.node_events_attended || [],
       yearsAttended,
       referredBy: app?.referred_by || null,
-      other_burns: (profile as Record<string, unknown>)?.other_burns as number || 0,
+      other_burns: (profile as Record<string, unknown>)?.other_burns as string[] || [],
     });
     setDetailLoading(false);
   }, []);
@@ -422,7 +422,7 @@ export default function MembersPage() {
               </div>
               <div className="hidden sm:flex items-center gap-1.5 shrink-0">
                 <NodeYearsBadge count={member.yearsCount} />
-                <BurnsBadge count={member.yearsCount + member.other_burns} />
+                <BurnsBadge count={member.yearsCount + (member.other_burns.length)} />
                 <BuildBadge count={member.node_events_attended.filter((e) => e.startsWith("Build")).length} />
               </div>
             </motion.div>
@@ -432,7 +432,7 @@ export default function MembersPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((member, i) => {
             const buildCount = member.node_events_attended.filter((e) => e.startsWith("Build")).length;
-            const totalBurns = member.yearsCount + member.other_burns;
+            const totalBurns = member.yearsCount + (member.other_burns.length);
 
             return (
               <motion.div
@@ -651,7 +651,7 @@ export default function MembersPage() {
                     {/* Summary badges */}
                     <div className="flex flex-wrap gap-2">
                       <NodeYearsBadge count={memberDetail?.yearsAttended?.length ?? 0} />
-                      <BurnsBadge count={(memberDetail?.yearsAttended?.length ?? 0) + (memberDetail?.other_burns ?? 0)} />
+                      <BurnsBadge count={(memberDetail?.yearsAttended?.length ?? 0) + ((memberDetail?.other_burns?.length ?? 0))} />
                       <BuildBadge count={memberDetail?.node_events_attended?.filter((e) => e.startsWith("Build")).length ?? 0} />
                     </div>
 

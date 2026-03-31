@@ -17,7 +17,7 @@ const userProfileSchema = z.object({
   instagram: z.string().max(100).nullable().optional(),
   skills: z.array(z.string().max(100)).max(50).optional(),
   node_events_attended: z.array(z.string().max(100)).max(50).optional(),
-  other_burns: z.number().int().min(0).max(30).optional(),
+  other_burns: z.array(z.string().max(100)).max(50).optional(),
 }).strict();
 
 const roleSchema = z.enum(["member", "lead", "admin", "super_admin"]);
@@ -43,7 +43,7 @@ export interface UserProfile {
   instagram: string | null;
   skills: string[];
   node_events_attended: string[];
-  other_burns: number;
+  other_burns: string[];
   role: UserRole;
   created_at: string;
   updated_at: string;
@@ -129,7 +129,7 @@ export async function updateUserProfile(
     instagram?: string | null;
     skills?: string[];
     node_events_attended?: string[];
-    other_burns?: number;
+    other_burns?: string[];
   }
 ): Promise<{ success: true } | { error: string }> {
   const parsed = userProfileSchema.safeParse(data);

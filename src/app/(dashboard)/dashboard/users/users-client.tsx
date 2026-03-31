@@ -179,7 +179,7 @@ export function UsersClient({
       emergency_contact: user.emergency_contact || "",
       dietary_restrictions: user.dietary_restrictions || "",
       instagram: user.instagram || "",
-      other_burns: user.other_burns || 0,
+      other_burns: user.other_burns || [],
     });
   }
 
@@ -187,7 +187,7 @@ export function UsersClient({
     if (!editingUser) return;
     setSavingProfile(true);
 
-    const payload: Record<string, string | number | null> = {};
+    const payload: Record<string, string | string[] | number | null> = {};
     const fields = [
       "first_name",
       "last_name",
@@ -203,7 +203,7 @@ export function UsersClient({
       const val = (editForm as Record<string, string>)[key];
       payload[key] = val || null;
     }
-    payload.other_burns = (editForm.other_burns as number) || 0;
+    payload.other_burns = (editForm.other_burns as string[]) || [];
 
     const result = await updateUserProfile(editingUser.id, payload);
     setSavingProfile(false);
@@ -778,15 +778,15 @@ export function UsersClient({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sand-300">Other Burns <span className="text-xs text-sand-500 font-normal">(non-NODE)</span></Label>
+                <Label className="text-sand-300">Other Burns <span className="text-xs text-sand-500 font-normal">(e.g. &quot;Burning Man 2020, AfrikaBurn 2023&quot;)</span></Label>
                 <Input
-                  type="number"
-                  min={0}
-                  max={30}
-                  className="w-24"
-                  value={(editForm.other_burns as number) ?? 0}
+                  placeholder="Burning Man 2020, Midburn 2019..."
+                  value={((editForm.other_burns as string[]) || []).join(", ")}
                   onChange={(e) =>
-                    setEditForm((p) => ({ ...p, other_burns: Math.max(0, parseInt(e.target.value) || 0) }))
+                    setEditForm((p) => ({
+                      ...p,
+                      other_burns: e.target.value ? e.target.value.split(",").map((s) => s.trim()).filter(Boolean) : [],
+                    }))
                   }
                 />
               </div>
