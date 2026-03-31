@@ -20,13 +20,13 @@ export default async function MessagesPage() {
     .single();
 
   const isAdmin = profile && ["admin", "super_admin"].includes(profile.role);
-  const admin = createAdminClient();
 
   let sentMessages: CampMessage[] = [];
   let drafts: CampMessage[] = [];
   let myMessages: UnreadMessage[] = [];
 
   try {
+    const admin = createAdminClient();
     if (isAdmin) {
       const [sentResult, draftsResult] = await Promise.all([
         admin.from("camp_messages").select("*").eq("status", "sent").order("sent_at", { ascending: false }),
