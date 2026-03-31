@@ -697,11 +697,27 @@ export function MessagesClient({
               <p className="text-xs text-sand-500">From {readingMessage.sender_name} &middot; {new Date(readingMessage.sent_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
             </SheetHeader>
             <ScrollArea className="h-[calc(100vh-140px)]">
-              <div className="px-6 py-5 text-sm text-sand-200 leading-relaxed whitespace-pre-wrap">{readingMessage.body_html}</div>
+              <RenderHtml html={readingMessage.body_html} />
             </ScrollArea>
           </>)}
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+/** Renders admin-authored HTML content with styled elements */
+function RenderHtml({ html }: { html: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = html;
+  }, [html]);
+
+  return (
+    <div
+      ref={ref}
+      className="px-6 py-5 text-sm text-sand-200 leading-relaxed [&_b]:font-bold [&_i]:italic [&_u]:underline [&_a]:text-pink-400 [&_a]:underline [&_ul]:list-disc [&_ul]:ml-5 [&_ol]:list-decimal [&_ol]:ml-5 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:my-2 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:my-2 [&_hr]:border-pink-500/20 [&_hr]:my-3"
+    />
   );
 }

@@ -107,7 +107,14 @@ export default function DashboardLayout({
           setSidebarItems(items);
         });
 
-      // Fetch unread message count
+    });
+  }, []);
+
+  // Re-fetch unread message count when navigating between pages
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
       supabase
         .from("message_recipients")
         .select("id", { count: "exact", head: true })
@@ -117,7 +124,7 @@ export default function DashboardLayout({
           setUnreadCount(count || 0);
         });
     });
-  }, []);
+  }, [pathname]);
 
   async function handleLogout() {
     setLoggingOut(true);
