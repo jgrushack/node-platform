@@ -1,10 +1,8 @@
 export function campMessageEmail({
-  firstName,
   subject,
   bodyHtml,
   siteUrl,
 }: {
-  firstName: string;
   subject: string;
   bodyHtml: string;
   siteUrl: string;
@@ -49,9 +47,6 @@ export function campMessageEmail({
           <!-- Body -->
           <tr>
             <td style="padding:40px 32px;background-color:#1a0a2e;border-left:1px solid rgba(249,0,119,0.2);border-right:1px solid rgba(249,0,119,0.2);">
-              <p style="margin:0 0 24px;font-size:18px;line-height:1.6;color:#F9EDD8;">
-                Hey ${firstName},
-              </p>
               <div style="margin:0 0 32px;font-size:16px;line-height:1.7;color:#F9EDD8;">
                 ${bodyHtml}
               </div>

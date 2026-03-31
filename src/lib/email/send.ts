@@ -87,7 +87,7 @@ export async function sendCampMessageBatch({
   subject,
   bodyHtml,
 }: {
-  recipients: { email: string; firstName: string }[];
+  recipients: { email: string }[];
   subject: string;
   bodyHtml: string;
 }): Promise<{ sent: number; failed: number }> {
@@ -101,7 +101,6 @@ export async function sendCampMessageBatch({
     const batch = recipients.slice(i, i + BATCH_SIZE);
     const emails = batch.map((r) => {
       const html = campMessageEmail({
-        firstName: r.firstName,
         subject,
         bodyHtml,
         siteUrl,

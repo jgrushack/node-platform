@@ -376,7 +376,6 @@ export async function sendMessage(
   // Send emails
   const emailRecipients = preview.recipients.map((r) => ({
     email: r.email,
-    firstName: r.first_name || r.email.split("@")[0],
   }));
 
   const { sent, failed } = await sendCampMessageBatch({
@@ -451,7 +450,6 @@ export async function getEmailPreview(
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
   const html = campMessageEmail({
-    firstName: "Member",
     subject,
     bodyHtml,
     siteUrl,

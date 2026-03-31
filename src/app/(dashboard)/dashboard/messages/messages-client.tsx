@@ -188,6 +188,29 @@ export function MessagesClient({
     setEmailPreviewHtml(result.html);
   }
 
+  /** Update the local drafts list to reflect current compose state */
+  function upsertLocalDraft(id: string) {
+    const now = new Date().toISOString();
+    const draftData: CampMessage = {
+      id,
+      subject,
+      body_html: bodyHtml,
+      audience_filter: buildFilter(),
+      sent_by: "",
+      recipient_count: 0,
+      status: "draft",
+      sent_at: now,
+      created_at: now,
+      updated_by: null,
+      updated_at: now,
+    };
+    setDrafts((prev) => {
+      const exists = prev.some((d) => d.id === id);
+      if (exists) return prev.map((d) => d.id === id ? { ...d, ...draftData } : d);
+      return [draftData, ...prev];
+    });
+  }
+
   async function handleSaveDraft() {
     setSaving(true);
     const payload = { subject, body_html: bodyHtml, audience_filter: buildFilter() };
@@ -195,15 +218,16 @@ export function MessagesClient({
       const result = await updateDraft(editingDraftId, payload);
       setSaving(false);
       if ("error" in result) { toast.error(result.error); return; }
+      upsertLocalDraft(editingDraftId);
       toast.success("Draft updated");
     } else {
       const result = await saveDraft(payload);
       setSaving(false);
       if ("error" in result) { toast.error(result.error); return; }
       setEditingDraftId(result.id);
+      upsertLocalDraft(result.id);
       toast.success("Draft saved");
     }
-    router.refresh();
   }
 
   async function handleSend() {
@@ -216,9 +240,27 @@ export function MessagesClient({
     setSending(false);
     if ("error" in result) { toast.error(result.error); return; }
     toast.success(`Message sent to ${result.sent} recipient${result.sent !== 1 ? "s" : ""}${result.failed ? ` (${result.failed} failed)` : ""}`);
+    // Remove from drafts if it was a draft
+    if (editingDraftId) {
+      setDrafts((prev) => prev.filter((d) => d.id !== editingDraftId));
+    }
+    // Add to sent list locally
+    const now = new Date().toISOString();
+    setSentMessages((prev) => [{
+      id: result.messageId,
+      subject,
+      body_html: bodyHtml,
+      audience_filter: buildFilter(),
+      sent_by: "",
+      recipient_count: result.sent,
+      status: "sent" as const,
+      sent_at: now,
+      created_at: now,
+      updated_by: null,
+      updated_at: now,
+    }, ...prev]);
     resetCompose();
     setTab("sent");
-    router.refresh();
   }
 
   async function handleDeleteDraft(id: string) {
@@ -295,9 +337,13 @@ export function MessagesClient({
       const payload = { subject, body_html: bodyHtml, audience_filter: buildFilter() };
       if (editingDraftId) {
         await updateDraft(editingDraftId, payload);
+        upsertLocalDraft(editingDraftId);
       } else {
         const result = await saveDraft(payload);
-        if ("success" in result) setEditingDraftId(result.id);
+        if ("success" in result) {
+          setEditingDraftId(result.id);
+          upsertLocalDraft(result.id);
+        }
       }
       lastSavedRef.current = { subject, bodyHtml };
       setAutosaveStatus("saved");
@@ -462,9 +508,9 @@ export function MessagesClient({
                   <div className="relative">
                     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setColorPickerOpen(!colorPickerOpen)} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Text color"><Palette className="h-4 w-4" /></button>
                     {colorPickerOpen && (
-                      <div className="absolute top-full right-0 mt-1.5 z-50 rounded-xl border border-pink-500/20 bg-[rgba(36,3,68,0.97)] backdrop-blur-xl p-3 shadow-xl">
-                        <p className="text-[10px] text-sand-500 mb-2 uppercase tracking-wider">Text Color</p>
-                        <div className="grid grid-cols-5 gap-2.5">
+                      <div className="absolute top-full right-0 mt-2 z-50 w-[240px] rounded-xl border border-pink-500/20 bg-[rgba(36,3,68,0.97)] backdrop-blur-xl p-4 shadow-2xl">
+                        <p className="text-[10px] text-sand-500 mb-3 uppercase tracking-wider font-medium">Text Color</p>
+                        <div className="grid grid-cols-5 gap-3">
                           {[
                             { color: "#F90077", label: "Pink" },
                             { color: "#FFB800", label: "Gold" },
@@ -482,7 +528,7 @@ export function MessagesClient({
                               type="button"
                               title={c.label}
                               onMouseDown={(e) => { e.preventDefault(); execCmd("foreColor", c.color); setColorPickerOpen(false); }}
-                              className="h-7 w-7 rounded-full border-2 border-white/10 hover:border-white/40 hover:scale-110 transition-all"
+                              className="h-9 w-9 rounded-full border-2 border-white/10 hover:border-white/50 hover:scale-110 transition-all shadow-sm"
                               style={{ backgroundColor: c.color }}
                             />
                           ))}
