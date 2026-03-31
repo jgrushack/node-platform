@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   BarChart3,
   Shield,
+  Mail,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -47,6 +48,7 @@ export default function DashboardLayout({
     { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
     { href: "/dashboard/profile", label: "Profile", icon: User },
   ]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const stored = localStorage.getItem("viewAsRole");
@@ -86,6 +88,7 @@ export default function DashboardLayout({
 
           items.push(
             { href: "/dashboard/members", label: "Members", icon: UsersRound },
+            { href: "/dashboard/messages", label: "Messages", icon: Mail },
             { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
           );
 
@@ -102,6 +105,16 @@ export default function DashboardLayout({
           items.push({ href: "/dashboard/profile", label: "Profile", icon: User });
 
           setSidebarItems(items);
+        });
+
+      // Fetch unread message count
+      supabase
+        .from("message_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("profile_id", user.id)
+        .is("read_at", null)
+        .then(({ count }) => {
+          setUnreadCount(count || 0);
         });
     });
   }, []);
@@ -239,6 +252,19 @@ export default function DashboardLayout({
               Exit Preview
             </button>
           </div>
+        )}
+
+        {/* Unread messages banner */}
+        {unreadCount > 0 && pathname !== "/dashboard/messages" && (
+          <Link
+            href="/dashboard/messages"
+            className="flex items-center gap-2 bg-pink-500/10 px-4 py-2 md:px-6 text-sm text-pink-400 hover:bg-pink-500/15 transition-colors"
+          >
+            <Mail className="h-4 w-4" />
+            <span>
+              You have {unreadCount} unread message{unreadCount !== 1 ? "s" : ""}
+            </span>
+          </Link>
         )}
 
         {/* Page content */}
