@@ -1,5 +1,4 @@
-import { getMessages } from "@/lib/actions/messages";
-import { getMyMessages } from "@/lib/actions/messages";
+import { getMessages, getDrafts, getMyMessages } from "@/lib/actions/messages";
 import { createClient } from "@/lib/supabase/server";
 import { MessagesClient } from "./messages-client";
 
@@ -21,11 +20,12 @@ export default async function MessagesPage() {
 
   const isAdmin = profile && ["admin", "super_admin"].includes(profile.role);
 
-  // Admins see sent messages history; everyone sees their received messages
   let sentMessages: Awaited<ReturnType<typeof getMessages>> = [];
+  let drafts: Awaited<ReturnType<typeof getDrafts>> = [];
   if (isAdmin) {
-    const result = await getMessages();
-    sentMessages = "error" in result ? [] : result;
+    const [sentResult, draftsResult] = await Promise.all([getMessages(), getDrafts()]);
+    sentMessages = "error" in sentResult ? [] : sentResult;
+    drafts = "error" in draftsResult ? [] : draftsResult;
   }
 
   const myResult = await getMyMessages();
@@ -35,6 +35,7 @@ export default async function MessagesPage() {
     <MessagesClient
       isAdmin={!!isAdmin}
       initialSentMessages={sentMessages as Exclude<typeof sentMessages, { error: string }>}
+      initialDrafts={drafts as Exclude<typeof drafts, { error: string }>}
       initialMyMessages={myMessages}
     />
   );

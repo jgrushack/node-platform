@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,9 +35,21 @@ import {
   ChevronUp,
   Eye,
   PenSquare,
+  Save,
+  FileText,
+  Trash2,
+  MonitorSmartphone,
 } from "lucide-react";
 import type { CampMessage, AudienceFilter, RecipientPreview, UnreadMessage } from "@/lib/types/message";
-import { previewRecipients, sendMessage, markMessageRead } from "@/lib/actions/messages";
+import {
+  previewRecipients,
+  sendMessage,
+  markMessageRead,
+  saveDraft,
+  updateDraft,
+  deleteDraft,
+  getEmailPreview,
+} from "@/lib/actions/messages";
 
 const NODE_YEARS = [2017, 2018, 2019, 2022, 2023, 2024, 2026];
 
@@ -57,18 +69,23 @@ function audienceLabel(filter: AudienceFilter): string {
 export function MessagesClient({
   isAdmin,
   initialSentMessages,
+  initialDrafts,
   initialMyMessages,
 }: {
   isAdmin: boolean;
   initialSentMessages: CampMessage[];
+  initialDrafts: CampMessage[];
   initialMyMessages: UnreadMessage[];
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"inbox" | "sent" | "compose">(isAdmin ? "sent" : "inbox");
+  const [tab, setTab] = useState<"inbox" | "drafts" | "sent" | "compose">(isAdmin ? "drafts" : "inbox");
   const [sentMessages] = useState(initialSentMessages);
+  const [drafts, setDrafts] = useState(initialDrafts);
   const [myMessages, setMyMessages] = useState(initialMyMessages);
   const [readingMessage, setReadingMessage] = useState<UnreadMessage | null>(null);
 
+  // Compose state
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
   const [filterType, setFilterType] = useState<"all" | "filtered">("all");
@@ -78,19 +95,24 @@ export function MessagesClient({
   const [isBuildCrew, setIsBuildCrew] = useState(false);
   const [tenure, setTenure] = useState<string>("");
   const [onboardingIncomplete, setOnboardingIncomplete] = useState(false);
-  const [includeReapply, setIncludeReapply] = useState(false);
-  const [includeLimited, setIncludeLimited] = useState(false);
 
+  // Preview state
   const [previewing, setPreviewing] = useState(false);
   const [previewResult, setPreviewResult] = useState<RecipientPreview[] | null>(null);
   const [previewExpanded, setPreviewExpanded] = useState(false);
+
+  // Email preview
+  const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
+  const [emailPreviewLoading, setEmailPreviewLoading] = useState(false);
+
+  // Actions
+  const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function buildFilter(): AudienceFilter {
-    if (filterType === "all") {
-      return { type: "all", include_reapply: includeReapply, include_limited_referrals: includeLimited };
-    }
+    if (filterType === "all") return { type: "all" };
     return {
       type: "filtered",
       registration_years: selectedYears.length ? selectedYears : undefined,
@@ -99,9 +121,37 @@ export function MessagesClient({
       is_build_crew: isBuildCrew || undefined,
       tenure: (tenure || undefined) as AudienceFilter["tenure"],
       onboarding_incomplete: onboardingIncomplete || undefined,
-      include_reapply: includeReapply || undefined,
-      include_limited_referrals: includeLimited || undefined,
     };
+  }
+
+  function loadDraftIntoCompose(draft: CampMessage) {
+    setEditingDraftId(draft.id);
+    setSubject(draft.subject);
+    setBodyHtml(draft.body_html);
+    const f = draft.audience_filter;
+    setFilterType(f.type === "filtered" ? "filtered" : "all");
+    setSelectedYears(f.registration_years || []);
+    setSelectedRoles(f.roles || []);
+    setIsCommittee(f.is_committee_member || false);
+    setIsBuildCrew(f.is_build_crew || false);
+    setTenure(f.tenure || "");
+    setOnboardingIncomplete(f.onboarding_incomplete || false);
+    setPreviewResult(null);
+    setTab("compose");
+  }
+
+  function resetCompose() {
+    setEditingDraftId(null);
+    setSubject("");
+    setBodyHtml("");
+    setFilterType("all");
+    setSelectedYears([]);
+    setSelectedRoles([]);
+    setIsCommittee(false);
+    setIsBuildCrew(false);
+    setTenure("");
+    setOnboardingIncomplete(false);
+    setPreviewResult(null);
   }
 
   async function handlePreview() {
@@ -114,14 +164,56 @@ export function MessagesClient({
     setPreviewExpanded(false);
   }
 
+  async function handleEmailPreview() {
+    if (!subject.trim() && !bodyHtml.trim()) { toast.error("Add a subject or message first."); return; }
+    setEmailPreviewLoading(true);
+    const result = await getEmailPreview(subject || "(No subject)", bodyHtml || "");
+    setEmailPreviewLoading(false);
+    if ("error" in result) { toast.error(result.error); return; }
+    setEmailPreviewHtml(result.html);
+  }
+
+  async function handleSaveDraft() {
+    setSaving(true);
+    const payload = { subject, body_html: bodyHtml, audience_filter: buildFilter() };
+    if (editingDraftId) {
+      const result = await updateDraft(editingDraftId, payload);
+      setSaving(false);
+      if ("error" in result) { toast.error(result.error); return; }
+      toast.success("Draft updated");
+    } else {
+      const result = await saveDraft(payload);
+      setSaving(false);
+      if ("error" in result) { toast.error(result.error); return; }
+      setEditingDraftId(result.id);
+      toast.success("Draft saved");
+    }
+    router.refresh();
+  }
+
   async function handleSend() {
     setConfirmOpen(false);
     setSending(true);
-    const result = await sendMessage({ subject, body_html: bodyHtml, audience_filter: buildFilter() });
+    const result = await sendMessage(
+      { subject, body_html: bodyHtml, audience_filter: buildFilter() },
+      editingDraftId || undefined
+    );
     setSending(false);
     if ("error" in result) { toast.error(result.error); return; }
     toast.success(`Message sent to ${result.sent} recipient${result.sent !== 1 ? "s" : ""}${result.failed ? ` (${result.failed} failed)` : ""}`);
-    setSubject(""); setBodyHtml(""); setPreviewResult(null); setTab("sent"); router.refresh();
+    resetCompose();
+    setTab("sent");
+    router.refresh();
+  }
+
+  async function handleDeleteDraft(id: string) {
+    setDeletingId(id);
+    const result = await deleteDraft(id);
+    setDeletingId(null);
+    if ("error" in result) { toast.error(result.error); return; }
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
+    if (editingDraftId === id) resetCompose();
+    toast.success("Draft deleted");
   }
 
   async function handleReadMessage(msg: UnreadMessage) {
@@ -141,23 +233,28 @@ export function MessagesClient({
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-3xl font-bold text-sand-100">Messages</h1>
-        <p className="mt-1 text-sand-400">{isAdmin ? "Send messages to camp members and view inbox." : "Messages from NODE camp leadership."}</p>
+        <p className="mt-1 text-sand-400">{isAdmin ? "Compose, draft, and send messages to camp members." : "Messages from NODE camp leadership."}</p>
       </motion.div>
 
-      <div className="flex gap-2">
+      {/* Tab bar */}
+      <div className="flex gap-2 flex-wrap">
         <Button variant="outline" size="sm" className={tab === "inbox" ? "bg-pink-500/15 text-pink-400 border-transparent" : "text-sand-400 border-transparent hover:text-sand-200"} onClick={() => setTab("inbox")}>
           <Mail className="mr-1.5 h-3.5 w-3.5" /> Inbox {unreadCount > 0 && <Badge className="ml-1.5 bg-pink-500/20 text-pink-400 text-[10px]">{unreadCount}</Badge>}
         </Button>
         {isAdmin && (<>
+          <Button variant="outline" size="sm" className={tab === "drafts" ? "bg-pink-500/15 text-pink-400 border-transparent" : "text-sand-400 border-transparent hover:text-sand-200"} onClick={() => setTab("drafts")}>
+            <FileText className="mr-1.5 h-3.5 w-3.5" /> Drafts {drafts.length > 0 && <Badge className="ml-1.5 bg-amber/20 text-amber text-[10px]">{drafts.length}</Badge>}
+          </Button>
           <Button variant="outline" size="sm" className={tab === "sent" ? "bg-pink-500/15 text-pink-400 border-transparent" : "text-sand-400 border-transparent hover:text-sand-200"} onClick={() => setTab("sent")}>
             <Send className="mr-1.5 h-3.5 w-3.5" /> Sent ({sentMessages.length})
           </Button>
-          <Button variant="outline" size="sm" className={tab === "compose" ? "bg-pink-500/15 text-pink-400 border-transparent" : "text-sand-400 border-transparent hover:text-sand-200"} onClick={() => setTab("compose")}>
-            <PenSquare className="mr-1.5 h-3.5 w-3.5" /> Compose
+          <Button variant="outline" size="sm" className={tab === "compose" ? "bg-pink-500/15 text-pink-400 border-transparent" : "text-sand-400 border-transparent hover:text-sand-200"} onClick={() => { resetCompose(); setTab("compose"); }}>
+            <PenSquare className="mr-1.5 h-3.5 w-3.5" /> New Message
           </Button>
         </>)}
       </div>
 
+      {/* ── INBOX ── */}
       {tab === "inbox" && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
           {myMessages.length === 0 ? (
@@ -180,6 +277,41 @@ export function MessagesClient({
         </motion.div>
       )}
 
+      {/* ── DRAFTS ── */}
+      {tab === "drafts" && isAdmin && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <Card className="glass-card border-0 overflow-hidden">
+            {drafts.length === 0 ? (
+              <CardContent className="py-12 text-center text-sand-500">No drafts. Click &quot;New Message&quot; to start composing.</CardContent>
+            ) : (
+              <div className="divide-y divide-pink-500/10">
+                {drafts.map((draft) => (
+                  <div key={draft.id} className="flex items-center gap-4 px-4 py-3 hover:bg-pink-500/5 transition-colors">
+                    <div className="min-w-0 flex-1 cursor-pointer" onClick={() => loadDraftIntoCompose(draft)}>
+                      <p className="text-sm font-medium text-sand-100 truncate">{draft.subject || "(No subject)"}</p>
+                      <p className="text-xs text-sand-500 mt-0.5">
+                        {audienceLabel(draft.audience_filter)}
+                        {draft.updater && ` \u00b7 Last edited by ${[draft.updater.first_name, draft.updater.last_name].filter(Boolean).join(" ")}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <p className="text-xs text-sand-500">{new Date(draft.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                      <Button variant="ghost" size="sm" className="h-7 text-sand-400 hover:text-pink-400" onClick={() => loadDraftIntoCompose(draft)}>
+                        <PenSquare className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-sand-400 hover:text-red-400" onClick={() => handleDeleteDraft(draft.id)} disabled={deletingId === draft.id}>
+                        {deletingId === draft.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </motion.div>
+      )}
+
+      {/* ── SENT ── */}
       {tab === "sent" && isAdmin && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="glass-card border-0 overflow-hidden">
@@ -205,8 +337,17 @@ export function MessagesClient({
         </motion.div>
       )}
 
+      {/* ── COMPOSE ── */}
       {tab === "compose" && isAdmin && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          {editingDraftId && (
+            <div className="flex items-center gap-2 text-sm text-amber">
+              <FileText className="h-4 w-4" />
+              <span>Editing draft</span>
+              <Button variant="ghost" size="sm" className="h-6 text-xs text-sand-400 hover:text-sand-200" onClick={() => { resetCompose(); }}>Start fresh</Button>
+            </div>
+          )}
+
           <Card className="glass-card border-0">
             <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-sand-400">Compose Message</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -221,6 +362,7 @@ export function MessagesClient({
             </CardContent>
           </Card>
 
+          {/* Audience */}
           <Card className="glass-card border-0">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-medium text-sand-400"><Users className="h-4 w-4" /> Audience</CardTitle>
@@ -271,14 +413,7 @@ export function MessagesClient({
                 </div>
               )}
 
-              <div className="space-y-2 rounded-xl bg-red-500/5 border border-red-500/10 p-4">
-                <Label className="text-sand-400 text-xs uppercase tracking-wider">Standing Gate</Label>
-                <p className="text-[11px] text-sand-500">Members marked &quot;Not Invited Back&quot; are always excluded.</p>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2">
-                  <label className="flex items-center gap-2 text-sm text-sand-300 cursor-pointer"><Checkbox checked={includeLimited} onCheckedChange={(v) => { setIncludeLimited(!!v); setPreviewResult(null); }} className="border-sand-500 data-[state=checked]:bg-amber data-[state=checked]:border-amber" /> Include &quot;Limited Referrals&quot;</label>
-                  <label className="flex items-center gap-2 text-sm text-sand-300 cursor-pointer"><Checkbox checked={includeReapply} onCheckedChange={(v) => { setIncludeReapply(!!v); setPreviewResult(null); }} className="border-sand-500 data-[state=checked]:bg-amber data-[state=checked]:border-amber" /> Include &quot;Reapply&quot;</label>
-                </div>
-              </div>
+              <p className="text-[11px] text-sand-500">Members marked &quot;Not Invited Back&quot; or &quot;Reapply&quot; are automatically excluded.</p>
 
               <Separator className="bg-pink-500/10" />
               <div className="space-y-3">
@@ -308,10 +443,20 @@ export function MessagesClient({
             </CardContent>
           </Card>
 
-          <Button className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink" onClick={() => setConfirmOpen(true)} disabled={!subject.trim() || !bodyHtml.trim() || sending}>
-            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />} {sending ? "Sending..." : "Send Message"}
-          </Button>
+          {/* Action buttons */}
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" className="border-pink-500/20 text-sand-300 hover:text-sand-100" onClick={handleSaveDraft} disabled={saving || (!subject.trim() && !bodyHtml.trim())}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} {saving ? "Saving..." : editingDraftId ? "Update Draft" : "Save Draft"}
+            </Button>
+            <Button variant="outline" className="border-pink-500/20 text-sand-300 hover:text-sand-100" onClick={handleEmailPreview} disabled={emailPreviewLoading || (!subject.trim() && !bodyHtml.trim())}>
+              {emailPreviewLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MonitorSmartphone className="mr-2 h-4 w-4" />} Preview Email
+            </Button>
+            <Button className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink" onClick={() => setConfirmOpen(true)} disabled={!subject.trim() || !bodyHtml.trim() || sending}>
+              {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />} {sending ? "Sending..." : "Send Now"}
+            </Button>
+          </div>
 
+          {/* Confirm send dialog */}
           <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
             <DialogContent className="glass border-pink-500/10 sm:max-w-md">
               <DialogHeader>
@@ -330,10 +475,30 @@ export function MessagesClient({
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Email preview dialog — admin-authored content (trusted) rendered in iframe */}
+          <Dialog open={!!emailPreviewHtml} onOpenChange={(open) => !open && setEmailPreviewHtml(null)}>
+            <DialogContent className="glass border-pink-500/10 sm:max-w-2xl max-h-[85vh] p-0 overflow-hidden">
+              <DialogHeader className="px-6 pt-6 pb-3">
+                <DialogTitle className="flex items-center gap-2 text-sand-100"><MonitorSmartphone className="h-5 w-5 text-pink-400" /> Email Preview</DialogTitle>
+                <DialogDescription className="text-sand-400">This is how the email will appear to recipients.</DialogDescription>
+              </DialogHeader>
+              {emailPreviewHtml && (
+                <div className="px-6 pb-6">
+                  <iframe
+                    srcDoc={emailPreviewHtml}
+                    className="w-full h-[60vh] rounded-lg border border-pink-500/10 bg-white"
+                    sandbox="allow-same-origin"
+                    title="Email preview"
+                  />
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </motion.div>
       )}
 
-      {/* Message reading sheet — content is admin-authored (trusted), not user-generated */}
+      {/* Message reading sheet */}
       <Sheet open={!!readingMessage} onOpenChange={(open) => !open && setReadingMessage(null)}>
         <SheetContent className="glass w-full sm:max-w-lg border-l-pink-500/10 p-0">
           {readingMessage && (<>

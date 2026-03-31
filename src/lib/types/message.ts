@@ -25,6 +25,12 @@ export const composeMessageSchema = z.object({
   audience_filter: audienceFilterSchema,
 });
 
+export const draftMessageSchema = z.object({
+  subject: z.string().max(200).optional(),
+  body_html: z.string().optional(),
+  audience_filter: audienceFilterSchema.optional(),
+});
+
 export type ComposeMessageData = z.infer<typeof composeMessageSchema>;
 
 export interface CampMessage {
@@ -34,13 +40,20 @@ export interface CampMessage {
   audience_filter: AudienceFilter;
   sent_by: string;
   recipient_count: number;
+  status: "draft" | "sent";
   sent_at: string;
   created_at: string;
+  updated_by: string | null;
+  updated_at: string;
   sender?: {
     first_name: string | null;
     last_name: string | null;
     playa_name: string | null;
     email: string;
+  };
+  updater?: {
+    first_name: string | null;
+    last_name: string | null;
   };
 }
 

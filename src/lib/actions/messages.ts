@@ -10,6 +10,7 @@ import {
   type RecipientPreview,
   type UnreadMessage,
 } from "@/lib/types/message";
+import { campMessageEmail } from "@/lib/email/templates/camp-message";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -94,18 +95,11 @@ export async function previewRecipients(
 
   let candidates = allProfiles;
 
-  // Standing gate: always exclude not_invited_back
-  candidates = candidates.filter((p) => standings[p.id] !== "not_invited_back");
-
-  // Exclude reapply unless toggled
-  if (!filter.include_reapply) {
-    candidates = candidates.filter((p) => standings[p.id] !== "reapply");
-  }
-
-  // Exclude limited_referrals unless toggled
-  if (!filter.include_limited_referrals) {
-    candidates = candidates.filter((p) => standings[p.id] !== "limited_referrals");
-  }
+  // Standing gate: exclude not_invited_back and reapply (they're effectively out)
+  candidates = candidates.filter((p) => {
+    const s = standings[p.id];
+    return s !== "not_invited_back" && s !== "reapply";
+  });
 
   // If type is "all", return everyone who passed the standing gate
   if (filter.type === "all") {
@@ -178,10 +172,109 @@ export async function previewRecipients(
 }
 
 /**
- * Send a message: validate, resolve recipients, insert DB rows, send emails.
+ * Save a new draft.
+ */
+export async function saveDraft(
+  data: { subject?: string; body_html?: string; audience_filter?: AudienceFilter }
+): Promise<{ success: true; id: string } | { error: string }> {
+  const { error, user } = await requireAdmin();
+  if (error || !user) return { error: error ?? "Not authenticated" };
+
+  const admin = createAdminClient();
+  const { data: msg, error: insertError } = await admin
+    .from("camp_messages")
+    .insert({
+      subject: data.subject || "",
+      body_html: data.body_html || "",
+      audience_filter: data.audience_filter || { type: "all" },
+      sent_by: user.id,
+      updated_by: user.id,
+      status: "draft",
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !msg) {
+    console.error("[saveDraft]", insertError);
+    return { error: "Failed to save draft." };
+  }
+
+  return { success: true, id: msg.id };
+}
+
+/**
+ * Update an existing draft.
+ */
+export async function updateDraft(
+  id: string,
+  data: { subject?: string; body_html?: string; audience_filter?: AudienceFilter }
+): Promise<{ success: true } | { error: string }> {
+  const { error, user } = await requireAdmin();
+  if (error || !user) return { error: error ?? "Not authenticated" };
+
+  const admin = createAdminClient();
+
+  // Verify it's still a draft
+  const { data: existing } = await admin
+    .from("camp_messages")
+    .select("status")
+    .eq("id", id)
+    .single();
+
+  if (!existing || existing.status !== "draft") {
+    return { error: "Can only edit drafts." };
+  }
+
+  const { error: updateError } = await admin
+    .from("camp_messages")
+    .update({
+      ...(data.subject !== undefined && { subject: data.subject }),
+      ...(data.body_html !== undefined && { body_html: data.body_html }),
+      ...(data.audience_filter !== undefined && { audience_filter: data.audience_filter }),
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (updateError) {
+    console.error("[updateDraft]", updateError);
+    return { error: "Failed to update draft." };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Delete a draft.
+ */
+export async function deleteDraft(
+  id: string
+): Promise<{ success: true } | { error: string }> {
+  const { error } = await requireAdmin();
+  if (error) return { error };
+
+  const admin = createAdminClient();
+  const { error: delError } = await admin
+    .from("camp_messages")
+    .delete()
+    .eq("id", id)
+    .eq("status", "draft");
+
+  if (delError) {
+    console.error("[deleteDraft]", delError);
+    return { error: "Failed to delete draft." };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Send a message from a draft or directly.
+ * If draftId provided, transitions that draft to sent.
  */
 export async function sendMessage(
-  data: unknown
+  data: unknown,
+  draftId?: string
 ): Promise<{ success: true; messageId: string; sent: number; failed: number } | { error: string }> {
   const parsed = composeMessageSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -191,34 +284,61 @@ export async function sendMessage(
 
   const { subject, body_html, audience_filter } = parsed.data;
 
-  // Resolve recipients
   const preview = await previewRecipients(audience_filter);
   if ("error" in preview) return { error: preview.error };
   if (preview.count === 0) return { error: "No recipients match the selected audience." };
 
   const admin = createAdminClient();
+  let messageId: string;
 
-  // Insert message
-  const { data: msg, error: insertError } = await admin
-    .from("camp_messages")
-    .insert({
-      subject,
-      body_html,
-      audience_filter,
-      sent_by: user.id,
-      recipient_count: preview.count,
-    })
-    .select("id")
-    .single();
+  if (draftId) {
+    // Transition draft to sent
+    const { error: updateError } = await admin
+      .from("camp_messages")
+      .update({
+        subject,
+        body_html,
+        audience_filter,
+        status: "sent",
+        recipient_count: preview.count,
+        sent_at: new Date().toISOString(),
+        updated_by: user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", draftId)
+      .eq("status", "draft");
 
-  if (insertError || !msg) {
-    console.error("[sendMessage] insert", insertError);
-    return { error: "Failed to create message." };
+    if (updateError) {
+      console.error("[sendMessage] update draft", updateError);
+      return { error: "Failed to send draft." };
+    }
+    messageId = draftId;
+  } else {
+    // Create new sent message
+    const { data: msg, error: insertError } = await admin
+      .from("camp_messages")
+      .insert({
+        subject,
+        body_html,
+        audience_filter,
+        sent_by: user.id,
+        updated_by: user.id,
+        recipient_count: preview.count,
+        status: "sent",
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !msg) {
+      console.error("[sendMessage] insert", insertError);
+      return { error: "Failed to create message." };
+    }
+    messageId = msg.id;
   }
 
   // Insert recipient rows
   const recipientRows = preview.recipients.map((r) => ({
-    message_id: msg.id,
+    message_id: messageId,
     profile_id: r.id,
   }));
 
@@ -228,7 +348,6 @@ export async function sendMessage(
 
   if (recipError) {
     console.error("[sendMessage] recipients", recipError);
-    // Message was created but recipients failed — still return the message
   }
 
   // Send emails
@@ -243,19 +362,18 @@ export async function sendMessage(
     bodyHtml: body_html,
   });
 
-  // Mark email_sent for successful sends
   if (sent > 0) {
     await admin
       .from("message_recipients")
       .update({ email_sent: true })
-      .eq("message_id", msg.id);
+      .eq("message_id", messageId);
   }
 
-  return { success: true, messageId: msg.id, sent, failed };
+  return { success: true, messageId, sent, failed };
 }
 
 /**
- * Get all sent messages (admin view).
+ * Get sent messages (admin view).
  */
 export async function getMessages(): Promise<CampMessage[] | { error: string }> {
   const { error } = await requireAdmin();
@@ -265,6 +383,7 @@ export async function getMessages(): Promise<CampMessage[] | { error: string }> 
   const { data, error: dbError } = await supabase
     .from("camp_messages")
     .select("*, sender:profiles!sent_by(first_name, last_name, playa_name, email)")
+    .eq("status", "sent")
     .order("sent_at", { ascending: false });
 
   if (dbError) {
@@ -273,6 +392,49 @@ export async function getMessages(): Promise<CampMessage[] | { error: string }> 
   }
 
   return (data || []) as unknown as CampMessage[];
+}
+
+/**
+ * Get drafts (admin view).
+ */
+export async function getDrafts(): Promise<CampMessage[] | { error: string }> {
+  const { error } = await requireAdmin();
+  if (error) return { error };
+
+  const admin = createAdminClient();
+  const { data, error: dbError } = await admin
+    .from("camp_messages")
+    .select("*, sender:profiles!sent_by(first_name, last_name, playa_name, email), updater:profiles!updated_by(first_name, last_name)")
+    .eq("status", "draft")
+    .order("updated_at", { ascending: false });
+
+  if (dbError) {
+    console.error("[getDrafts]", dbError);
+    return { error: "Failed to load drafts." };
+  }
+
+  return (data || []) as unknown as CampMessage[];
+}
+
+/**
+ * Generate email preview HTML for a message.
+ */
+export async function getEmailPreview(
+  subject: string,
+  bodyHtml: string
+): Promise<{ html: string } | { error: string }> {
+  const { error } = await requireAdmin();
+  if (error) return { error };
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
+  const html = campMessageEmail({
+    firstName: "Member",
+    subject,
+    bodyHtml,
+    siteUrl,
+  });
+
+  return { html };
 }
 
 /**
