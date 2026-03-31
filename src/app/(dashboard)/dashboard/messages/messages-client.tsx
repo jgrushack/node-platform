@@ -45,8 +45,8 @@ import {
   Heading1,
   Heading2,
   Link,
-  ListOrdered,
   Minus,
+  Palette,
 } from "lucide-react";
 import type { CampMessage, AudienceFilter, RecipientPreview, UnreadMessage } from "@/lib/types/message";
 import {
@@ -110,6 +110,9 @@ export function MessagesClient({
   const [previewing, setPreviewing] = useState(false);
   const [previewResult, setPreviewResult] = useState<RecipientPreview[] | null>(null);
   const [previewExpanded, setPreviewExpanded] = useState(false);
+
+  // Color picker
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   // Email preview
   const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
@@ -414,6 +417,35 @@ export function MessagesClient({
                   <div className="w-px bg-pink-500/20 mx-1" />
                   <button type="button" onClick={() => wrapSelection('<a href="URL" style="color:#F90077;">', "</a>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Link"><Link className="h-4 w-4" /></button>
                   <button type="button" onClick={() => wrapSelection("", "<br/>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Line break"><Minus className="h-4 w-4" /></button>
+                  <div className="w-px bg-pink-500/20 mx-1" />
+                  <div className="relative">
+                    <button type="button" onClick={() => setColorPickerOpen(!colorPickerOpen)} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Text color"><Palette className="h-4 w-4" /></button>
+                    {colorPickerOpen && (
+                      <div className="absolute top-full left-0 mt-1 z-50 grid grid-cols-5 gap-1.5 rounded-lg border border-pink-500/20 bg-[rgba(36,3,68,0.95)] backdrop-blur-xl p-2 shadow-xl">
+                        {[
+                          { color: "#F90077", label: "Pink" },
+                          { color: "#FFB800", label: "Gold" },
+                          { color: "#F97316", label: "Orange" },
+                          { color: "#EF4444", label: "Red" },
+                          { color: "#22C55E", label: "Green" },
+                          { color: "#3B82F6", label: "Blue" },
+                          { color: "#A855F7", label: "Purple" },
+                          { color: "#F9EDD8", label: "Sand" },
+                          { color: "#FFFFFF", label: "White" },
+                          { color: "#94A3B8", label: "Gray" },
+                        ].map((c) => (
+                          <button
+                            key={c.color}
+                            type="button"
+                            title={c.label}
+                            onClick={() => { wrapSelection(`<span style="color:${c.color};">`, "</span>"); setColorPickerOpen(false); }}
+                            className="h-6 w-6 rounded-full border border-white/20 hover:scale-110 transition-transform"
+                            style={{ backgroundColor: c.color }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <Textarea ref={textareaRef} placeholder="Write your message here..." className="min-h-[200px] rounded-t-none border-t-0" value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} />
               </div>
