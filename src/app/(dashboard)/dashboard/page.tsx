@@ -30,7 +30,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Lock, Loader2 as Spinner, Ticket } from "lucide-react";
-import { updateTicketStatus } from "@/lib/actions/registrations";
 
 interface UserData {
   firstName: string;
@@ -123,9 +122,10 @@ function getUpcomingBmEvents(tz: string) {
 
 const documents: { label: string; type: "action" | "view"; comingSoon: boolean }[] = [
   { label: "Camp Agreement / Liability", type: "action", comingSoon: true },
-  { label: "Ticket Purchased Questionnaire", type: "action", comingSoon: true },
   { label: "Budget", type: "view", comingSoon: false },
 ];
+
+type CarPassStatus = "yes" | "no" | "need_ride" | "burner_express";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
@@ -135,7 +135,8 @@ export default function DashboardPage() {
   const [yearsAtNode, setYearsAtNode] = useState<number | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [hasTicket, setHasTicket] = useState<boolean | null>(null);
-  const [hasCarPass, setHasCarPass] = useState<boolean | null>(null);
+  const [carPassStatus, setCarPassStatus] = useState<CarPassStatus | null>(null);
+  const [editingTicketStatus, setEditingTicketStatus] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [nextEvent, setNextEvent] = useState<{ title: string; date: string } | null>(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -204,14 +205,7 @@ export default function DashboardPage() {
                 .then(({ data: reg }) => {
                   if (reg && reg.status === "confirmed") {
                     setHasTicket(!!reg.has_ticket);
-                    setHasCarPass(!!reg.has_car_pass);
-                    // Check if ticket sale popup should show
-                    const now = Date.now();
-                    const saleStart = Date.UTC(2026, 2, 4, 7, 0, 0); // Mar 4 00:00 PDT
-                    const saleEnd = Date.UTC(2026, 2, 11, 19, 0, 0); // Mar 11 12:00 PDT
-                    if (!reg.has_ticket && now >= saleStart && now <= saleEnd) {
-                      setShowTicketPopup(true);
-                    }
+                    setCarPassStatus((reg.has_car_pass as CarPassStatus) || "no");
                     // Registration confirmed — check invoices for payment state
                     supabase
                       .from("invoices")
@@ -366,13 +360,14 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleTicketConfirm(carPass: boolean) {
+  async function handleSaveTicketStatus(ticket: boolean, carPass: CarPassStatus) {
     setSavingTicket(true);
-    await updateTicketStatus(carPass);
+    const { updateTicketAndCarPass } = await import("@/lib/actions/registrations");
+    await updateTicketAndCarPass(ticket, carPass);
     setSavingTicket(false);
-    setShowTicketPopup(false);
-    setHasTicket(true);
-    setHasCarPass(carPass);
+    setHasTicket(ticket);
+    setCarPassStatus(carPass);
+    setEditingTicketStatus(false);
   }
 
   function refreshDashboardData() {
@@ -506,7 +501,7 @@ export default function DashboardPage() {
                     )}
                     {stat.label === "2026 Status" && hasTicket !== null && campStatus?.label === "Attending" && (
                       <span className={hasTicket ? "text-green-400" : "text-red-400"}>
-                        {stat.subtext ? "· " : ""}{hasTicket ? (hasCarPass ? "Ticket + Car Pass" : "Ticket") : "No Ticket"}
+                        {stat.subtext ? "· " : ""}{hasTicket ? "Ticket \u2713" : "No Ticket"}
                       </span>
                     )}
                   </p>
@@ -772,6 +767,65 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
+      {/* Ticket & Travel Status */}
+      {campStatus?.label === "Attending" && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.85 }}
+        >
+          <Card className="glass-card border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sand-200">
+                <Ticket className="h-4 w-4 text-amber" />
+                Ticket &amp; Travel
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {hasTicket === null || editingTicketStatus ? (
+                <TicketStatusForm
+                  initialTicket={hasTicket ?? undefined}
+                  initialCarPass={carPassStatus ?? undefined}
+                  saving={savingTicket}
+                  onSave={handleSaveTicketStatus}
+                  onCancel={hasTicket !== null ? () => setEditingTicketStatus(false) : undefined}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-sand-400">Burning Man Ticket:</span>
+                        <span className={hasTicket ? "text-green-400 font-medium" : "text-red-400 font-medium"}>
+                          {hasTicket ? "Yes" : "No"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-sand-400">Getting There:</span>
+                        <span className="text-sand-200 font-medium">
+                          {carPassStatus === "yes" && "Car Pass"}
+                          {carPassStatus === "no" && "No car pass"}
+                          {carPassStatus === "need_ride" && "Need a ride"}
+                          {carPassStatus === "burner_express" && "Burner Express"}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-sand-400 hover:text-pink-400"
+                      onClick={() => setEditingTicketStatus(true)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Budget Dialog */}
       <Dialog open={budgetOpen} onOpenChange={setBudgetOpen}>
         <DialogContent className="glass border-pink-500/10 sm:max-w-5xl h-[85vh] flex flex-col p-0">
@@ -792,48 +846,6 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Ticket Sale Popup */}
-      <Dialog open={showTicketPopup} onOpenChange={setShowTicketPopup}>
-        <DialogContent className="glass border-pink-500/10 sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-sand-100">
-              <Ticket className="h-5 w-5 text-amber" />
-              Steward Tickets Are Now On Sale!
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-sand-300">
-            Steward tickets are now on sale! Have you purchased yours?
-          </p>
-          <p className="text-xs text-sand-500">
-            Sale ends March 11 at 12pm PDT
-          </p>
-          <div className="flex flex-col gap-2 pt-2">
-            <Button
-              onClick={() => handleTicketConfirm(false)}
-              disabled={savingTicket}
-              className="w-full rounded-full bg-green-600 text-white hover:bg-green-700"
-            >
-              {savingTicket ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Yes
-            </Button>
-            <Button
-              onClick={() => handleTicketConfirm(true)}
-              disabled={savingTicket}
-              className="w-full rounded-full bg-green-600 text-white hover:bg-green-700"
-            >
-              {savingTicket ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Yes + Car Pass
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setShowTicketPopup(false)}
-              className="w-full text-sand-400 hover:text-sand-200"
-            >
-              Not yet
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
 
       {/* Set Password Dialog */}
@@ -901,6 +913,72 @@ export default function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function TicketStatusForm({
+  initialTicket,
+  initialCarPass,
+  saving,
+  onSave,
+  onCancel,
+}: {
+  initialTicket?: boolean;
+  initialCarPass?: CarPassStatus;
+  saving: boolean;
+  onSave: (ticket: boolean, carPass: CarPassStatus) => void;
+  onCancel?: () => void;
+}) {
+  const [step, setStep] = useState<"ticket" | "carpass">(initialTicket !== undefined ? "carpass" : "ticket");
+  const [ticket, setTicket] = useState<boolean | null>(initialTicket ?? null);
+  const [carPass, setCarPass] = useState<CarPassStatus | null>(initialCarPass ?? null);
+
+  function selectTicket(val: boolean) {
+    setTicket(val);
+    setStep("carpass");
+  }
+
+  function selectCarPass(val: CarPassStatus) {
+    setCarPass(val);
+    onSave(ticket!, val);
+  }
+
+  const btnClass = "flex-1 rounded-xl border border-pink-500/20 bg-pink-500/5 px-4 py-3 text-sm font-medium text-sand-200 hover:bg-pink-500/15 hover:text-sand-100 transition-colors";
+  const btnActiveClass = "flex-1 rounded-xl border border-pink-500/40 bg-pink-500/20 px-4 py-3 text-sm font-medium text-pink-400 transition-colors";
+
+  return (
+    <div className="space-y-4">
+      {step === "ticket" && (
+        <div className="space-y-3">
+          <p className="text-sm text-sand-300">Do you have a ticket to Burning Man?</p>
+          <div className="flex gap-3">
+            <button onClick={() => selectTicket(true)} disabled={saving} className={ticket === true ? btnActiveClass : btnClass}>Yes</button>
+            <button onClick={() => selectTicket(false)} disabled={saving} className={ticket === false ? btnActiveClass : btnClass}>No</button>
+          </div>
+        </div>
+      )}
+      {step === "carpass" && (
+        <div className="space-y-3">
+          {initialTicket === undefined && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-sand-400">Ticket:</span>
+              <span className={ticket ? "text-green-400" : "text-red-400"}>{ticket ? "Yes" : "No"}</span>
+              <button onClick={() => setStep("ticket")} className="text-xs text-pink-400 hover:text-pink-300 ml-1">change</button>
+            </div>
+          )}
+          <p className="text-sm text-sand-300">How are you getting to the playa?</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => selectCarPass("yes")} disabled={saving} className={carPass === "yes" ? btnActiveClass : btnClass}>Car Pass</button>
+            <button onClick={() => selectCarPass("no")} disabled={saving} className={carPass === "no" ? btnActiveClass : btnClass}>No Car Pass</button>
+            <button onClick={() => selectCarPass("need_ride")} disabled={saving} className={carPass === "need_ride" ? btnActiveClass : btnClass}>Need a Ride</button>
+            <button onClick={() => selectCarPass("burner_express")} disabled={saving} className={carPass === "burner_express" ? btnActiveClass : btnClass}>Burner Express</button>
+          </div>
+        </div>
+      )}
+      {onCancel && (
+        <Button variant="ghost" size="sm" onClick={onCancel} className="text-sand-400 hover:text-sand-200">Cancel</Button>
+      )}
     </div>
   );
 }

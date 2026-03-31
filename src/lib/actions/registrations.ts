@@ -101,7 +101,10 @@ export async function respondToPrebuild(
   return { success: true };
 }
 
-export async function updateTicketStatus(carPass: boolean = false) {
+export async function updateTicketAndCarPass(
+  hasTicket: boolean,
+  carPass: "yes" | "no" | "need_ride" | "burner_express"
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -123,10 +126,9 @@ export async function updateTicketStatus(carPass: boolean = false) {
 
   const { error } = await supabase
     .from("registrations")
-    .update({ has_ticket: true, has_car_pass: carPass })
+    .update({ has_ticket: hasTicket, has_car_pass: carPass })
     .eq("profile_id", user.id)
-    .eq("camp_year_id", campYear.id)
-    .eq("status", "confirmed");
+    .eq("camp_year_id", campYear.id);
 
   if (error) {
     return { error: error.message };
