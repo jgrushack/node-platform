@@ -446,44 +446,47 @@ export function MessagesClient({
               </div>
               <div className="space-y-0">
                 <Label className="text-sand-300 mb-2 block">Message</Label>
-                {/* Formatting toolbar */}
+                {/* Formatting toolbar — onMouseDown preventDefault keeps focus in editor */}
                 <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-b-0 border-pink-500/20 bg-pink-500/5 px-2 py-1.5">
-                  <button type="button" onClick={() => execCmd("bold")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Bold (Ctrl+B)"><Bold className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => execCmd("italic")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Italic (Ctrl+I)"><Italic className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => execCmd("underline")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Underline (Ctrl+U)"><Underline className="h-4 w-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); execCmd("bold"); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Bold (Ctrl+B)"><Bold className="h-4 w-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); execCmd("italic"); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Italic (Ctrl+I)"><Italic className="h-4 w-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); execCmd("underline"); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Underline (Ctrl+U)"><Underline className="h-4 w-4" /></button>
                   <div className="w-px h-5 bg-pink-500/20 mx-1" />
-                  <button type="button" onClick={() => execCmd("fontSize", "5")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Large text"><Heading1 className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => execCmd("fontSize", "4")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Medium text"><Heading2 className="h-4 w-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); execCmd("fontSize", "5"); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Large text"><Heading1 className="h-4 w-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); execCmd("fontSize", "4"); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Medium text"><Heading2 className="h-4 w-4" /></button>
                   <div className="w-px h-5 bg-pink-500/20 mx-1" />
-                  <button type="button" onClick={() => { const url = prompt("Enter URL:"); if (url) execCmd("createLink", url); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Insert link"><Link className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => execCmd("insertUnorderedList")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Bullet list"><List className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => execCmd("insertHorizontalRule")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Horizontal rule"><Minus className="h-4 w-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); const url = prompt("Enter URL:"); if (url) execCmd("createLink", url); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Insert link"><Link className="h-4 w-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); execCmd("insertUnorderedList"); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Bullet list"><List className="h-4 w-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); execCmd("insertHorizontalRule"); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Horizontal rule"><Minus className="h-4 w-4" /></button>
                   <div className="w-px h-5 bg-pink-500/20 mx-1" />
                   <div className="relative">
-                    <button type="button" onClick={() => setColorPickerOpen(!colorPickerOpen)} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Text color"><Palette className="h-4 w-4" /></button>
+                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setColorPickerOpen(!colorPickerOpen)} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Text color"><Palette className="h-4 w-4" /></button>
                     {colorPickerOpen && (
-                      <div className="absolute top-full left-0 mt-1 z-50 grid grid-cols-5 gap-1.5 rounded-lg border border-pink-500/20 bg-[rgba(36,3,68,0.95)] backdrop-blur-xl p-2 shadow-xl">
-                        {[
-                          { color: "#F90077", label: "Pink" },
-                          { color: "#FFB800", label: "Gold" },
-                          { color: "#F97316", label: "Orange" },
-                          { color: "#EF4444", label: "Red" },
-                          { color: "#22C55E", label: "Green" },
-                          { color: "#3B82F6", label: "Blue" },
-                          { color: "#A855F7", label: "Purple" },
-                          { color: "#F9EDD8", label: "Sand" },
-                          { color: "#FFFFFF", label: "White" },
-                          { color: "#94A3B8", label: "Gray" },
-                        ].map((c) => (
-                          <button
-                            key={c.color}
-                            type="button"
-                            title={c.label}
-                            onClick={() => { execCmd("foreColor", c.color); setColorPickerOpen(false); }}
-                            className="h-6 w-6 rounded-full border border-white/20 hover:scale-110 transition-transform"
-                            style={{ backgroundColor: c.color }}
-                          />
-                        ))}
+                      <div className="absolute top-full right-0 mt-1.5 z-50 rounded-xl border border-pink-500/20 bg-[rgba(36,3,68,0.97)] backdrop-blur-xl p-3 shadow-xl">
+                        <p className="text-[10px] text-sand-500 mb-2 uppercase tracking-wider">Text Color</p>
+                        <div className="grid grid-cols-5 gap-2.5">
+                          {[
+                            { color: "#F90077", label: "Pink" },
+                            { color: "#FFB800", label: "Gold" },
+                            { color: "#F97316", label: "Orange" },
+                            { color: "#EF4444", label: "Red" },
+                            { color: "#22C55E", label: "Green" },
+                            { color: "#3B82F6", label: "Blue" },
+                            { color: "#A855F7", label: "Purple" },
+                            { color: "#F9EDD8", label: "Sand" },
+                            { color: "#FFFFFF", label: "White" },
+                            { color: "#94A3B8", label: "Gray" },
+                          ].map((c) => (
+                            <button
+                              key={c.color}
+                              type="button"
+                              title={c.label}
+                              onMouseDown={(e) => { e.preventDefault(); execCmd("foreColor", c.color); setColorPickerOpen(false); }}
+                              className="h-7 w-7 rounded-full border-2 border-white/10 hover:border-white/40 hover:scale-110 transition-all"
+                              style={{ backgroundColor: c.color }}
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -492,10 +495,11 @@ export function MessagesClient({
                 <div
                   ref={editorRef}
                   contentEditable
+                  suppressContentEditableWarning
                   onInput={syncEditor}
                   onBlur={syncEditor}
                   data-placeholder="Write your message here..."
-                  className="min-h-[200px] max-h-[500px] overflow-y-auto rounded-b-lg border border-pink-500/20 bg-transparent px-3 py-2 text-sm text-sand-200 outline-none focus:ring-2 focus:ring-pink-500/30 empty:before:content-[attr(data-placeholder)] empty:before:text-sand-500"
+                  className="min-h-[200px] max-h-[500px] overflow-y-auto rounded-b-lg border border-pink-500/20 bg-transparent px-3 py-2 text-sm text-sand-200 leading-relaxed outline-none focus:ring-2 focus:ring-pink-500/30 [&_ul]:list-disc [&_ul]:ml-5 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:ml-5 [&_ol]:my-1 [&_li]:my-0.5 [&_a]:text-pink-400 [&_a]:underline [&_hr]:border-pink-500/20 [&_hr]:my-3 empty:before:content-[attr(data-placeholder)] empty:before:text-sand-500"
                 />
               </div>
             </CardContent>
