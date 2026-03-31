@@ -1,4 +1,4 @@
-import { resend, FROM_EMAIL } from "./resend";
+import { resend, FROM_EMAIL, REPLY_TO_EMAIL } from "./resend";
 import { existingMemberInviteEmail } from "./templates/existing-member-invite";
 import { approvedApplicantEmail } from "./templates/approved-applicant";
 import { campMessageEmail } from "./templates/camp-message";
@@ -40,6 +40,7 @@ export async function sendExistingMemberInvite({
   const html = existingMemberInviteEmail({ firstName, magicLink });
   const { error } = await resend.emails.send({
     from: FROM_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
     to: email,
     subject: "Welcome to the NODE Portal",
     html,
@@ -66,6 +67,7 @@ export async function sendApprovedApplicantEmail({
   const html = approvedApplicantEmail({ firstName, magicLink });
   const { error } = await resend.emails.send({
     from: FROM_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
     to: email,
     subject: "You're In — Welcome to NODE 2026",
     html,
@@ -106,6 +108,7 @@ export async function sendCampMessageBatch({
       });
       return {
         from: FROM_EMAIL,
+        replyTo: REPLY_TO_EMAIL,
         to: r.email,
         subject,
         html,
