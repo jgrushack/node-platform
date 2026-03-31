@@ -29,6 +29,7 @@ import {
   ThumbsDown,
   Hourglass,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 import type {
   ApplicationWithVotes,
@@ -38,6 +39,7 @@ import type {
 import {
   castVote,
   adminOverrideStatus,
+  deleteApplication,
   getVideoSignedUrl,
   getApplicationComments,
   addApplicationComment,
@@ -236,6 +238,7 @@ function ApplicationDetail({
   const [videoLoading, setVideoLoading] = useState(false);
   const [isVoting, startVotingTransition] = useTransition();
   const [isOverriding, startOverrideTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
   const [isCommenting, startCommentTransition] = useTransition();
   const [currentVote, setCurrentVote] = useState<VoteValue | null>(
     application.current_user_vote
@@ -294,6 +297,21 @@ function ApplicationDetail({
           ? "Application approved. Account created and welcome email sent."
           : `Application ${status}.`
       );
+      onStatusChange();
+    });
+  }
+
+  function handleDelete() {
+    if (!confirm(`Delete application from ${application.first_name} ${application.last_name} (${application.email})? This cannot be undone.`)) {
+      return;
+    }
+    startDeleteTransition(async () => {
+      const result = await deleteApplication(application.id);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Application deleted.");
       onStatusChange();
     });
   }
@@ -506,6 +524,21 @@ function ApplicationDetail({
                 >
                   <XCircle className="mr-2 h-4 w-4" />
                   Reject
+                </Button>
+              </div>
+              <div className="mt-3 pt-3 border-t border-sand-400/10">
+                <Button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  variant="outline"
+                  className="w-full border-red-500/30 text-red-400 hover:bg-red-500/10"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Delete Application
                 </Button>
               </div>
             </div>

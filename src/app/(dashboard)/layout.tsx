@@ -17,6 +17,7 @@ import {
   BarChart3,
   Shield,
   Mail,
+  Wallet,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -89,6 +90,7 @@ export default function DashboardLayout({
           items.push(
             { href: "/dashboard/members", label: "Members", icon: UsersRound },
             { href: "/dashboard/messages", label: "Messages", icon: Mail },
+            { href: "/dashboard/payments", label: "Payments", icon: Wallet },
             { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
           );
 

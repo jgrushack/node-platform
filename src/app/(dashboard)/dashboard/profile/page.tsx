@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Instagram, X, Plus, Loader2, Camera, AlertCircle, Trash2, Cake } from "lucide-react";
+import { Instagram, X, Plus, Loader2, Camera, AlertCircle, Trash2, Cake, Flame, Hammer } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +59,7 @@ interface ProfileData {
   dietary_restrictions: string;
   instagram: string;
   skills: string[];
-  other_burns: number;
+  other_burns: string[];
 }
 
 interface ReadOnlyData {
@@ -127,7 +127,7 @@ export default function ProfilePage() {
             dietary_restrictions: data.dietary_restrictions || "",
             instagram: data.instagram || "",
             skills: data.skills || [],
-            other_burns: (data as Record<string, unknown>).other_burns as number || 0,
+            other_burns: (data as Record<string, unknown>).other_burns as string[] || [],
           });
           setReadOnly((prev) => ({
             ...prev,
@@ -303,6 +303,30 @@ export default function ProfilePage() {
         }
       }
     }
+  }
+
+  async function addNodeEvent(entry: string) {
+    const updated = [...readOnly.nodeEventsAttended, entry];
+    setReadOnly((prev) => ({ ...prev, nodeEventsAttended: updated }));
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase
+      .from("profiles")
+      .update({ node_events_attended: updated })
+      .eq("id", user.id);
+  }
+
+  async function removeNodeEvent(entry: string) {
+    const updated = readOnly.nodeEventsAttended.filter((e) => e !== entry);
+    setReadOnly((prev) => ({ ...prev, nodeEventsAttended: updated }));
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase
+      .from("profiles")
+      .update({ node_events_attended: updated })
+      .eq("id", user.id);
   }
 
   async function handleDeleteAccount() {
@@ -538,21 +562,36 @@ export default function ProfilePage() {
           {/* Other Burns */}
           <div className="space-y-2">
             <Label className="text-sand-300">
+              <Flame className="mr-1.5 inline h-3.5 w-3.5 text-sand-400" />
               Other Burns
               <span className="ml-1.5 text-xs text-sand-500 font-normal">
                 (Burns / regionals without NODE)
               </span>
             </Label>
-            <Input
-              type="number"
-              min={0}
-              max={30}
-              placeholder="0"
-              value={profile?.other_burns ?? 0}
-              onChange={(e) =>
-                updateField("other_burns", Math.max(0, parseInt(e.target.value) || 0))
+            {profile && profile.other_burns.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {profile.other_burns.map((burn) => (
+                  <Badge
+                    key={burn}
+                    className="bg-amber/20 text-amber hover:bg-amber/30 cursor-pointer gap-1 pr-1.5"
+                    onClick={() =>
+                      updateField(
+                        "other_burns",
+                        profile.other_burns.filter((b) => b !== burn)
+                      )
+                    }
+                  >
+                    {burn}
+                    <X className="h-3 w-3" />
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <BurnAdder
+              existing={profile?.other_burns ?? []}
+              onAdd={(entry) =>
+                updateField("other_burns", [...(profile?.other_burns ?? []), entry])
               }
-              className="w-24"
             />
           </div>
 
@@ -593,7 +632,7 @@ export default function ProfilePage() {
             {/* Summary Badges */}
             <div className="flex flex-wrap gap-2">
               <NodeYearsBadge count={readOnly.yearsAttended.length} />
-              <BurnsBadge count={readOnly.yearsAttended.length + (profile?.other_burns ?? 0)} />
+              <BurnsBadge count={readOnly.yearsAttended.length + (profile?.other_burns ?? []).length} />
               <BuildBadge count={readOnly.nodeEventsAttended.filter((e) => e.startsWith("Build")).length} />
             </div>
 
@@ -620,27 +659,60 @@ export default function ProfilePage() {
 
             <Separator className="bg-pink-500/10" />
 
-            {/* Build events */}
+            {/* Build Years */}
             <div className="space-y-2">
               <Label className="text-sand-400 text-xs uppercase tracking-wider">
+                <Hammer className="mr-1 inline h-3.5 w-3.5" />
                 Build Years
               </Label>
-              {readOnly.nodeEventsAttended.filter((e) => e.startsWith("Build")).length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {readOnly.nodeEventsAttended
-                    .filter((e) => e.startsWith("Build"))
-                    .map((event) => (
-                      <Badge
-                        key={event}
-                        className="bg-pink-500/20 text-pink-400"
-                      >
-                        {event.replace("Build ", "")}
-                      </Badge>
-                    ))}
-                </div>
-              ) : (
-                <p className="text-sm text-sand-500">None on record</p>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {readOnly.nodeEventsAttended
+                  .filter((e) => e.startsWith("Build"))
+                  .map((event) => (
+                    <Badge
+                      key={event}
+                      className="bg-pink-500/20 text-pink-400 hover:bg-pink-500/30 cursor-pointer gap-1 pr-1.5"
+                      onClick={() => removeNodeEvent(event)}
+                    >
+                      {event.replace("Build ", "")}
+                      <X className="h-3 w-3" />
+                    </Badge>
+                  ))}
+                <EventYearAdder
+                  prefix="Build"
+                  existing={readOnly.nodeEventsAttended}
+                  onAdd={(entry) => addNodeEvent(entry)}
+                />
+              </div>
+            </div>
+
+            <Separator className="bg-pink-500/10" />
+
+            {/* Strike Years */}
+            <div className="space-y-2">
+              <Label className="text-sand-400 text-xs uppercase tracking-wider">
+                <Hammer className="mr-1 inline h-3.5 w-3.5" />
+                Strike Years
+              </Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {readOnly.nodeEventsAttended
+                  .filter((e) => e.startsWith("Strike"))
+                  .map((event) => (
+                    <Badge
+                      key={event}
+                      className="bg-pink-500/20 text-pink-400 hover:bg-pink-500/30 cursor-pointer gap-1 pr-1.5"
+                      onClick={() => removeNodeEvent(event)}
+                    >
+                      {event.replace("Strike ", "")}
+                      <X className="h-3 w-3" />
+                    </Badge>
+                  ))}
+                <EventYearAdder
+                  prefix="Strike"
+                  existing={readOnly.nodeEventsAttended}
+                  onAdd={(entry) => addNodeEvent(entry)}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -733,6 +805,205 @@ export default function ProfilePage() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+const COMMON_BURNS = [
+  "Burning Man",
+  "AfrikaBurn",
+  "Midburn",
+  "Nowhere",
+  "Fuego Austral",
+  "Kiwiburn",
+  "Nest",
+  "Borderland",
+  "Blazing Swan",
+  "Lakes of Fire",
+  "Apogaea",
+  "Alchemy",
+  "Youtopia",
+  "Mystopia",
+  "Playa del Fuego",
+  "Frostburn",
+  "Transformus",
+  "Freezer Burn",
+  "Love Burn",
+  "Saguaro Man",
+];
+
+const BURN_YEARS = Array.from({ length: 2026 - 1986 + 1 }, (_, i) => 2026 - i);
+const EVENT_YEARS = Array.from({ length: 2026 - 2017 + 1 }, (_, i) => 2026 - i).filter((y) => y !== 2020 && y !== 2021 && y !== 2017);
+
+function BurnAdder({
+  existing,
+  onAdd,
+}: {
+  existing: string[];
+  onAdd: (entry: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [burnName, setBurnName] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [year, setYear] = useState("");
+
+  function handleAdd() {
+    const name = burnName === "__custom" ? customName.trim() : burnName;
+    if (!name || !year) return;
+    const entry = `${name} ${year}`;
+    if (existing.includes(entry)) return;
+    onAdd(entry);
+    setBurnName("");
+    setCustomName("");
+    setYear("");
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 gap-1 border-amber/20 text-amber hover:bg-amber/10 text-xs"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="h-3 w-3" />
+        Add
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="space-y-1">
+        <select
+          value={burnName}
+          onChange={(e) => {
+            setBurnName(e.target.value);
+            if (e.target.value !== "__custom") setCustomName("");
+          }}
+          className="h-8 rounded-md border border-pink-500/20 bg-transparent px-2 text-sm text-sand-200 focus:outline-none focus:ring-2 focus:ring-pink-500/30"
+        >
+          <option value="" className="bg-blue-950">Select burn...</option>
+          {COMMON_BURNS.map((b) => (
+            <option key={b} value={b} className="bg-blue-950">{b}</option>
+          ))}
+          <option value="__custom" className="bg-blue-950">Other...</option>
+        </select>
+      </div>
+      {burnName === "__custom" && (
+        <Input
+          placeholder="Burn name"
+          value={customName}
+          onChange={(e) => setCustomName(e.target.value)}
+          className="h-8 w-36 text-sm"
+        />
+      )}
+      <select
+        value={year}
+        onChange={(e) => setYear(e.target.value)}
+        className="h-8 rounded-md border border-pink-500/20 bg-transparent px-2 text-sm text-sand-200 focus:outline-none focus:ring-2 focus:ring-pink-500/30"
+      >
+        <option value="" className="bg-blue-950">Year</option>
+        {BURN_YEARS.map((y) => (
+          <option key={y} value={y} className="bg-blue-950">{y}</option>
+        ))}
+      </select>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 gap-1 border-amber/20 text-amber hover:bg-amber/10"
+        onClick={handleAdd}
+        disabled={(!burnName || (burnName === "__custom" && !customName.trim())) || !year}
+      >
+        <Plus className="h-3 w-3" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-8 text-sand-500 hover:text-sand-300"
+        onClick={() => { setOpen(false); setBurnName(""); setCustomName(""); setYear(""); }}
+      >
+        Cancel
+      </Button>
+    </div>
+  );
+}
+
+function EventYearAdder({
+  prefix,
+  existing,
+  onAdd,
+}: {
+  prefix: "Build" | "Strike";
+  existing: string[];
+  onAdd: (entry: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [year, setYear] = useState("");
+
+  const existingYears = existing
+    .filter((e) => e.startsWith(prefix))
+    .map((e) => parseInt(e.replace(`${prefix} `, "")));
+
+  function handleAdd() {
+    if (!year) return;
+    const entry = `${prefix} ${year}`;
+    if (existing.includes(entry)) return;
+    onAdd(entry);
+    setYear("");
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 gap-1 border-pink-500/20 text-pink-400 hover:bg-pink-500/10 text-xs"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="h-3 w-3" />
+        Add
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={year}
+        onChange={(e) => setYear(e.target.value)}
+        className="h-8 rounded-md border border-pink-500/20 bg-transparent px-2 text-sm text-sand-200 focus:outline-none focus:ring-2 focus:ring-pink-500/30"
+      >
+        <option value="" className="bg-blue-950">Year</option>
+        {EVENT_YEARS.filter((y) => !existingYears.includes(y)).map((y) => (
+          <option key={y} value={y} className="bg-blue-950">{y}</option>
+        ))}
+      </select>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 gap-1 border-pink-500/20 text-pink-400 hover:bg-pink-500/10"
+        onClick={handleAdd}
+        disabled={!year}
+      >
+        <Plus className="h-3 w-3" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-8 text-sand-500 hover:text-sand-300"
+        onClick={() => { setOpen(false); setYear(""); }}
+      >
+        Cancel
+      </Button>
     </div>
   );
 }
