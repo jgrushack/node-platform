@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,14 @@ import {
   FileText,
   Trash2,
   MonitorSmartphone,
+  Bold,
+  Italic,
+  Underline,
+  Heading1,
+  Heading2,
+  Link,
+  ListOrdered,
+  Minus,
 } from "lucide-react";
 import type { CampMessage, AudienceFilter, RecipientPreview, UnreadMessage } from "@/lib/types/message";
 import {
@@ -86,6 +94,7 @@ export function MessagesClient({
   const [readingMessage, setReadingMessage] = useState<UnreadMessage | null>(null);
 
   // Compose state
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
@@ -237,6 +246,24 @@ export function MessagesClient({
   function toggleYear(year: number) { setSelectedYears((prev) => prev.includes(year) ? prev.filter((y) => y !== year) : [...prev, year]); setPreviewResult(null); }
   function toggleRole(role: string) { setSelectedRoles((prev) => prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]); setPreviewResult(null); }
 
+  /** Wrap selected text (or insert at cursor) with HTML tags */
+  const wrapSelection = useCallback((before: string, after: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = bodyHtml.slice(start, end);
+    const replacement = before + (selected || "text") + after;
+    const updated = bodyHtml.slice(0, start) + replacement + bodyHtml.slice(end);
+    setBodyHtml(updated);
+    // Restore focus and move cursor after the inserted text
+    requestAnimationFrame(() => {
+      ta.focus();
+      const cursorPos = start + replacement.length;
+      ta.setSelectionRange(cursorPos, cursorPos);
+    });
+  }, [bodyHtml]);
+
   const unreadCount = myMessages.filter((m) => !m.read_at).length;
 
   return (
@@ -372,7 +399,18 @@ export function MessagesClient({
               </div>
               <div className="space-y-2">
                 <Label className="text-sand-300">Message</Label>
-                <Textarea placeholder="Write your message here... (HTML supported)" className="min-h-[200px]" value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} />
+                <div className="flex flex-wrap gap-1 rounded-t-lg border border-b-0 border-pink-500/20 bg-pink-500/5 px-2 py-1.5">
+                  <button type="button" onClick={() => wrapSelection("<b>", "</b>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Bold"><Bold className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => wrapSelection("<i>", "</i>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Italic"><Italic className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => wrapSelection("<u>", "</u>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Underline"><Underline className="h-4 w-4" /></button>
+                  <div className="w-px bg-pink-500/20 mx-1" />
+                  <button type="button" onClick={() => wrapSelection('<h1 style="font-size:24px;font-weight:bold;margin:16px 0 8px;">', "</h1>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Large heading"><Heading1 className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => wrapSelection('<h2 style="font-size:20px;font-weight:bold;margin:12px 0 6px;">', "</h2>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Small heading"><Heading2 className="h-4 w-4" /></button>
+                  <div className="w-px bg-pink-500/20 mx-1" />
+                  <button type="button" onClick={() => wrapSelection('<a href="URL" style="color:#F90077;">', "</a>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Link"><Link className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => wrapSelection("", "<br/>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Line break"><Minus className="h-4 w-4" /></button>
+                </div>
+                <Textarea ref={textareaRef} placeholder="Write your message here..." className="min-h-[200px] rounded-t-none border-t-0" value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} />
               </div>
             </CardContent>
           </Card>
