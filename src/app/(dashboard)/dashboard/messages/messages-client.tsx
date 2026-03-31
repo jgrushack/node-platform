@@ -48,6 +48,7 @@ import {
   saveDraft,
   updateDraft,
   deleteDraft,
+  deleteMessage,
   getEmailPreview,
 } from "@/lib/actions/messages";
 
@@ -79,7 +80,7 @@ export function MessagesClient({
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"inbox" | "drafts" | "sent" | "compose">(isAdmin ? "drafts" : "inbox");
-  const [sentMessages] = useState(initialSentMessages);
+  const [sentMessages, setSentMessages] = useState(initialSentMessages);
   const [drafts, setDrafts] = useState(initialDrafts);
   const [myMessages, setMyMessages] = useState(initialMyMessages);
   const [readingMessage, setReadingMessage] = useState<UnreadMessage | null>(null);
@@ -216,6 +217,15 @@ export function MessagesClient({
     toast.success("Draft deleted");
   }
 
+  async function handleDeleteMessage(id: string) {
+    setDeletingId(id);
+    const result = await deleteMessage(id);
+    setDeletingId(null);
+    if ("error" in result) { toast.error(result.error); return; }
+    setSentMessages((prev) => prev.filter((m) => m.id !== id));
+    toast.success("Message deleted");
+  }
+
   async function handleReadMessage(msg: UnreadMessage) {
     setReadingMessage(msg);
     if (!msg.read_at) {
@@ -320,14 +330,19 @@ export function MessagesClient({
             ) : (
               <div className="divide-y divide-pink-500/10">
                 {sentMessages.map((msg) => (
-                  <div key={msg.id} className="flex items-center gap-4 px-4 py-3">
+                  <div key={msg.id} className="flex items-center gap-4 px-4 py-3 hover:bg-pink-500/5 transition-colors">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-sand-100 truncate">{msg.subject}</p>
                       <p className="text-xs text-sand-500 mt-0.5">{audienceLabel(msg.audience_filter)} &middot; {msg.recipient_count} recipient{msg.recipient_count !== 1 ? "s" : ""}</p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs text-sand-500">{new Date(msg.sent_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
-                      <p className="text-[10px] text-sand-600">by {msg.sender ? [msg.sender.first_name, msg.sender.last_name].filter(Boolean).join(" ") : "Admin"}</p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <p className="text-xs text-sand-500">{new Date(msg.sent_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                        <p className="text-[10px] text-sand-600">by {msg.sender ? [msg.sender.first_name, msg.sender.last_name].filter(Boolean).join(" ") : "Admin"}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-7 text-sand-400 hover:text-red-400" onClick={() => handleDeleteMessage(msg.id)} disabled={deletingId === msg.id}>
+                        {deletingId === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
                     </div>
                   </div>
                 ))}

@@ -269,6 +269,29 @@ export async function deleteDraft(
 }
 
 /**
+ * Delete a sent message (cascades to message_recipients via ON DELETE CASCADE).
+ */
+export async function deleteMessage(
+  id: string
+): Promise<{ success: true } | { error: string }> {
+  const { error } = await requireAdmin();
+  if (error) return { error };
+
+  const admin = createAdminClient();
+  const { error: delError } = await admin
+    .from("camp_messages")
+    .delete()
+    .eq("id", id);
+
+  if (delError) {
+    console.error("[deleteMessage]", delError);
+    return { error: "Failed to delete message." };
+  }
+
+  return { success: true };
+}
+
+/**
  * Send a message from a draft or directly.
  * If draftId provided, transitions that draft to sent.
  */
