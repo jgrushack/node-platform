@@ -801,7 +801,7 @@ export default function DashboardPage() {
                             <span className="text-sand-400">Getting There:</span>
                             <span className="text-sand-200 font-medium">
                               {carPassStatus === "yes" && "Car Pass"}
-                              {carPassStatus === "no" && "No car pass"}
+                              {carPassStatus === "no" && "TBD"}
                               {carPassStatus === "need_ride" && "Need a ride"}
                               {carPassStatus === "burner_express" && "Burner Express"}
                             </span>
@@ -967,7 +967,7 @@ function TicketStatusForm({
           <p className="text-sm text-sand-300">How are you getting to the playa?</p>
           <div className="grid grid-cols-2 gap-3">
             <button onClick={() => selectCarPass("yes")} disabled={saving} className={carPass === "yes" ? btnActiveClass : btnClass}>Car Pass</button>
-            <button onClick={() => selectCarPass("no")} disabled={saving} className={carPass === "no" ? btnActiveClass : btnClass}>No Car Pass</button>
+            <button onClick={() => selectCarPass("no")} disabled={saving} className={carPass === "no" ? btnActiveClass : btnClass}>TBD</button>
             <button onClick={() => selectCarPass("need_ride")} disabled={saving} className={carPass === "need_ride" ? btnActiveClass : btnClass}>Need a Ride</button>
             <button onClick={() => selectCarPass("burner_express")} disabled={saving} className={carPass === "burner_express" ? btnActiveClass : btnClass}>Burner Express</button>
           </div>
