@@ -50,19 +50,17 @@ export async function previewRecipients(
     const { data, error: dbError } = await admin
       .from("profiles")
       .select("id, first_name, last_name, playa_name, email")
-      .in("id", filter.profile_ids)
-      .eq("is_active", true);
+      .in("id", filter.profile_ids);
 
     if (dbError) return { error: "Failed to fetch recipients." };
     const recipients = (data || []) as RecipientPreview[];
     return { recipients, count: recipients.length };
   }
 
-  // Fetch all active profiles
+  // Fetch all profiles (standing gate handles exclusions, not is_active)
   const { data: allProfiles, error: profError } = await admin
     .from("profiles")
-    .select("id, first_name, last_name, playa_name, email, role, is_committee_member, node_events_attended, onboarding_completed_at, is_active")
-    .eq("is_active", true);
+    .select("id, first_name, last_name, playa_name, email, role, is_committee_member, node_events_attended, onboarding_completed_at, is_active");
 
   if (profError || !allProfiles) return { error: "Failed to fetch profiles." };
 
