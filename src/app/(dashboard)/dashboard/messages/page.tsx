@@ -1,5 +1,5 @@
-import { getMessages, getDrafts, getMyMessages } from "@/lib/actions/messages";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { MessagesClient } from "./messages-client";
 import type { CampMessage, UnreadMessage } from "@/lib/types/message";
 
@@ -20,6 +20,7 @@ export default async function MessagesPage() {
     .single();
 
   const isAdmin = profile && ["admin", "super_admin"].includes(profile.role);
+  const admin = createAdminClient();
 
   let sentMessages: CampMessage[] = [];
   let drafts: CampMessage[] = [];
@@ -27,13 +28,56 @@ export default async function MessagesPage() {
 
   try {
     if (isAdmin) {
-      const [sentResult, draftsResult] = await Promise.all([getMessages(), getDrafts()]);
-      sentMessages = sentResult && !("error" in sentResult) ? sentResult : [];
-      drafts = draftsResult && !("error" in draftsResult) ? draftsResult : [];
+      const [sentResult, draftsResult] = await Promise.all([
+        admin.from("camp_messages").select("*").eq("status", "sent").order("sent_at", { ascending: false }),
+        admin.from("camp_messages").select("*").eq("status", "draft").order("updated_at", { ascending: false }),
+      ]);
+      sentMessages = (sentResult.data || []) as unknown as CampMessage[];
+      drafts = (draftsResult.data || []) as unknown as CampMessage[];
     }
 
-    const myResult = await getMyMessages();
-    myMessages = myResult && !("error" in myResult) ? myResult : [];
+    // Get messages for this user
+    const { data: recipientRows } = await admin
+      .from("message_recipients")
+      .select("id, message_id, read_at")
+      .eq("profile_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (recipientRows && recipientRows.length > 0) {
+      const messageIds = recipientRows.map((r) => r.message_id);
+      const { data: messages } = await admin
+        .from("camp_messages")
+        .select("id, subject, body_html, sent_at, sent_by")
+        .in("id", messageIds);
+
+      const msgMap = new Map((messages || []).map((m) => [m.id, m]));
+
+      // Get sender names
+      const senderIds = [...new Set((messages || []).map((m) => m.sent_by).filter(Boolean))];
+      const senderMap: Record<string, string> = {};
+      if (senderIds.length > 0) {
+        const { data: senders } = await admin
+          .from("profiles")
+          .select("id, first_name, last_name")
+          .in("id", senderIds);
+        for (const s of senders || []) {
+          senderMap[s.id] = [s.first_name, s.last_name].filter(Boolean).join(" ") || "NODE Admin";
+        }
+      }
+
+      myMessages = recipientRows.map((r) => {
+        const msg = msgMap.get(r.message_id);
+        return {
+          id: r.id,
+          message_id: r.message_id,
+          subject: msg?.subject || "",
+          body_html: msg?.body_html || "",
+          sent_at: msg?.sent_at || "",
+          sender_name: senderMap[msg?.sent_by || ""] || "NODE Admin",
+          read_at: r.read_at,
+        };
+      });
+    }
   } catch (e) {
     console.error("[MessagesPage] Error loading data:", e);
   }
