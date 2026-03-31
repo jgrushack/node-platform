@@ -31,6 +31,7 @@ import {
   ExternalLink,
   Clock,
   Loader2,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarDayEvent } from "@/lib/types/event";
@@ -49,8 +50,8 @@ const MONTHS = [
 
 const EVENT_TYPE_CONFIG = {
   event: { dot: "bg-pink-400", label: "Event", color: "text-pink-400" },
-  call: { dot: "bg-blue-400", label: "Call", color: "text-blue-400" },
-  deadline: { dot: "bg-amber", label: "Deadline", color: "text-amber" },
+  call: { dot: "bg-pink-400", label: "Call", color: "text-pink-400" },
+  deadline: { dot: "bg-pink-400", label: "Deadline", color: "text-pink-400" },
   bm: { dot: "bg-white", label: "BM Official", color: "text-white" },
 };
 
@@ -426,8 +427,9 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
                   {dayEvents.slice(0, 2).map((event) => (
                     <div
                       key={event.id}
-                      className={`truncate text-[10px] leading-tight ${EVENT_TYPE_CONFIG[event.event_type].color}`}
+                      className={`truncate text-[10px] leading-tight flex items-center gap-0.5 ${EVENT_TYPE_CONFIG[event.event_type].color}`}
                     >
+                      {event.event_type === "call" && <Phone className="h-2 w-2 shrink-0" />}
                       {event.title}
                     </div>
                   ))}
@@ -475,6 +477,7 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
                             <span
                               className={`h-2 w-2 shrink-0 rounded-full ${EVENT_TYPE_CONFIG[event.event_type].dot}`}
                             />
+                            {event.event_type === "call" && <Phone className="h-3.5 w-3.5 shrink-0 text-pink-400" />}
                             <h3 className="font-medium text-sand-100 text-sm truncate">
                               {event.title}
                             </h3>
