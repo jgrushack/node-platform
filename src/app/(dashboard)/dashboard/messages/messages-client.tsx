@@ -299,14 +299,19 @@ export function MessagesClient({
           ) : myMessages.map((msg) => {
             const isRead = !!msg.read_at;
             return (
-              <Card key={msg.id} className={`glass-card border-0 cursor-pointer transition-colors hover:bg-pink-500/5 ${!isRead ? "border-l-2 border-l-pink-500/50" : ""}`} onClick={() => handleReadMessage(msg)}>
+              <Card key={msg.id} className={`glass-card border-0 cursor-pointer transition-colors hover:bg-pink-500/5 ${!isRead ? "border-l-2 border-l-pink-500/50" : ""}`}>
                 <CardContent className="flex items-center gap-4 p-4">
-                  <div className={`h-2 w-2 shrink-0 rounded-full ${isRead ? "bg-transparent" : "bg-pink-500"}`} />
-                  <div className="min-w-0 flex-1">
+                  <div className={`h-2 w-2 shrink-0 rounded-full ${isRead ? "bg-transparent" : "bg-pink-500"}`} onClick={() => handleReadMessage(msg)} />
+                  <div className="min-w-0 flex-1" onClick={() => handleReadMessage(msg)}>
                     <p className={`text-sm truncate ${isRead ? "text-sand-300" : "text-sand-100 font-semibold"}`}>{msg.subject}</p>
                     <p className="text-xs text-sand-500 mt-0.5">From {msg.sender_name} &middot; {new Date(msg.sent_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
                   </div>
                   {!isRead && <Badge className="shrink-0 bg-pink-500/20 text-pink-400 text-[10px]">New</Badge>}
+                  {isAdmin && (
+                    <Button variant="ghost" size="sm" className="h-7 shrink-0 text-sand-400 hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.message_id); setMyMessages((prev) => prev.filter((m) => m.message_id !== msg.message_id)); }} disabled={deletingId === msg.message_id}>
+                      {deletingId === msg.message_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             );
