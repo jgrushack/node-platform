@@ -483,29 +483,27 @@ export default function DashboardPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: i * 0.1 }}
           >
-            <Card className="glass-card border-0">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <Card className="glass-card border-0 h-full">
+              <CardHeader className="flex flex-row items-center justify-between pb-1">
                 <CardTitle className="text-sm font-medium text-sand-400">
                   {stat.label}
                 </CardTitle>
                 <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </CardHeader>
-              <CardContent>
-                <div className={`text-xl sm:text-2xl font-bold ${stat.valueColor}`}>
+              <CardContent className="pb-4">
+                <div className={`text-xl sm:text-2xl font-bold ${stat.valueColor} truncate`}>
                   {stat.value}
                 </div>
-                {(stat.subtext || (stat.label === "2026 Status" && hasTicket !== null)) && (
-                  <p className="text-xs mt-0.5 flex items-center gap-1.5">
-                    {stat.subtext && (
-                      <span className={stat.valueColor}>{stat.subtext}</span>
-                    )}
-                    {stat.label === "2026 Status" && hasTicket !== null && campStatus?.label === "Attending" && (
-                      <span className={hasTicket ? "text-green-400" : "text-red-400"}>
-                        {stat.subtext ? "· " : ""}{hasTicket ? "Ticket \u2713" : "No Ticket"}
-                      </span>
-                    )}
-                  </p>
-                )}
+                <p className="text-xs mt-0.5 flex items-center gap-1.5 min-h-[1rem]">
+                  {stat.subtext && (
+                    <span className={stat.valueColor}>{stat.subtext}</span>
+                  )}
+                  {stat.label === "2026 Status" && hasTicket !== null && campStatus?.label === "Attending" && (
+                    <span className={hasTicket ? "text-green-400" : "text-red-400"}>
+                      {stat.subtext ? "· " : ""}{hasTicket ? "Ticket \u2713" : "No Ticket"}
+                    </span>
+                  )}
+                </p>
               </CardContent>
             </Card>
           </motion.div>
