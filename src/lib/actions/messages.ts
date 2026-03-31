@@ -77,10 +77,11 @@ export async function previewRecipients(
   }
 
   // Fetch registrations for year-based and tenure filters
+  // Include all non-cancelled registrations (pending, confirmed, waitlisted)
   const { data: regs } = await admin
     .from("registrations")
     .select("profile_id, camp_years(year)")
-    .eq("status", "confirmed");
+    .neq("status", "cancelled");
 
   // Build per-profile registration year sets
   const yearsByProfile: Record<string, number[]> = {};

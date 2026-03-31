@@ -60,7 +60,7 @@ import {
   getEmailPreview,
 } from "@/lib/actions/messages";
 
-const NODE_YEARS = [2017, 2018, 2019, 2022, 2023, 2024, 2026];
+const NODE_YEARS = [2017, 2018, 2019, 2022, 2023, 2024, 2025, 2026];
 
 function audienceLabel(filter: AudienceFilter): string {
   if (filter.type === "all") return "All active members";
