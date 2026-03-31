@@ -34,7 +34,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Search,
-  Eye,
   Pencil,
   Loader2,
   Link2,
@@ -96,12 +95,16 @@ interface CommitteeRequestWithProfile {
   };
 }
 
+const NODE_YEARS = [2018, 2019, 2022, 2023, 2024, 2025, 2026];
+
 export function UsersClient({
   initialUsers,
   initialCommitteeRequests,
+  yearsByUser,
 }: {
   initialUsers: UserProfile[];
   initialCommitteeRequests: CommitteeRequestWithProfile[];
+  yearsByUser: Record<string, number[]>;
 }) {
   const router = useRouter();
   const [users, setUsers] = useState(initialUsers);
@@ -109,6 +112,7 @@ export function UsersClient({
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all");
+  const [yearFilter, setYearFilter] = useState<number | "all">("all");
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
   const [savingProfile, setSavingProfile] = useState(false);
@@ -125,7 +129,8 @@ export function UsersClient({
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       (u.playa_name || "").toLowerCase().includes(search.toLowerCase());
     const matchesRole = roleFilter === "all" || u.role === roleFilter;
-    return matchesSearch && matchesRole;
+    const matchesYear = yearFilter === "all" || (yearsByUser[u.id] || []).includes(yearFilter);
+    return matchesSearch && matchesRole && matchesYear;
   });
 
   // Role counts
@@ -198,11 +203,6 @@ export function UsersClient({
     );
     setEditingUser(null);
     toast.success("Profile updated");
-  }
-
-  function handleViewAs(role: UserRole) {
-    localStorage.setItem("viewAsRole", role);
-    router.push("/dashboard");
   }
 
   function toggleSelect(id: string) {
@@ -296,44 +296,6 @@ export function UsersClient({
             </Button>
           )}
         </div>
-      </motion.div>
-
-      {/* View As Preview */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-      >
-        <Card className="glass-card border-0">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-sand-400">
-              <Eye className="h-4 w-4" />
-              Preview Role View
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-3 text-xs text-sand-500">
-              See the dashboard as a specific role experiences it.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {ALL_ROLES.map((role) => {
-                const cfg = ROLE_CONFIG[role];
-                return (
-                  <Button
-                    key={role}
-                    variant="outline"
-                    size="sm"
-                    className={`border-transparent ${cfg.bg} ${cfg.color} hover:opacity-80`}
-                    onClick={() => handleViewAs(role)}
-                  >
-                    <Eye className="mr-1.5 h-3 w-3" />
-                    {cfg.label}
-                  </Button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
       </motion.div>
 
       {/* Committee Requests */}
@@ -461,6 +423,32 @@ export function UsersClient({
           })}
         </div>
       </motion.div>
+
+      {/* Year Filter */}
+      <div className="flex flex-wrap gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className={yearFilter === "all" ? "bg-amber/20 text-amber border-amber/30" : "text-sand-400 border-transparent hover:text-sand-200"}
+          onClick={() => setYearFilter("all")}
+        >
+          All Years
+        </Button>
+        {NODE_YEARS.map((year) => {
+          const count = users.filter((u) => (yearsByUser[u.id] || []).includes(year)).length;
+          return (
+            <Button
+              key={year}
+              variant="outline"
+              size="sm"
+              className={yearFilter === year ? "bg-amber/20 text-amber border-amber/30" : "text-sand-400 border-transparent hover:text-sand-200"}
+              onClick={() => setYearFilter(year)}
+            >
+              {year} ({count})
+            </Button>
+          );
+        })}
+      </div>
 
       {/* Users Table */}
       <motion.div
