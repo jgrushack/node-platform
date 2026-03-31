@@ -425,7 +425,7 @@ export async function getDrafts(): Promise<CampMessage[] | { error: string }> {
   const admin = createAdminClient();
   const { data, error: dbError } = await admin
     .from("camp_messages")
-    .select("*, sender:profiles!sent_by(first_name, last_name, playa_name, email), updater:profiles!updated_by(first_name, last_name)")
+    .select("*, sender:profiles!sent_by(first_name, last_name, playa_name, email)")
     .eq("status", "draft")
     .order("updated_at", { ascending: false });
 

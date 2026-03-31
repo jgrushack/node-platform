@@ -1,6 +1,7 @@
 import { getMessages, getDrafts, getMyMessages } from "@/lib/actions/messages";
 import { createClient } from "@/lib/supabase/server";
 import { MessagesClient } from "./messages-client";
+import type { CampMessage, UnreadMessage } from "@/lib/types/message";
 
 export default async function MessagesPage() {
   const supabase = await createClient();
@@ -20,22 +21,28 @@ export default async function MessagesPage() {
 
   const isAdmin = profile && ["admin", "super_admin"].includes(profile.role);
 
-  let sentMessages: Awaited<ReturnType<typeof getMessages>> = [];
-  let drafts: Awaited<ReturnType<typeof getDrafts>> = [];
-  if (isAdmin) {
-    const [sentResult, draftsResult] = await Promise.all([getMessages(), getDrafts()]);
-    sentMessages = "error" in sentResult ? [] : sentResult;
-    drafts = "error" in draftsResult ? [] : draftsResult;
-  }
+  let sentMessages: CampMessage[] = [];
+  let drafts: CampMessage[] = [];
+  let myMessages: UnreadMessage[] = [];
 
-  const myResult = await getMyMessages();
-  const myMessages = "error" in myResult ? [] : myResult;
+  try {
+    if (isAdmin) {
+      const [sentResult, draftsResult] = await Promise.all([getMessages(), getDrafts()]);
+      sentMessages = sentResult && !("error" in sentResult) ? sentResult : [];
+      drafts = draftsResult && !("error" in draftsResult) ? draftsResult : [];
+    }
+
+    const myResult = await getMyMessages();
+    myMessages = myResult && !("error" in myResult) ? myResult : [];
+  } catch (e) {
+    console.error("[MessagesPage] Error loading data:", e);
+  }
 
   return (
     <MessagesClient
       isAdmin={!!isAdmin}
-      initialSentMessages={sentMessages as Exclude<typeof sentMessages, { error: string }>}
-      initialDrafts={drafts as Exclude<typeof drafts, { error: string }>}
+      initialSentMessages={sentMessages}
+      initialDrafts={drafts}
       initialMyMessages={myMessages}
     />
   );
