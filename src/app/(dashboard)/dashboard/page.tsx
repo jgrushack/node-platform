@@ -709,114 +709,113 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
 
-        {/* Documents */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-        >
-          <Card className="glass-card border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sand-200">
-                <FileCheck className="h-4 w-4 text-pink-400" />
-                Documents
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                {documents.map((doc) => (
-                  <li
-                    key={doc.label}
-                    className={`flex items-center gap-3 ${
-                      !doc.comingSoon && doc.type === "view"
-                        ? "cursor-pointer hover:bg-white/5 -mx-2 px-2 py-1.5 rounded-lg transition-colors"
-                        : ""
-                    }`}
-                    onClick={
-                      !doc.comingSoon && doc.type === "view"
-                        ? () => setBudgetOpen(true)
-                        : undefined
-                    }
-                  >
-                    <span
-                      className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
-                        doc.type === "view"
-                          ? "bg-blue-500/20 text-blue-400"
-                          : "bg-sand-700/30 text-sand-500"
+        {/* Documents + Ticket & Travel */}
+        <div className="space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+          >
+            <Card className="glass-card border-0">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sand-200">
+                  <FileCheck className="h-4 w-4 text-pink-400" />
+                  Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-3">
+                  {documents.map((doc) => (
+                    <li
+                      key={doc.label}
+                      className={`flex items-center gap-3 ${
+                        !doc.comingSoon && doc.type === "view"
+                          ? "cursor-pointer hover:bg-white/5 -mx-2 px-2 py-1.5 rounded-lg transition-colors"
+                          : ""
                       }`}
+                      onClick={
+                        !doc.comingSoon && doc.type === "view"
+                          ? () => setBudgetOpen(true)
+                          : undefined
+                      }
                     >
-                      {doc.type === "view" ? "!" : ""}
-                    </span>
-                    <span className="text-sm text-sand-200">
-                      {doc.label}
-                    </span>
-                    {doc.comingSoon ? (
-                      <Badge className="ml-auto bg-sand-700/30 text-sand-500 text-[10px]">
-                        Coming Soon
-                      </Badge>
-                    ) : doc.type === "view" ? (
-                      <Badge className="ml-auto bg-blue-500/15 text-blue-400 text-[10px]">
-                        View Only
-                      </Badge>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
+                          doc.type === "view"
+                            ? "bg-blue-500/20 text-blue-400"
+                            : "bg-sand-700/30 text-sand-500"
+                        }`}
+                      >
+                        {doc.type === "view" ? "!" : ""}
+                      </span>
+                      <span className="text-sm text-sand-200">
+                        {doc.label}
+                      </span>
+                      {doc.comingSoon ? (
+                        <Badge className="ml-auto bg-sand-700/30 text-sand-500 text-[10px]">
+                          Coming Soon
+                        </Badge>
+                      ) : doc.type === "view" ? (
+                        <Badge className="ml-auto bg-blue-500/15 text-blue-400 text-[10px]">
+                          View Only
+                        </Badge>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-      {/* Ticket & Travel Status */}
-      {campStatus?.label === "Attending" && (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.85 }}
-        >
-          <Card className="glass-card border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sand-200">
-                <Ticket className="h-4 w-4 text-amber" />
-                Ticket &amp; Travel
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {hasTicket === null || editingTicketStatus ? (
-                <TicketStatusForm
-                  initialTicket={hasTicket ?? undefined}
-                  initialCarPass={carPassStatus ?? undefined}
-                  saving={savingTicket}
-                  onSave={handleSaveTicketStatus}
-                  onCancel={hasTicket !== null ? () => setEditingTicketStatus(false) : undefined}
-                />
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-sand-400">Burning Man Ticket:</span>
-                        <span className={hasTicket ? "text-green-400 font-medium" : "text-red-400 font-medium"}>
-                          {hasTicket ? "Yes" : "No"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-sand-400">Getting There:</span>
-                        <span className="text-sand-200 font-medium">
-                          {carPassStatus === "yes" && "Car Pass"}
-                          {carPassStatus === "no" && "No car pass"}
-                          {carPassStatus === "need_ride" && "Need a ride"}
-                          {carPassStatus === "burner_express" && "Burner Express"}
-                        </span>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-sand-400 hover:text-pink-400"
-                      onClick={() => setEditingTicketStatus(true)}
-                    >
-                      Edit
+          {campStatus?.label === "Attending" && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.85 }}
+            >
+              <Card className="glass-card border-0">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sand-200">
+                    <Ticket className="h-4 w-4 text-amber" />
+                    Ticket &amp; Travel
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {hasTicket === null || editingTicketStatus ? (
+                    <TicketStatusForm
+                      initialTicket={editingTicketStatus ? (hasTicket ?? undefined) : undefined}
+                      initialCarPass={editingTicketStatus ? (carPassStatus ?? undefined) : undefined}
+                      saving={savingTicket}
+                      onSave={handleSaveTicketStatus}
+                      onCancel={hasTicket !== null ? () => setEditingTicketStatus(false) : undefined}
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-sand-400">Burning Man Ticket:</span>
+                            <span className={hasTicket ? "text-green-400 font-medium" : "text-red-400 font-medium"}>
+                              {hasTicket ? "Yes" : "No"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-sand-400">Getting There:</span>
+                            <span className="text-sand-200 font-medium">
+                              {carPassStatus === "yes" && "Car Pass"}
+                              {carPassStatus === "no" && "No car pass"}
+                              {carPassStatus === "need_ride" && "Need a ride"}
+                              {carPassStatus === "burner_express" && "Burner Express"}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-sand-400 hover:text-pink-400"
+                          onClick={() => setEditingTicketStatus(true)}
+                        >
+                          Edit
                     </Button>
                   </div>
                 </div>
@@ -824,7 +823,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </motion.div>
-      )}
+          )}
+        </div>
+      </div>
 
       {/* Budget Dialog */}
       <Dialog open={budgetOpen} onOpenChange={setBudgetOpen}>
@@ -930,7 +931,7 @@ function TicketStatusForm({
   onSave: (ticket: boolean, carPass: CarPassStatus) => void;
   onCancel?: () => void;
 }) {
-  const [step, setStep] = useState<"ticket" | "carpass">(initialTicket !== undefined ? "carpass" : "ticket");
+  const [step, setStep] = useState<"ticket" | "carpass">("ticket");
   const [ticket, setTicket] = useState<boolean | null>(initialTicket ?? null);
   const [carPass, setCarPass] = useState<CarPassStatus | null>(initialCarPass ?? null);
 
@@ -960,13 +961,11 @@ function TicketStatusForm({
       )}
       {step === "carpass" && (
         <div className="space-y-3">
-          {initialTicket === undefined && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-sand-400">Ticket:</span>
-              <span className={ticket ? "text-green-400" : "text-red-400"}>{ticket ? "Yes" : "No"}</span>
-              <button onClick={() => setStep("ticket")} className="text-xs text-pink-400 hover:text-pink-300 ml-1">change</button>
-            </div>
-          )}
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-sand-400">Ticket:</span>
+            <span className={ticket ? "text-green-400" : "text-red-400"}>{ticket ? "Yes" : "No"}</span>
+            <button onClick={() => setStep("ticket")} className="text-xs text-pink-400 hover:text-pink-300 ml-1">change</button>
+          </div>
           <p className="text-sm text-sand-300">How are you getting to the playa?</p>
           <div className="grid grid-cols-2 gap-3">
             <button onClick={() => selectCarPass("yes")} disabled={saving} className={carPass === "yes" ? btnActiveClass : btnClass}>Car Pass</button>
