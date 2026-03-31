@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
@@ -47,6 +46,7 @@ import {
   Link,
   Minus,
   Palette,
+  List,
 } from "lucide-react";
 import type { CampMessage, AudienceFilter, RecipientPreview, UnreadMessage } from "@/lib/types/message";
 import {
@@ -94,7 +94,7 @@ export function MessagesClient({
   const [readingMessage, setReadingMessage] = useState<UnreadMessage | null>(null);
 
   // Compose state
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
@@ -119,6 +119,7 @@ export function MessagesClient({
   const [emailPreviewLoading, setEmailPreviewLoading] = useState(false);
 
   // Actions
+  const [autosaveStatus, setAutosaveStatus] = useState<"saved" | null>(null);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -140,7 +141,8 @@ export function MessagesClient({
   function loadDraftIntoCompose(draft: CampMessage) {
     setEditingDraftId(draft.id);
     setSubject(draft.subject);
-    setBodyHtml(draft.body_html);
+    // Use requestAnimationFrame to ensure editor is mounted when switching to compose tab
+    requestAnimationFrame(() => setEditorContent(draft.body_html));
     const f = draft.audience_filter;
     setFilterType(f.type === "filtered" ? "filtered" : "all");
     setSelectedYears(f.registration_years || []);
@@ -156,7 +158,7 @@ export function MessagesClient({
   function resetCompose() {
     setEditingDraftId(null);
     setSubject("");
-    setBodyHtml("");
+    setEditorContent("");
     setFilterType("all");
     setSelectedYears([]);
     setSelectedRoles([]);
@@ -249,25 +251,62 @@ export function MessagesClient({
   function toggleYear(year: number) { setSelectedYears((prev) => prev.includes(year) ? prev.filter((y) => y !== year) : [...prev, year]); setPreviewResult(null); }
   function toggleRole(role: string) { setSelectedRoles((prev) => prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]); setPreviewResult(null); }
 
-  /** Wrap selected text (or insert at cursor) with HTML tags.
-   *  Uses native insertText so Cmd/Ctrl+Z undo works. */
-  const wrapSelection = useCallback((before: string, after: string) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.focus();
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = ta.value.slice(start, end);
-    const replacement = before + (selected || "text") + after;
-    // Select the range we want to replace
-    ta.setSelectionRange(start, end);
-    // Insert via native command — preserves browser undo stack
-    document.execCommand("insertText", false, replacement);
-    // Sync React state from the now-updated textarea value
-    setBodyHtml(ta.value);
+  /** Sync React state from contentEditable */
+  const syncEditor = useCallback(() => {
+    if (editorRef.current) setBodyHtml(editorRef.current.innerHTML);
+  }, []);
+
+  /** Run an execCommand on the contentEditable editor (preserves undo) */
+  const execCmd = useCallback((cmd: string, value?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(cmd, false, value);
+    if (editorRef.current) setBodyHtml(editorRef.current.innerHTML);
+  }, []);
+
+  /** Set editor content when loading a draft — content is admin-authored (trusted) */
+  const setEditorContent = useCallback((html: string) => {
+    if (editorRef.current) {
+      // Safe: content is authored by admins, stored in our DB
+      const el = editorRef.current;
+      el.textContent = "";
+      if (html) {
+        const range = document.createRange();
+        const frag = range.createContextualFragment(html);
+        el.appendChild(frag);
+      }
+    }
+    setBodyHtml(html);
   }, []);
 
   const unreadCount = myMessages.filter((m) => !m.read_at).length;
+
+  // Autosave draft every 3 seconds after changes (only on compose tab)
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef({ subject: "", bodyHtml: "" });
+
+  useEffect(() => {
+    if (tab !== "compose" || !isAdmin) return;
+    if (!subject.trim() && !bodyHtml.trim()) return;
+    // Skip if nothing changed since last save
+    if (subject === lastSavedRef.current.subject && bodyHtml === lastSavedRef.current.bodyHtml) return;
+
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(async () => {
+      const payload = { subject, body_html: bodyHtml, audience_filter: buildFilter() };
+      if (editingDraftId) {
+        await updateDraft(editingDraftId, payload);
+      } else {
+        const result = await saveDraft(payload);
+        if ("success" in result) setEditingDraftId(result.id);
+      }
+      lastSavedRef.current = { subject, bodyHtml };
+      setAutosaveStatus("saved");
+      setTimeout(() => setAutosaveStatus(null), 2000);
+    }, 3000);
+
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject, bodyHtml, tab]);
 
   return (
     <div className="space-y-6">
@@ -405,19 +444,21 @@ export function MessagesClient({
                 <Label className="text-sand-300">Subject</Label>
                 <Input placeholder="e.g. Build Week Update, Dues Reminder..." value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} />
               </div>
-              <div className="space-y-2">
-                <Label className="text-sand-300">Message</Label>
-                <div className="flex flex-wrap gap-1 rounded-t-lg border border-b-0 border-pink-500/20 bg-pink-500/5 px-2 py-1.5">
-                  <button type="button" onClick={() => wrapSelection("<b>", "</b>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Bold"><Bold className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => wrapSelection("<i>", "</i>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Italic"><Italic className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => wrapSelection("<u>", "</u>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Underline"><Underline className="h-4 w-4" /></button>
-                  <div className="w-px bg-pink-500/20 mx-1" />
-                  <button type="button" onClick={() => wrapSelection('<h1 style="font-size:24px;font-weight:bold;margin:16px 0 8px;">', "</h1>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Large heading"><Heading1 className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => wrapSelection('<h2 style="font-size:20px;font-weight:bold;margin:12px 0 6px;">', "</h2>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Small heading"><Heading2 className="h-4 w-4" /></button>
-                  <div className="w-px bg-pink-500/20 mx-1" />
-                  <button type="button" onClick={() => wrapSelection('<a href="URL" style="color:#F90077;">', "</a>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Link"><Link className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => wrapSelection("", "<br/>")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Line break"><Minus className="h-4 w-4" /></button>
-                  <div className="w-px bg-pink-500/20 mx-1" />
+              <div className="space-y-0">
+                <Label className="text-sand-300 mb-2 block">Message</Label>
+                {/* Formatting toolbar */}
+                <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-b-0 border-pink-500/20 bg-pink-500/5 px-2 py-1.5">
+                  <button type="button" onClick={() => execCmd("bold")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Bold (Ctrl+B)"><Bold className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => execCmd("italic")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Italic (Ctrl+I)"><Italic className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => execCmd("underline")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Underline (Ctrl+U)"><Underline className="h-4 w-4" /></button>
+                  <div className="w-px h-5 bg-pink-500/20 mx-1" />
+                  <button type="button" onClick={() => execCmd("fontSize", "5")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Large text"><Heading1 className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => execCmd("fontSize", "4")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Medium text"><Heading2 className="h-4 w-4" /></button>
+                  <div className="w-px h-5 bg-pink-500/20 mx-1" />
+                  <button type="button" onClick={() => { const url = prompt("Enter URL:"); if (url) execCmd("createLink", url); }} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Insert link"><Link className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => execCmd("insertUnorderedList")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Bullet list"><List className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => execCmd("insertHorizontalRule")} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Horizontal rule"><Minus className="h-4 w-4" /></button>
+                  <div className="w-px h-5 bg-pink-500/20 mx-1" />
                   <div className="relative">
                     <button type="button" onClick={() => setColorPickerOpen(!colorPickerOpen)} className="rounded p-1.5 text-sand-400 hover:bg-pink-500/15 hover:text-sand-100 transition-colors" title="Text color"><Palette className="h-4 w-4" /></button>
                     {colorPickerOpen && (
@@ -438,7 +479,7 @@ export function MessagesClient({
                             key={c.color}
                             type="button"
                             title={c.label}
-                            onClick={() => { wrapSelection(`<span style="color:${c.color};">`, "</span>"); setColorPickerOpen(false); }}
+                            onClick={() => { execCmd("foreColor", c.color); setColorPickerOpen(false); }}
                             className="h-6 w-6 rounded-full border border-white/20 hover:scale-110 transition-transform"
                             style={{ backgroundColor: c.color }}
                           />
@@ -447,7 +488,15 @@ export function MessagesClient({
                     )}
                   </div>
                 </div>
-                <Textarea ref={textareaRef} placeholder="Write your message here..." className="min-h-[200px] rounded-t-none border-t-0" value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} />
+                {/* Rich text editor (contentEditable) */}
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  onInput={syncEditor}
+                  onBlur={syncEditor}
+                  data-placeholder="Write your message here..."
+                  className="min-h-[200px] max-h-[500px] overflow-y-auto rounded-b-lg border border-pink-500/20 bg-transparent px-3 py-2 text-sm text-sand-200 outline-none focus:ring-2 focus:ring-pink-500/30 empty:before:content-[attr(data-placeholder)] empty:before:text-sand-500"
+                />
               </div>
             </CardContent>
           </Card>
@@ -534,10 +583,11 @@ export function MessagesClient({
           </Card>
 
           {/* Action buttons */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button variant="outline" className="border-pink-500/20 text-sand-300 hover:text-sand-100" onClick={handleSaveDraft} disabled={saving || (!subject.trim() && !bodyHtml.trim())}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} {saving ? "Saving..." : editingDraftId ? "Update Draft" : "Save Draft"}
             </Button>
+            {autosaveStatus === "saved" && <span className="text-xs text-sand-500">Autosaved</span>}
             <Button variant="outline" className="border-pink-500/20 text-sand-300 hover:text-sand-100" onClick={handleEmailPreview} disabled={emailPreviewLoading || (!subject.trim() && !bodyHtml.trim())}>
               {emailPreviewLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MonitorSmartphone className="mr-2 h-4 w-4" />} Preview Email
             </Button>
