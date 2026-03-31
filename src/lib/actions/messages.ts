@@ -400,8 +400,8 @@ export async function getMessages(): Promise<CampMessage[] | { error: string }> 
   const { error } = await requireAdmin();
   if (error) return { error };
 
-  const supabase = await createClient();
-  const { data, error: dbError } = await supabase
+  const admin = createAdminClient();
+  const { data, error: dbError } = await admin
     .from("camp_messages")
     .select("*, sender:profiles!sent_by(first_name, last_name, playa_name, email)")
     .eq("status", "sent")
@@ -467,9 +467,11 @@ export async function getUnreadMessages(): Promise<UnreadMessage[] | { error: st
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  const { data, error } = await supabase
+  // Use admin client to avoid RLS issues with nested joins
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("message_recipients")
-    .select("id, message_id, read_at, message:camp_messages!message_id(subject, body_html, sent_at, sender:profiles!sent_by(first_name, last_name))")
+    .select("id, message_id, read_at, camp_messages(subject, body_html, sent_at, sent_by)")
     .eq("profile_id", user.id)
     .is("read_at", null)
     .order("created_at", { ascending: false });
@@ -479,20 +481,33 @@ export async function getUnreadMessages(): Promise<UnreadMessage[] | { error: st
     return { error: "Failed to load messages." };
   }
 
+  // Resolve sender names in a second query
+  const senderIds = [...new Set((data || []).map((r) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (r as any).camp_messages?.sent_by;
+  }).filter(Boolean))];
+
+  const senderMap: Record<string, string> = {};
+  if (senderIds.length > 0) {
+    const { data: senders } = await admin
+      .from("profiles")
+      .select("id, first_name, last_name")
+      .in("id", senderIds);
+    for (const s of senders || []) {
+      senderMap[s.id] = [s.first_name, s.last_name].filter(Boolean).join(" ") || "NODE Admin";
+    }
+  }
+
   return (data || []).map((row) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const msg = (row as any).message;
-    const sender = msg?.sender;
-    const senderName = sender
-      ? [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "NODE Admin"
-      : "NODE Admin";
+    const msg = (row as any).camp_messages;
     return {
       id: row.id,
       message_id: row.message_id,
       subject: msg?.subject || "",
       body_html: msg?.body_html || "",
       sent_at: msg?.sent_at || "",
-      sender_name: senderName,
+      sender_name: senderMap[msg?.sent_by] || "NODE Admin",
     };
   }) as UnreadMessage[];
 }
@@ -507,9 +522,11 @@ export async function getMyMessages(): Promise<UnreadMessage[] | { error: string
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  const { data, error } = await supabase
+  // Use admin client to avoid RLS issues with nested joins
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("message_recipients")
-    .select("id, message_id, read_at, message:camp_messages!message_id(subject, body_html, sent_at, sender:profiles!sent_by(first_name, last_name))")
+    .select("id, message_id, read_at, camp_messages(subject, body_html, sent_at, sent_by)")
     .eq("profile_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -518,20 +535,33 @@ export async function getMyMessages(): Promise<UnreadMessage[] | { error: string
     return { error: "Failed to load messages." };
   }
 
+  // Resolve sender names in a second query
+  const senderIds = [...new Set((data || []).map((r) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (r as any).camp_messages?.sent_by;
+  }).filter(Boolean))];
+
+  const senderMap: Record<string, string> = {};
+  if (senderIds.length > 0) {
+    const { data: senders } = await admin
+      .from("profiles")
+      .select("id, first_name, last_name")
+      .in("id", senderIds);
+    for (const s of senders || []) {
+      senderMap[s.id] = [s.first_name, s.last_name].filter(Boolean).join(" ") || "NODE Admin";
+    }
+  }
+
   return (data || []).map((row) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const msg = (row as any).message;
-    const sender = msg?.sender;
-    const senderName = sender
-      ? [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "NODE Admin"
-      : "NODE Admin";
+    const msg = (row as any).camp_messages;
     return {
       id: row.id,
       message_id: row.message_id,
       subject: msg?.subject || "",
       body_html: msg?.body_html || "",
       sent_at: msg?.sent_at || "",
-      sender_name: senderName,
+      sender_name: senderMap[msg?.sent_by] || "NODE Admin",
       read_at: row.read_at,
     };
   }) as UnreadMessage[];
