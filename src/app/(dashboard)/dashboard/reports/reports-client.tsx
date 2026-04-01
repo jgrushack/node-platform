@@ -59,7 +59,7 @@ export default function ReportsClient() {
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("confirmed");
   const [appSearch, setAppSearch] = useState("");
   const [appStatusFilter, setAppStatusFilter] = useState<string>("all");
 
@@ -216,23 +216,23 @@ export default function ReportsClient() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           {
-            label: "Registered",
+            label: "Nodes Registered",
             value: totalRegistered,
-            detail: `${confirmed} confirmed`,
+            detail: `${confirmed} confirmed, ${totalRegistered - confirmed} other`,
             icon: Users,
             color: "text-pink-400",
           },
           {
-            label: "Have Ticket",
-            value: withTicket,
-            detail: `${totalRegistered > 0 ? Math.round((withTicket / totalRegistered) * 100) : 0}% of registered`,
-            icon: Ticket,
-            color: "text-amber",
+            label: "2026 Campers",
+            value: `${confirmed}/55`,
+            detail: `${withTicket} with ticket`,
+            icon: CheckCircle2,
+            color: "text-emerald-400",
           },
           {
-            label: "Have Car Pass",
+            label: "Car Passes",
             value: withCarPass,
-            detail: `${totalRegistered > 0 ? Math.round((withCarPass / totalRegistered) * 100) : 0}% of registered`,
+            detail: `${confirmed > 0 ? Math.round((withCarPass / confirmed) * 100) : 0}% of campers`,
             icon: Car,
             color: "text-coral",
           },

@@ -16,6 +16,10 @@ import {
   FileCheck,
   Instagram,
   Megaphone,
+  ExternalLink,
+  Clock,
+  CalendarPlus,
+  Video,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
@@ -138,7 +142,18 @@ export default function DashboardPage() {
   const [carPassStatus, setCarPassStatus] = useState<CarPassStatus | null>(null);
   const [editingTicketStatus, setEditingTicketStatus] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
-  const [nextEvent, setNextEvent] = useState<{ title: string; date: string } | null>(null);
+  const [nextEvent, setNextEvent] = useState<{
+    id: string;
+    title: string;
+    date: string;
+    rawDate: string;
+    startTime: string | null;
+    endTime: string | null;
+    eventType: string;
+    description: string | null;
+    joinLink: string | null;
+  } | null>(null);
+  const [showEventDialog, setShowEventDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showTicketPopup, setShowTicketPopup] = useState(false);
   const [savingTicket, setSavingTicket] = useState(false);
@@ -294,16 +309,31 @@ export default function DashboardPage() {
           // Fetch next upcoming event
           supabase
             .from("node_events")
-            .select("title, event_date")
+            .select("id, title, event_date, start_time, end_time, event_type, description, join_link")
             .gte("event_date", new Date().toISOString().split("T")[0])
             .order("event_date", { ascending: true })
             .limit(1)
             .maybeSingle()
             .then(({ data: evt }) => {
               if (evt) {
+                const dateStr = new Date(evt.event_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                const timeStr = evt.start_time
+                  ? new Date(`${evt.event_date}T${evt.start_time}`).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      timeZoneName: "short",
+                    })
+                  : null;
                 setNextEvent({
+                  id: evt.id,
                   title: evt.title,
-                  date: new Date(evt.event_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                  date: timeStr ? `${dateStr} · ${timeStr}` : dateStr,
+                  rawDate: evt.event_date,
+                  startTime: evt.start_time,
+                  endTime: evt.end_time,
+                  eventType: evt.event_type,
+                  description: evt.description,
+                  joinLink: evt.join_link,
                 });
               }
             });
@@ -434,6 +464,8 @@ export default function DashboardPage() {
       color: "text-coral",
       valueColor: "text-sand-100",
       subtext: nextEvent?.date ?? null,
+      clickable: !!nextEvent,
+      onClick: () => nextEvent && setShowEventDialog(true),
     },
     {
       label: "Balance",
@@ -483,7 +515,14 @@ export default function DashboardPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: i * 0.1 }}
           >
-            <Card className="glass-card border-0 h-full">
+            <Card
+              className={`glass-card border-0 h-full ${
+                "clickable" in stat && stat.clickable
+                  ? "cursor-pointer transition-all hover:ring-1 hover:ring-pink-500/30"
+                  : ""
+              }`}
+              onClick={"onClick" in stat && stat.onClick ? stat.onClick : undefined}
+            >
               <CardHeader className="flex flex-row items-center justify-between pb-1">
                 <CardTitle className="text-sm font-medium text-sand-400">
                   {stat.label}
@@ -824,6 +863,103 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Next Event Dialog */}
+      <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
+        <DialogContent className="glass border-pink-500/10 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <CalendarDays className="h-5 w-5 text-coral" />
+              {nextEvent?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {nextEvent && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-sand-300">
+                  <CalendarDays className="h-4 w-4 text-sand-400" />
+                  {new Date(nextEvent.rawDate + "T00:00:00").toLocaleDateString("en-US", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </div>
+                {nextEvent.startTime && (
+                  <div className="flex items-center gap-2 text-sm text-sand-300">
+                    <Clock className="h-4 w-4 text-sand-400" />
+                    {new Date(`${nextEvent.rawDate}T${nextEvent.startTime}`).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      timeZoneName: "short",
+                    })}
+                    {nextEvent.endTime && (
+                      <>
+                        {" — "}
+                        {new Date(`${nextEvent.rawDate}T${nextEvent.endTime}`).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </>
+                    )}
+                  </div>
+                )}
+                {nextEvent.eventType && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={
+                      nextEvent.eventType === "call"
+                        ? "bg-blue-500/15 text-blue-400 border-blue-500/20"
+                        : nextEvent.eventType === "deadline"
+                          ? "bg-red-500/15 text-red-400 border-red-500/20"
+                          : "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
+                    }>
+                      {nextEvent.eventType === "call" ? "Video Call" : nextEvent.eventType === "deadline" ? "Deadline" : "Event"}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              {nextEvent.description && (
+                <p className="text-sm text-sand-400">{nextEvent.description}</p>
+              )}
+
+              <div className="flex flex-wrap gap-2 pt-2">
+                {nextEvent.joinLink && (
+                  <a
+                    href={nextEvent.joinLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 border border-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-500/25 transition-colors"
+                  >
+                    <Video className="h-3 w-3" />
+                    Join Call
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+                <button
+                  onClick={() => {
+                    const start = nextEvent.startTime
+                      ? `${nextEvent.rawDate.replace(/-/g, "")}T${nextEvent.startTime.replace(/:/g, "")}00`
+                      : `${nextEvent.rawDate.replace(/-/g, "")}`;
+                    const end = nextEvent.endTime
+                      ? `${nextEvent.rawDate.replace(/-/g, "")}T${nextEvent.endTime.replace(/:/g, "")}00`
+                      : nextEvent.startTime
+                        ? `${nextEvent.rawDate.replace(/-/g, "")}T${nextEvent.startTime.replace(/:/g, "")}00`
+                        : `${nextEvent.rawDate.replace(/-/g, "")}`;
+                    const dates = nextEvent.startTime ? `${start}/${end}` : `${start}/${end}`;
+                    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(nextEvent.title)}&dates=${dates}${nextEvent.description ? `&details=${encodeURIComponent(nextEvent.description)}` : ""}${nextEvent.joinLink ? `&location=${encodeURIComponent(nextEvent.joinLink)}` : ""}`;
+                    window.open(url, "_blank");
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-pink-500/15 border border-pink-500/20 px-3 py-1.5 text-xs font-medium text-pink-400 hover:bg-pink-500/25 transition-colors"
+                >
+                  <CalendarPlus className="h-3 w-3" />
+                  Add to Calendar
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Budget Dialog */}
       <Dialog open={budgetOpen} onOpenChange={setBudgetOpen}>

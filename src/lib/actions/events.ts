@@ -20,14 +20,14 @@ async function requireAuth() {
   return { error: null, supabase, user };
 }
 
-async function requireSuperAdmin() {
+async function requireAdmin() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "Not authenticated" as const, supabase, user: null };
+    return { error: "Not authenticated" as const, supabase, user: null, role: null };
   }
 
   const { data: profile } = await supabase
@@ -36,11 +36,11 @@ async function requireSuperAdmin() {
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "super_admin") {
-    return { error: "Unauthorized" as const, supabase, user: null };
+  if (!profile || !["admin", "super_admin"].includes(profile.role)) {
+    return { error: "Unauthorized" as const, supabase, user: null, role: null };
   }
 
-  return { error: null, supabase, user };
+  return { error: null, supabase, user, role: profile.role };
 }
 
 export async function getNodeEvents(): Promise<
@@ -67,7 +67,7 @@ export async function getNodeEvents(): Promise<
 export async function createNodeEvent(
   formData: NodeEventFormData
 ): Promise<{ id: string } | { error: string }> {
-  const { error: authError, supabase, user } = await requireSuperAdmin();
+  const { error: authError, supabase, user } = await requireAdmin();
   if (authError || !user) {
     return { error: authError ?? "Not authenticated" };
   }
@@ -116,7 +116,7 @@ export async function updateNodeEvent(
   eventId: string,
   formData: NodeEventFormData
 ): Promise<{ success: true } | { error: string }> {
-  const { error: authError, supabase } = await requireSuperAdmin();
+  const { error: authError, supabase } = await requireAdmin();
   if (authError) {
     return { error: authError };
   }
@@ -150,9 +150,22 @@ export async function updateNodeEvent(
 export async function deleteNodeEvent(
   eventId: string
 ): Promise<{ success: true } | { error: string }> {
-  const { error: authError, supabase } = await requireSuperAdmin();
-  if (authError) {
-    return { error: authError };
+  const { error: authError, supabase, user, role } = await requireAdmin();
+  if (authError || !user) {
+    return { error: authError ?? "Not authenticated" };
+  }
+
+  // Admins can only delete events they created; super_admins can delete any
+  if (role === "admin") {
+    const { data: event } = await supabase
+      .from("node_events")
+      .select("created_by")
+      .eq("id", eventId)
+      .single();
+
+    if (!event || event.created_by !== user.id) {
+      return { error: "You can only delete events you created." };
+    }
   }
 
   const { error } = await supabase

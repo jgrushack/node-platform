@@ -57,10 +57,11 @@ const EVENT_TYPE_CONFIG = {
 
 interface CalendarClientProps {
   events: CalendarDayEvent[];
+  userId: string;
   userRole: string;
 }
 
-export function CalendarClient({ events: initialEvents, userRole }: CalendarClientProps) {
+export function CalendarClient({ events: initialEvents, userRole, userId }: CalendarClientProps) {
   const [events, setEvents] = useState(initialEvents);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -69,6 +70,7 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  const isAdmin = userRole === "admin" || userRole === "super_admin";
   const isSuperAdmin = userRole === "super_admin";
 
   const year = currentDate.getFullYear();
@@ -294,7 +296,7 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
           <h1 className="text-3xl font-bold text-sand-100">Calendar</h1>
           <p className="mt-1 text-sand-400">NODE 2026 events and deadlines</p>
         </div>
-        {isSuperAdmin && (
+        {isAdmin && (
           <Button
             onClick={() => openCreateForm()}
             className="gap-2 bg-pink-500/20 text-pink-400 hover:bg-pink-500/30 border border-pink-500/20 w-fit"
@@ -387,7 +389,7 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
               <button
                 key={`${day.key}-${i}`}
                 onClick={() => {
-                  if (hasEvents || (isSuperAdmin && day.isCurrentMonth)) {
+                  if (hasEvents || (isAdmin && day.isCurrentMonth)) {
                     setSelectedDate(day.key);
                   }
                 }}
@@ -517,7 +519,7 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
                           </a>
                         )}
 
-                        {isSuperAdmin && (
+                        {isAdmin && (
                           <div className="flex items-center gap-2 pt-1">
                             <Button
                               variant="ghost"
@@ -528,20 +530,22 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
                               <Pencil className="h-3 w-3" />
                               Edit
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(event.id)}
-                              disabled={deleting === event.id}
-                              className="h-7 gap-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            >
-                              {deleting === event.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-3 w-3" />
-                              )}
-                              Delete
-                            </Button>
+                            {(isSuperAdmin || event.created_by === userId) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(event.id)}
+                                disabled={deleting === event.id}
+                                className="h-7 gap-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              >
+                                {deleting === event.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )}
+                                Delete
+                              </Button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -578,7 +582,7 @@ export function CalendarClient({ events: initialEvents, userRole }: CalendarClie
                 )}
               </div>
 
-              {isSuperAdmin && (
+              {isAdmin && (
                 <DialogFooter>
                   <Button
                     onClick={() => openCreateForm()}

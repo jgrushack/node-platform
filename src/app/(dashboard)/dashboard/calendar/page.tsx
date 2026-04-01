@@ -1,13 +1,14 @@
 import { getNodeEvents } from "@/lib/actions/events";
-import { getCurrentUserRole } from "@/lib/actions/applications";
+import { getCurrentUserRole, getCurrentUserId } from "@/lib/actions/applications";
 import { CalendarClient } from "./calendar-client";
 import type { CalendarDayEvent } from "@/lib/types/event";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
 
 export default async function CalendarPage() {
-  const [eventsResult, role] = await Promise.all([
+  const [eventsResult, role, userId] = await Promise.all([
     getNodeEvents(),
     getCurrentUserRole(),
+    getCurrentUserId(),
   ]);
 
   const nodeEvents: CalendarDayEvent[] =
@@ -22,6 +23,7 @@ export default async function CalendarPage() {
           end_time: e.end_time,
           join_link: e.join_link,
           description: e.description,
+          created_by: e.created_by,
         }));
 
   // BM calendar events visible to admin/super_admin only
@@ -45,6 +47,7 @@ export default async function CalendarPage() {
     <CalendarClient
       events={allEvents}
       userRole={role ?? "member"}
+      userId={userId ?? ""}
     />
   );
 }

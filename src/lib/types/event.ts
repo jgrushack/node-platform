@@ -36,4 +36,5 @@ export interface CalendarDayEvent {
   end_time: string | null;
   join_link: string | null;
   description: string | null;
+  created_by?: string;
 }

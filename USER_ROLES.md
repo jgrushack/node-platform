@@ -21,9 +21,10 @@ There are 4 roles, defined in `profiles.role`:
 | Add application comments | committee | committee | Y | Y |
 | Send camp messages | - | - | Y | Y |
 | View Reports tab | - | - | Y | Y |
-| Approve / reject applications | - | - | Y | Y |
-| Delete applications | - | - | Y | Y |
-| Create / edit / delete calendar events | - | - | - | Y |
+| Approve / reject / override applications | - | - | - | Y |
+| Delete applications | - | - | - | Y |
+| Create / edit calendar events | - | - | Y | Y |
+| Delete calendar events | - | - | own only | Y |
 | Users tab (manage roles, edit profiles) | - | - | - | Y |
 | Approve / reject committee requests | - | - | - | Y |
 | Generate invite links | - | - | - | Y |
@@ -46,9 +47,9 @@ Server actions enforce permissions with these guards (defined in `src/lib/action
 
 | Function | Allows | Used by |
 |----------|--------|---------|
-| `requireAdmin()` | admin, super_admin | `sendMessage`, `getApplicationsWithVotes`, `castVote`, `deleteApplication` |
-| `requireAdminOrSuperAdmin()` | admin, super_admin | `approveApplication`, `adminOverrideStatus` |
-| `requireSuperAdmin()` | super_admin only | `getUsers`, `updateUserRole`, `updateUserProfile`, `generateInviteLinks`, `getCommitteeRequests`, `handleCommitteeRequest`, `createNodeEvent`, `updateNodeEvent`, `deleteNodeEvent` |
+| `requireAdmin()` | admin, super_admin | `sendMessage`, `getApplicationsWithVotes`, `castVote`, `createNodeEvent`, `updateNodeEvent`, `deleteNodeEvent` (ownership check for admin) |
+| `requireAdminOrSuperAdmin()` | admin, super_admin | `approveApplication` (via auto-approve only) |
+| `requireSuperAdmin()` | super_admin only | `getUsers`, `updateUserRole`, `updateUserProfile`, `generateInviteLinks`, `getCommitteeRequests`, `handleCommitteeRequest`, `adminOverrideStatus`, `deleteApplication` |
 
 ---
 

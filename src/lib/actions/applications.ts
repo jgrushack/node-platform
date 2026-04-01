@@ -49,6 +49,29 @@ async function requireAdmin() {
   return { error: null, supabase, user };
 }
 
+async function requireSuperAdmin() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" as const, supabase, user: null };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "super_admin") {
+    return { error: "Unauthorized" as const, supabase, user: null };
+  }
+
+  return { error: null, supabase, user };
+}
+
 async function requireAdminOrSuperAdmin() {
   const supabase = await createClient();
   const {
@@ -459,7 +482,7 @@ export async function adminOverrideStatus(
   applicationId: string,
   status: "approved" | "rejected" | "waitlist"
 ): Promise<{ success: true } | { error: string }> {
-  const { error: authError, user } = await requireAdminOrSuperAdmin();
+  const { error: authError, user } = await requireSuperAdmin();
   if (authError || !user) {
     return { error: authError ?? "Not authenticated" };
   }
@@ -491,7 +514,7 @@ export async function adminOverrideStatus(
 export async function deleteApplication(
   id: string
 ): Promise<{ success: true } | { error: string }> {
-  const { error: authError, supabase, user } = await requireAdmin();
+  const { error: authError, supabase, user } = await requireSuperAdmin();
   if (authError || !user) {
     return { error: authError ?? "Not authenticated" };
   }
@@ -599,6 +622,12 @@ export async function addApplicationComment(
   }
 
   return { success: true };
+}
+
+export async function getCurrentUserId(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id ?? null;
 }
 
 export async function getCurrentUserRole(): Promise<string | null> {
