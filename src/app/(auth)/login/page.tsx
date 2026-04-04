@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Lock, ArrowRight, Loader2, Sparkles } from "lucide-react";
+import { Mail, Lock, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -150,13 +150,7 @@ export default function LoginPage() {
         disabled={loading}
         className="w-full rounded-full bg-pink-500 font-semibold text-white hover:bg-pink-600 glow-pink"
       >
-        {loading ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : mode === "magic" ? (
-          <Sparkles className="mr-2 h-4 w-4" />
-        ) : (
-          <ArrowRight className="mr-2 h-4 w-4" />
-        )}
+        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         {loading
           ? mode === "magic"
             ? "Sending link..."

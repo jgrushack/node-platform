@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
 
 export default function HomeClient() {
   return (
@@ -62,10 +61,9 @@ export default function HomeClient() {
           <Link href="/apply">
             <Button
               size="lg"
-              className="group rounded-full bg-pink-500 px-8 text-lg font-semibold text-white hover:bg-pink-600 glow-pink"
+              className="rounded-full bg-pink-500 px-8 text-lg font-semibold text-white hover:bg-pink-600 glow-pink justify-center"
             >
               Apply to NODE
-              <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
             </Button>
           </Link>
         </motion.div>

@@ -9,8 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
-  ArrowRight,
-  ArrowLeft,
   Sparkles,
   CheckCircle,
   User,
@@ -254,16 +252,15 @@ export default function ApplyClient() {
             variant="ghost"
             onClick={prev}
             disabled={step === 0 || step === steps.length - 1 || isPending}
-            className="text-sand-300 hover:text-sand-100"
+            className="text-sand-300 hover:text-sand-100 justify-center"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
           {step < steps.length - 1 && (
             <Button
               onClick={step === steps.length - 2 ? handleSubmit : next}
               disabled={isPending}
-              className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
+              className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink justify-center"
             >
               {isPending ? (
                 <>
@@ -273,10 +270,7 @@ export default function ApplyClient() {
               ) : step === steps.length - 2 ? (
                 "Submit"
               ) : (
-                <>
-                  Continue
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </>
+                "Continue"
               )}
             </Button>
           )}
