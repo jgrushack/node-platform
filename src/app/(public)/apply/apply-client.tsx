@@ -42,17 +42,17 @@ const BURN_YEARS = [
   "2022", "2023", "2024",
 ];
 
-const TEN_PRINCIPLES = [
-  "Radical Inclusion",
-  "Gifting",
-  "Decommodification",
-  "Radical Self-reliance",
-  "Radical Self-expression",
-  "Communal Effort",
-  "Civic Responsibility",
-  "Leaving No Trace",
-  "Participation",
-  "Immediacy"
+const TEN_PRINCIPLES: { name: string; description: string }[] = [
+  { name: "Radical Inclusion", description: "Anyone may be a part of Burning Man. We welcome and respect the stranger. No prerequisites exist for participation in our community." },
+  { name: "Gifting", description: "Burning Man is devoted to acts of gift giving. The value of a gift is unconditional. Gifting does not contemplate a return or an exchange for something of equal value." },
+  { name: "Decommodification", description: "In order to preserve the spirit of gifting, our community seeks to create social environments that are unmediated by commercial sponsorships, transactions, or advertising." },
+  { name: "Radical Self-reliance", description: "Burning Man encourages the individual to discover, exercise and rely on their inner resources." },
+  { name: "Radical Self-expression", description: "Radical self-expression arises from the unique gifts of the individual. No one other than the individual or a collaborating group can determine its content." },
+  { name: "Communal Effort", description: "Our community values creative cooperation and collaboration. We strive to produce, promote and protect social networks, public spaces, works of art, and methods of communication that support such interaction." },
+  { name: "Civic Responsibility", description: "We value civil society. Community members who organize events should assume responsibility for public welfare and endeavor to communicate civic responsibilities to participants." },
+  { name: "Leaving No Trace", description: "Our community respects the environment. We are committed to leaving no physical trace of our activities wherever we gather." },
+  { name: "Participation", description: "Our community is committed to a radically participatory ethic. We believe that transformative change, whether in the individual or in society, can occur only through the medium of deeply personal participation." },
+  { name: "Immediacy", description: "Immediate experience is, in many ways, the most important touchstone of value in our culture. We seek to overcome barriers that stand between us and a recognition of our inner selves." },
 ];
 
 interface ApplyFormData {
@@ -61,6 +61,7 @@ interface ApplyFormData {
   email: string;
   phone: string;
   playaName: string;
+  beenToBm: boolean | null;
   yearsAttended: string[];
   previousCamps: string;
   virginExpectations: string;
@@ -93,9 +94,13 @@ function canAdvance(step: number, form: ApplyFormData): boolean {
   switch (step) {
     case 0: return true; // Welcome
     case 1: return !!(form.firstName && form.lastName && form.email);
-    case 2: return true; // 0 years selected = virgin burner, still valid
+    case 2: {
+      if (form.beenToBm === null) return false;
+      if (form.beenToBm) return form.yearsAttended.length > 0;
+      return !!form.favoritePrinciple;
+    }
     case 3: return !!(form.skills && form.referredBy);
-    case 4: return true; // Video (optional)
+    case 4: return !!form.videoFile;
     case 5: return true; // Review
     default: return true;
   }
@@ -110,6 +115,7 @@ export default function ApplyClient() {
     email: "",
     phone: "",
     playaName: "",
+    beenToBm: null,
     yearsAttended: [],
     previousCamps: "",
     virginExpectations: "",
@@ -152,7 +158,7 @@ export default function ApplyClient() {
         email: form.email,
         phone: form.phone,
         playaName: form.playaName,
-        yearsAttended: form.yearsAttended.length > 0
+        yearsAttended: form.beenToBm
           ? form.yearsAttended.slice().sort().join(", ")
           : "Virgin Burner",
         previousCamps: form.previousCamps,
@@ -330,6 +336,11 @@ function WelcomeStep() {
           </li>
         </ul>
       </div>
+
+      <p className="mt-6 max-w-md text-sm text-pink-400 leading-relaxed">
+        You will be required to upload a 1-2 minute video during the application.
+        If you are not ready to record your video, please come back when you are.
+      </p>
     </div>
   );
 }
@@ -390,7 +401,7 @@ function PersonalStep({ form, update }: FormStepProps) {
 }
 
 function ExperienceStep({ form, update }: FormStepProps) {
-  const isVirgin = form.yearsAttended.length === 0;
+  const [expandedPrinciple, setExpandedPrinciple] = useState<string | null>(null);
 
   function toggleYear(year: string) {
     const current = form.yearsAttended;
@@ -404,79 +415,115 @@ function ExperienceStep({ form, update }: FormStepProps) {
   return (
     <div className="space-y-5">
       <h2 className="text-2xl font-bold text-sand-100">Burn Experience</h2>
+
+      {/* Question 1: Have you been to Burning Man? */}
       <div className="space-y-3">
-        <div>
-          <Label className="text-sand-300">
-            Which years have you attended Burning Man?
-          </Label>
-          <p className="mt-1 text-xs text-sand-500">
-            Select all that apply — leave blank if this is your first burn
-          </p>
+        <Label className="text-sand-300">Have you been to Burning Man before? *</Label>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => update("beenToBm", true)}
+            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
+              form.beenToBm === true
+                ? "border-pink-500 bg-pink-500/20 text-pink-400"
+                : "border-blue-900/30 bg-blue-900/10 text-sand-300 hover:bg-blue-900/20"
+            }`}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            onClick={() => { update("beenToBm", false); update("yearsAttended", []); }}
+            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
+              form.beenToBm === false
+                ? "border-pink-500 bg-pink-500/20 text-pink-400"
+                : "border-blue-900/30 bg-blue-900/10 text-sand-300 hover:bg-blue-900/20"
+            }`}
+          >
+            No
+          </button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {BURN_YEARS.map((year) => (
-            <button
-              key={year}
-              type="button"
-              onClick={() => toggleYear(year)}
-              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
-                form.yearsAttended.includes(year)
-                  ? "border-pink-500 bg-pink-500/20 text-pink-400"
-                  : "border-blue-900/30 bg-blue-900/10 text-sand-300 hover:bg-blue-900/20"
-              }`}
-            >
-              {year}
-            </button>
-          ))}
-        </div>
-        {isVirgin ? (
-          <p className="text-xs text-amber-400/80">
-            First burn? Leave all years blank and answer the question below.
-          </p>
-        ) : (
-          <p className="text-xs text-sand-500">
-            {form.yearsAttended.length} year
-            {form.yearsAttended.length !== 1 ? "s" : ""} selected
-          </p>
-        )}
       </div>
 
-      {!isVirgin ? (
-        <div className="space-y-2">
-          <Label className="text-sand-300">Previous camps or communities</Label>
-          <Textarea
-            value={form.previousCamps}
-            onChange={(e) => update("previousCamps", e.target.value)}
-            placeholder="Tell us about camps you've been part of and why you're looking for something new..."
-            className="min-h-[100px]"
-            maxLength={2000}
-          />
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-sand-300">
-              Which of the 10 Principles resonates with you the most?
-            </Label>
-            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-              {TEN_PRINCIPLES.map((principle) => (
-                <Label
-                  key={principle}
-                  className={`flex cursor-pointer items-center rounded-lg border p-3 transition-colors ${
-                    form.favoritePrinciple === principle
-                      ? "border-pink-500 bg-pink-500/10 text-pink-400"
+      {/* Yes → year selector + previous camps */}
+      {form.beenToBm === true && (
+        <div className="animate-in fade-in slide-in-from-top-4 space-y-5">
+          <div className="space-y-3">
+            <Label className="text-sand-300">Which years did you attend? *</Label>
+            <div className="flex flex-wrap gap-2">
+              {BURN_YEARS.map((year) => (
+                <button
+                  key={year}
+                  type="button"
+                  onClick={() => toggleYear(year)}
+                  className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    form.yearsAttended.includes(year)
+                      ? "border-pink-500 bg-pink-500/20 text-pink-400"
                       : "border-blue-900/30 bg-blue-900/10 text-sand-300 hover:bg-blue-900/20"
                   }`}
                 >
-                  <input
-                    type="radio"
-                    name="favoritePrinciple"
-                    className="hidden"
-                    checked={form.favoritePrinciple === principle}
-                    onChange={() => update("favoritePrinciple", principle)}
-                  />
-                  {principle}
-                </Label>
+                  {year}
+                </button>
+              ))}
+            </div>
+            {form.yearsAttended.length > 0 && (
+              <p className="text-xs text-sand-500">
+                {form.yearsAttended.length} year{form.yearsAttended.length !== 1 ? "s" : ""} selected
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sand-300">Previous camps or communities</Label>
+            <Textarea
+              value={form.previousCamps}
+              onChange={(e) => update("previousCamps", e.target.value)}
+              placeholder="Tell us about camps you've been part of and why you're looking for something new..."
+              className="min-h-[100px] placeholder:text-sand-600"
+              maxLength={2000}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* No → 10 Principles */}
+      {form.beenToBm === false && (
+        <div className="animate-in fade-in slide-in-from-top-4 space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sand-300">
+              The 10 Principles of Burning Man — which resonates with you the most? *
+            </Label>
+            <p className="text-xs text-sand-500">Tap any principle to learn what it means</p>
+            <div className="mt-2 grid grid-cols-1 gap-2">
+              {TEN_PRINCIPLES.map((p) => (
+                <div key={p.name}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpandedPrinciple(expandedPrinciple === p.name ? null : p.name);
+                    }}
+                    className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                      form.favoritePrinciple === p.name
+                        ? "border-pink-500 bg-pink-500/10 text-pink-400"
+                        : "border-blue-900/30 bg-blue-900/10 text-sand-300 hover:bg-blue-900/20"
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{p.name}</span>
+                  </button>
+                  {expandedPrinciple === p.name && (
+                    <div className="mx-2 mt-1 mb-2 rounded-b-lg bg-blue-900/10 border border-t-0 border-blue-900/30 px-3 py-2">
+                      <p className="text-xs text-sand-400 leading-relaxed">{p.description}</p>
+                      <button
+                        type="button"
+                        onClick={() => update("favoritePrinciple", p.name)}
+                        className={`mt-2 text-xs font-medium ${
+                          form.favoritePrinciple === p.name ? "text-pink-400" : "text-pink-400/70 hover:text-pink-400"
+                        }`}
+                      >
+                        {form.favoritePrinciple === p.name ? "✓ Selected as your favorite" : "Select as your favorite"}
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -490,7 +537,7 @@ function ExperienceStep({ form, update }: FormStepProps) {
                 value={form.principleReason}
                 onChange={(e) => update("principleReason", e.target.value)}
                 placeholder="No wrong answers here..."
-                className="min-h-[100px]"
+                className="min-h-[100px] placeholder:text-sand-600"
                 maxLength={2000}
               />
             </div>
@@ -511,7 +558,7 @@ function ContributionStep({ form, update }: FormStepProps) {
           value={form.skills}
           onChange={(e) => update("skills", e.target.value)}
           placeholder="Construction, cooking, DJing, yoga instruction, massage, sound healing, bartending, large-scale art, medical/first aid, electrical, heavy machinery, photography, hair/makeup, mixology, event production..."
-          className="min-h-[80px]"
+          className="min-h-[80px] placeholder:text-sand-600"
           maxLength={2000}
           required
         />
@@ -521,7 +568,7 @@ function ContributionStep({ form, update }: FormStepProps) {
         <Input
           value={form.referredBy}
           onChange={(e) => update("referredBy", e.target.value)}
-          placeholder="Name of your connection to camp"
+          placeholder="Name of your connection to camp" className="placeholder:text-sand-600"
           maxLength={200}
           required
         />
