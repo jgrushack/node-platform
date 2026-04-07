@@ -70,6 +70,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="overscroll-none">
+      <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="NODE" />
+        <meta name="theme-color" content="#0F0120" />
+      </head>
       <body
         className={`${exo2.variable} ${neuropol.variable} ${sciFied.variable} antialiased overscroll-none`}
       >

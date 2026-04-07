@@ -154,6 +154,7 @@ export default function DashboardPage() {
     joinLink: string | null;
   } | null>(null);
   const [showEventDialog, setShowEventDialog] = useState(false);
+  const [showPwaPrompt, setShowPwaPrompt] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showTicketPopup, setShowTicketPopup] = useState(false);
   const [savingTicket, setSavingTicket] = useState(false);
@@ -182,6 +183,14 @@ export default function DashboardPage() {
       // Prompt password setup if user hasn't set one yet
       if (!authUser.user_metadata?.password_set) {
         setShowPasswordDialog(true);
+      }
+
+      // Show PWA install prompt on iOS if not already installed
+      const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isStandalone = ("standalone" in window.navigator) && (window.navigator as unknown as { standalone: boolean }).standalone;
+      const dismissed = localStorage.getItem("pwa-prompt-dismissed");
+      if (isIos && !isStandalone && !dismissed) {
+        setShowPwaPrompt(true);
       }
 
       supabase
@@ -698,54 +707,8 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {/* Bottom grid: Recent Updates + Documents */}
+      {/* Bottom grid: Documents + Recent Updates */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Updates */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.75 }}
-        >
-          <Card className="glass-card border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sand-200">
-                <Megaphone className="h-4 w-4 text-pink-400" />
-                Recent Updates
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Latest Instagram post */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Instagram className="h-3.5 w-3.5 text-pink-400" />
-                  <span className="text-xs font-medium text-sand-400">
-                    @node_brc
-                  </span>
-                </div>
-                <div className="overflow-hidden rounded-xl border border-pink-500/10 mx-auto" style={{ maxWidth: "480px" }}>
-                  <iframe
-                    src="https://www.instagram.com/p/DVTzj2NEbhB/embed"
-                    className="border-0"
-                    style={{ width: "480px", height: "640px", maxWidth: "100%" }}
-                    loading="lazy"
-                    scrolling="no"
-                    title="NODE Instagram"
-                  />
-                </div>
-                <a
-                  href="https://www.instagram.com/node_brc/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-pink-400 hover:text-pink-300 transition-colors"
-                >
-                  <Instagram className="h-3 w-3" />
-                  Follow @node_brc on Instagram
-                </a>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
         {/* Documents + Ticket & Travel */}
         <div className="space-y-6">
           <motion.div
@@ -837,7 +800,7 @@ export default function DashboardPage() {
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
-                            <span className="text-sand-400">Getting There:</span>
+                            <span className="text-sand-400">Driving:</span>
                             <span className="text-sand-200 font-medium">
                               {carPassStatus === "yes" && "Car Pass"}
                               {carPassStatus === "no" && "TBD"}
@@ -862,6 +825,51 @@ export default function DashboardPage() {
         </motion.div>
           )}
         </div>
+
+        {/* Recent Updates */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.85 }}
+        >
+          <Card className="glass-card border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sand-200">
+                <Megaphone className="h-4 w-4 text-pink-400" />
+                Recent Updates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Instagram className="h-3.5 w-3.5 text-pink-400" />
+                  <span className="text-xs font-medium text-sand-400">
+                    @node_brc
+                  </span>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-pink-500/10 mx-auto" style={{ maxWidth: "480px" }}>
+                  <iframe
+                    src="https://www.instagram.com/p/DVTzj2NEbhB/embed"
+                    className="border-0"
+                    style={{ width: "480px", height: "640px", maxWidth: "100%" }}
+                    loading="lazy"
+                    scrolling="no"
+                    title="NODE Instagram"
+                  />
+                </div>
+                <a
+                  href="https://www.instagram.com/node_brc/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-pink-400 hover:text-pink-300 transition-colors"
+                >
+                  <Instagram className="h-3 w-3" />
+                  Follow @node_brc on Instagram
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       {/* Next Event Dialog */}
@@ -982,6 +990,31 @@ export default function DashboardPage() {
       </Dialog>
 
 
+
+      {/* PWA Install Prompt (iOS) */}
+      <Dialog open={showPwaPrompt} onOpenChange={setShowPwaPrompt}>
+        <DialogContent className="glass border-pink-500/10 sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              Add NODE to Home Screen
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm text-sand-300">
+            <p>Get the full app experience — quick access, no browser bar, and notifications.</p>
+            <ol className="space-y-2 list-decimal list-inside text-sand-400">
+              <li>Tap the <strong className="text-sand-200">Share</strong> button at the bottom of Safari</li>
+              <li>Scroll down and tap <strong className="text-sand-200">Add to Home Screen</strong></li>
+              <li>Tap <strong className="text-sand-200">Add</strong></li>
+            </ol>
+          </div>
+          <Button
+            onClick={() => { setShowPwaPrompt(false); localStorage.setItem("pwa-prompt-dismissed", "1"); }}
+            className="w-full rounded-full bg-pink-500 text-white hover:bg-pink-600"
+          >
+            Got it
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {/* Set Password Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
