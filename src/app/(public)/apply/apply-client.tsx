@@ -605,10 +605,34 @@ function VideoStep({ form, update }: FormStepProps) {
     };
   }, []);
 
+  const getSupportedMimeType = () => {
+    const types = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+      "video/mp4;codecs=h264,aac",
+      "video/mp4",
+    ];
+    for (const type of types) {
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type)) {
+        return type;
+      }
+    }
+    return "";
+  };
+
   const startRecording = async () => {
     try {
+      const mimeType = getSupportedMimeType();
+      if (!mimeType) {
+        toast.error(
+          "Your browser doesn't support video recording. Please use the upload option instead."
+        );
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: { facingMode: "user" },
         audio: true,
       });
       streamRef.current = stream;
@@ -617,7 +641,7 @@ function VideoStep({ form, update }: FormStepProps) {
         videoRef.current.srcObject = stream;
       }
 
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -628,9 +652,12 @@ function VideoStep({ form, update }: FormStepProps) {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" });
-        const file = new File([blob], "node-application-video.webm", {
-          type: "video/webm",
+        const recordedType = mediaRecorder.mimeType || mimeType;
+        const baseType = recordedType.split(";")[0];
+        const ext = baseType === "video/mp4" ? "mp4" : "webm";
+        const blob = new Blob(chunksRef.current, { type: baseType });
+        const file = new File([blob], `node-application-video.${ext}`, {
+          type: baseType,
         });
         update("videoFile", file);
 
@@ -684,6 +711,11 @@ function VideoStep({ form, update }: FormStepProps) {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const allowedTypes = ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo"];
+    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(mp4|webm|mov|avi)$/i)) {
+      toast.error("Please upload an MP4, WebM, or MOV video file.");
+      return;
+    }
     if (file.size > 50 * 1024 * 1024) {
       toast.error("Video must be under 50MB.");
       return;
@@ -797,7 +829,7 @@ function VideoStep({ form, update }: FormStepProps) {
               <div className="relative w-full md:w-auto">
                 <Input
                   type="file"
-                  accept="video/mp4,video/webm,video/quicktime"
+                  accept="video/*"
                   className="hidden"
                   id="video-upload"
                   onChange={handleFileUpload}
@@ -813,6 +845,11 @@ function VideoStep({ form, update }: FormStepProps) {
             </div>
           )}
         </div>
+        {!form.videoFile && (
+          <p className="text-center text-sm text-coral font-medium">
+            Video is required for submission
+          </p>
+        )}
       </div>
     </div>
   );
