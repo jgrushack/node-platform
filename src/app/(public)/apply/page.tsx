@@ -7,6 +7,8 @@ export const metadata: Metadata = {
     "Apply to join NODE — a Burning Man theme camp built on art, music, and doing the work together.",
 };
 
+export const maxDuration = 60;
+
 export default function ApplyPage() {
   return <ApplyClient />;
 }

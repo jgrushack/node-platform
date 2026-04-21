@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -25,6 +26,7 @@ const ALLOWED_VIDEO_TYPES = [
 ];
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
 const AUTO_APPROVE_THRESHOLD = 4;
+const DUPLICATE_WINDOW_MS = 10 * 60 * 1000; // 10 min
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -116,105 +118,130 @@ export async function submitApplication(
     return { error: parsed.error.issues[0].message };
   }
 
+  const fields = {
+    first_name: parsed.data.firstName,
+    last_name: parsed.data.lastName,
+    email: parsed.data.email,
+    phone: parsed.data.phone || null,
+    playa_name: parsed.data.playaName || null,
+    years_attended: parsed.data.yearsAttended,
+    previous_camps: parsed.data.previousCamps || null,
+    favorite_principle: parsed.data.favoritePrinciple || null,
+    principle_reason: parsed.data.principleReason || null,
+    skills: parsed.data.skills || null,
+    referred_by: parsed.data.referredBy || null,
+  };
+
   const supabase = await createClient();
-  const id = randomUUID();
+  const adminClient = createAdminClient();
 
-  const { error } = await supabase
+  // Reuse a pending application submitted in the last 10 min for the same
+  // email — guards against duplicates when a user retries after the previous
+  // attempt hung on video upload.
+  const cutoff = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
+  const { data: existing } = await adminClient
     .from("applications")
-    .insert({
-      id,
-      first_name: parsed.data.firstName,
-      last_name: parsed.data.lastName,
-      email: parsed.data.email,
-      phone: parsed.data.phone || null,
-      playa_name: parsed.data.playaName || null,
-      years_attended: parsed.data.yearsAttended,
-      previous_camps: parsed.data.previousCamps || null,
-      favorite_principle: parsed.data.favoritePrinciple || null,
-      principle_reason: parsed.data.principleReason || null,
-      skills: parsed.data.skills || null,
-      referred_by: parsed.data.referredBy || null,
-    });
+    .select("id")
+    .eq("email", parsed.data.email)
+    .eq("status", "pending")
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (error) {
-    console.error("[submitApplication]", error);
-    return { error: "Failed to submit application. Please try again." };
+  let id: string;
+  if (existing?.id) {
+    id = existing.id;
+    const { error: updateError } = await adminClient
+      .from("applications")
+      .update(fields)
+      .eq("id", id);
+    if (updateError) {
+      console.error("[submitApplication] update", updateError);
+      return { error: "Failed to submit application. Please try again." };
+    }
+  } else {
+    id = randomUUID();
+    const { error } = await supabase
+      .from("applications")
+      .insert({ id, ...fields });
+    if (error) {
+      console.error("[submitApplication]", error);
+      return { error: "Failed to submit application. Please try again." };
+    }
   }
 
-  // Non-blocking: sync to Google Sheet for redundancy
-  appendApplicationToSheet(parsed.data).catch((err) => {
-    console.error("[Google Sheets sync]", err);
+  // Non-blocking: sync to Google Sheet for redundancy. `after()` keeps the
+  // serverless invocation alive until the Sheets write finishes, after the
+  // response has already been sent to the client — so slow/failed Sheets
+  // calls never block or time out the submit.
+  after(async () => {
+    try {
+      await appendApplicationToSheet(parsed.data);
+    } catch (err) {
+      console.error("[Google Sheets sync]", err);
+    }
   });
 
   return { id };
 }
 
-export async function uploadApplicationVideo(
+export async function createVideoUploadUrl(
   applicationId: string,
-  formData: FormData
-): Promise<{ success: true } | { error: string }> {
-  const file = formData.get("video") as File | null;
-  if (!file) {
-    return { error: "No video file provided" };
-  }
-
-  // Validate file size
-  if (file.size > MAX_VIDEO_SIZE) {
+  fileName: string,
+  fileSize: number,
+  fileType: string
+): Promise<{ path: string; token: string } | { error: string }> {
+  if (fileSize > MAX_VIDEO_SIZE) {
     return { error: "Video must be under 50MB." };
   }
-
-  // Validate file type
-  if (!ALLOWED_VIDEO_TYPES.includes(file.type)) {
+  if (!ALLOWED_VIDEO_TYPES.includes(fileType)) {
     return { error: "Only MP4, WebM, MOV, and AVI video files are allowed." };
   }
 
-  const supabase = await createClient();
-
-  // Require authentication
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: "Not authenticated" };
-  }
-
-  // Verify application exists AND belongs to this user
   const adminClient = createAdminClient();
   const { data: app, error: appError } = await adminClient
     .from("applications")
-    .select("id, email")
+    .select("id")
     .eq("id", applicationId)
-    .single();
+    .maybeSingle();
 
   if (appError || !app) {
     return { error: "Application not found." };
   }
 
-  // Verify the authenticated user owns this application
-  if (app.email !== user.email) {
-    return { error: "Unauthorized" };
-  }
+  const safeFilename = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${applicationId}/${safeFilename}`;
 
-  // Sanitize filename
-  const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = `${applicationId}/${safeFilename}`;
-
-  const { error: uploadError } = await supabase.storage
+  const { data, error } = await adminClient.storage
     .from("application-videos")
-    .upload(filePath, file);
+    .createSignedUploadUrl(path, { upsert: true });
 
-  if (uploadError) {
-    console.error("[uploadApplicationVideo]", uploadError);
-    return { error: "Failed to upload video. Please try again." };
+  if (error || !data) {
+    console.error("[createVideoUploadUrl]", error);
+    return { error: "Failed to create upload URL." };
   }
 
-  // Reuse admin client to bypass RLS when updating the application row
-  const { error: updateError } = await adminClient
+  return { path: data.path, token: data.token };
+}
+
+export async function linkApplicationVideo(
+  applicationId: string,
+  path: string
+): Promise<{ success: true } | { error: string }> {
+  if (!path.startsWith(`${applicationId}/`)) {
+    return { error: "Invalid video path." };
+  }
+
+  const adminClient = createAdminClient();
+  const { error } = await adminClient
     .from("applications")
-    .update({ video_url: filePath })
+    .update({ video_url: path })
     .eq("id", applicationId);
 
-  if (updateError) {
-    console.error("[uploadApplicationVideo] link error", updateError);
-    return { error: "Video uploaded but failed to link to application." };
+  if (error) {
+    console.error("[linkApplicationVideo]", error);
+    return { error: "Failed to link video to application." };
   }
 
   return { success: true };
@@ -671,7 +698,7 @@ export async function getCurrentUserProfile(): Promise<{ role: string; isCommitt
 export async function getApplicationSummary(): Promise<
   ApplicationSummaryData | { error: string }
 > {
-  const { error: authError, supabase } = await requireAuth();
+  const { error: authError, supabase } = await requireAdmin();
   if (authError) {
     return { error: authError };
   }

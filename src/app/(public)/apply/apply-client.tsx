@@ -24,8 +24,12 @@ import {
 } from "lucide-react";
 import {
   submitApplication,
-  uploadApplicationVideo,
+  createVideoUploadUrl,
+  linkApplicationVideo,
 } from "@/lib/actions/applications";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+
+type VideoUploadStatus = "idle" | "uploading" | "done" | "failed";
 
 const steps = [
   { label: "Welcome", icon: Sparkles },
@@ -129,6 +133,7 @@ export default function ApplyClient() {
 
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [videoStatus, setVideoStatus] = useState<VideoUploadStatus>("idle");
 
   function next() {
     if (!canAdvance(step, form)) {
@@ -146,6 +151,51 @@ export default function ApplyClient() {
 
   function update<K extends keyof ApplyFormData>(field: K, value: ApplyFormData[K]) {
     setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  async function uploadVideoInBackground(applicationId: string, file: File) {
+    setVideoStatus("uploading");
+    try {
+      const urlResult = await createVideoUploadUrl(
+        applicationId,
+        file.name,
+        file.size,
+        file.type
+      );
+      if ("error" in urlResult) {
+        setVideoStatus("failed");
+        toast.warning(urlResult.error);
+        return;
+      }
+
+      const supabase = createSupabaseClient();
+      const { error: uploadErr } = await supabase.storage
+        .from("application-videos")
+        .uploadToSignedUrl(urlResult.path, urlResult.token, file, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        console.error("[video upload]", uploadErr);
+        setVideoStatus("failed");
+        toast.warning("Your application is saved, but the video upload failed. Our team will follow up.");
+        return;
+      }
+
+      const linkResult = await linkApplicationVideo(applicationId, urlResult.path);
+      if ("error" in linkResult) {
+        setVideoStatus("failed");
+        toast.warning("Video uploaded but couldn't be linked. Our team will follow up.");
+        return;
+      }
+
+      setVideoStatus("done");
+    } catch (err) {
+      console.error("[video upload]", err);
+      setVideoStatus("failed");
+      toast.warning("Your application is saved, but the video upload failed. Our team will follow up.");
+    }
   }
 
   function handleSubmit() {
@@ -173,22 +223,15 @@ export default function ApplyClient() {
         return;
       }
 
-      // Upload video if present (non-blocking — application already saved)
-      if (form.videoFile) {
-        const videoFormData = new FormData();
-        videoFormData.append("video", form.videoFile);
-        const videoResult = await uploadApplicationVideo(
-          result.id,
-          videoFormData
-        );
-        if ("error" in videoResult) {
-          toast.warning("Application saved, but video upload failed. Our team will follow up.");
-        }
-      }
-
-      // Advance to confirmation step
+      // Advance to the confirmation step immediately — the row is saved.
+      // Video uploads directly to Supabase Storage in the background so the
+      // user isn't blocked on a 50MB upload round-tripping through our server.
       setDirection(1);
       setStep(steps.length - 1);
+
+      if (form.videoFile) {
+        void uploadVideoInBackground(result.id, form.videoFile);
+      }
     });
   }
 
@@ -240,7 +283,7 @@ export default function ApplyClient() {
               {step === 3 && <ContributionStep form={form} update={update} />}
               {step === 4 && <VideoStep form={form} update={update} />}
               {step === 5 && <ReviewStep form={form} />}
-              {step === 6 && <ConfirmStep />}
+              {step === 6 && <ConfirmStep videoStatus={videoStatus} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -581,10 +624,17 @@ function VideoStep({ form, update }: FormStepProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const mobile = /iPhone|iPad|iPod|Android/i.test(ua);
+    setIsMobile(mobile);
+  }, []);
 
   // Manage blob URL lifecycle to prevent memory leaks
   useEffect(() => {
@@ -813,6 +863,23 @@ function VideoStep({ form, update }: FormStepProps) {
                 )}
               </div>
             </div>
+          ) : isMobile ? (
+            <div className="p-4 flex items-center justify-center sm:p-8">
+              <Input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                id="video-upload"
+                onChange={handleFileUpload}
+              />
+              <Label
+                htmlFor="video-upload"
+                className="flex items-center justify-center w-full h-16 px-6 font-medium text-sm rounded-md border border-blue-800 bg-blue-950/50 cursor-pointer hover:bg-pink-500/20 hover:text-pink-400 hover:border-pink-500/50 transition-colors"
+              >
+                <Video className="mr-3 h-5 w-5" />
+                Record or Upload Video
+              </Label>
+            </div>
           ) : (
             <div className="p-4 flex flex-col md:flex-row items-center justify-center gap-4 hover:bg-blue-900/10 sm:p-8">
               <Button
@@ -903,7 +970,7 @@ function ReviewStep({ form }: { form: ApplyFormData }) {
   );
 }
 
-function ConfirmStep() {
+function ConfirmStep({ videoStatus }: { videoStatus: VideoUploadStatus }) {
   return (
     <div className="flex flex-col items-center text-center">
       <CheckCircle className="mb-4 h-16 w-16 text-pink-400" />
@@ -914,6 +981,23 @@ function ConfirmStep() {
         Thanks for applying. We&apos;ll review your application and get back
         to you within 2 weeks.
       </p>
+      {videoStatus === "uploading" && (
+        <p className="mt-6 flex items-center gap-2 text-sm text-sand-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Uploading your video… you can leave this page once it finishes.
+        </p>
+      )}
+      {videoStatus === "done" && (
+        <p className="mt-6 flex items-center gap-2 text-sm text-emerald-400">
+          <CheckCircle className="h-4 w-4" />
+          Video uploaded.
+        </p>
+      )}
+      {videoStatus === "failed" && (
+        <p className="mt-6 text-sm text-amber-400">
+          Video upload failed — our team will follow up to collect it.
+        </p>
+      )}
       <p className="mt-6 text-sm text-sand-500">
         Keep an eye on your email.
       </p>
