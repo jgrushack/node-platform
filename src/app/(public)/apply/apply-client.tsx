@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect, useTransition } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useTransition,
+  useCallback,
+} from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,15 +27,51 @@ import {
   Square,
   RotateCcw,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import {
-  submitApplication,
-  createVideoUploadUrl,
+  createDraftApplication,
+  finalizeApplication,
+  prepareVideoUpload,
   linkApplicationVideo,
 } from "@/lib/actions/applications";
-import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
-type VideoUploadStatus = "idle" | "uploading" | "done" | "failed";
+type VideoUploadStatus =
+  | "idle"
+  | "preparing"
+  | "uploading"
+  | "done"
+  | "failed";
+
+type VideoUploadState = {
+  status: VideoUploadStatus;
+  bytesUploaded: number;
+  bytesTotal: number;
+  bytesPerSecond: number;
+  error: string | null;
+};
+
+const INITIAL_UPLOAD_STATE: VideoUploadState = {
+  status: "idle",
+  bytesUploaded: 0,
+  bytesTotal: 0,
+  bytesPerSecond: 0,
+  error: null,
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.ceil(seconds % 60);
+  return s === 0 ? `${m}m` : `${m}m ${s}s`;
+}
 
 const steps = [
   { label: "Welcome", icon: Sparkles },
@@ -133,7 +175,198 @@ export default function ApplyClient() {
 
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [videoStatus, setVideoStatus] = useState<VideoUploadStatus>("idle");
+  const [applicationId, setApplicationId] = useState<string | null>(null);
+  const [uploadState, setUploadState] = useState<VideoUploadState>(
+    INITIAL_UPLOAD_STATE
+  );
+
+  // Holds the active tus Upload instance so we can abort / retry it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tusUploadRef = useRef<any>(null);
+  const uploadStartRef = useRef<number>(0);
+  const lastUploadedFileRef = useRef<File | null>(null);
+
+  function buildApplicationPayload() {
+    return {
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      phone: form.phone,
+      playaName: form.playaName,
+      yearsAttended: form.beenToBm
+        ? form.yearsAttended.slice().sort().join(", ")
+        : "Virgin Burner",
+      previousCamps: form.previousCamps,
+      favoritePrinciple: form.favoritePrinciple,
+      principleReason: form.principleReason,
+      skills: form.skills,
+      referredBy: form.referredBy,
+    };
+  }
+
+  const startVideoUpload = useCallback(
+    async (file: File, existingId: string | null) => {
+      setUploadState({
+        ...INITIAL_UPLOAD_STATE,
+        status: "preparing",
+        bytesTotal: file.size,
+      });
+
+      let id = existingId;
+      if (!id) {
+        const draft = await createDraftApplication(buildApplicationPayload());
+        if ("error" in draft) {
+          setUploadState((s) => ({
+            ...s,
+            status: "failed",
+            error: draft.error,
+          }));
+          return;
+        }
+        id = draft.id;
+        setApplicationId(id);
+      }
+
+      const prep = await prepareVideoUpload(
+        id,
+        file.name,
+        file.size,
+        file.type
+      );
+      if ("error" in prep) {
+        setUploadState((s) => ({
+          ...s,
+          status: "failed",
+          error: prep.error,
+        }));
+        return;
+      }
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !anonKey) {
+        setUploadState((s) => ({
+          ...s,
+          status: "failed",
+          error: "Upload is not configured. Please refresh and try again.",
+        }));
+        return;
+      }
+
+      const tus = await import("tus-js-client");
+      // Abort any prior upload for this mount
+      tusUploadRef.current?.abort?.();
+      uploadStartRef.current = Date.now();
+      const pathForLink = prep.path;
+      const idForLink = id;
+
+      const upload = new tus.Upload(file, {
+        endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+        retryDelays: [0, 1000, 3000, 5000, 10000, 20000, 30000],
+        headers: {
+          authorization: `Bearer ${anonKey}`,
+          "x-upsert": "true",
+        },
+        uploadDataDuringCreation: true,
+        removeFingerprintOnSuccess: true,
+        metadata: {
+          bucketName: "application-videos",
+          objectName: pathForLink,
+          contentType: file.type || "application/octet-stream",
+          cacheControl: "3600",
+        },
+        chunkSize: 6 * 1024 * 1024,
+        onProgress(bytesUploaded: number, bytesTotal: number) {
+          const elapsedSec = (Date.now() - uploadStartRef.current) / 1000;
+          const speed = elapsedSec > 0 ? bytesUploaded / elapsedSec : 0;
+          setUploadState({
+            status: "uploading",
+            bytesUploaded,
+            bytesTotal,
+            bytesPerSecond: speed,
+            error: null,
+          });
+        },
+        async onSuccess() {
+          const linkResult = await linkApplicationVideo(
+            idForLink,
+            pathForLink
+          );
+          if ("error" in linkResult) {
+            setUploadState((s) => ({
+              ...s,
+              status: "failed",
+              error: linkResult.error,
+            }));
+            return;
+          }
+          setUploadState((s) => ({
+            ...s,
+            status: "done",
+            bytesUploaded: s.bytesTotal,
+            bytesPerSecond: 0,
+            error: null,
+          }));
+        },
+        onError(err: Error) {
+          console.error("[tus]", err);
+          setUploadState((s) => ({
+            ...s,
+            status: "failed",
+            error: err.message || "Upload failed. Check your connection.",
+          }));
+        },
+      });
+
+      tusUploadRef.current = upload;
+      lastUploadedFileRef.current = file;
+
+      const previousUploads = await upload.findPreviousUploads();
+      if (previousUploads.length > 0) {
+        upload.resumeFromPreviousUpload(previousUploads[0]);
+      }
+      upload.start();
+    },
+    // `buildApplicationPayload` reads from `form`, but we only call this when
+    // the user picks/records a video (step 5), and the form fields through
+    // step 4 are already populated by then. Intentionally not in deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  function retryUpload() {
+    const file = form.videoFile ?? lastUploadedFileRef.current;
+    if (!file) return;
+    void startVideoUpload(file, applicationId);
+  }
+
+  // Kick off the upload as soon as a video is selected/recorded. The upload
+  // runs in the background while the user finishes the review step, so by
+  // the time they hit Submit the file is usually already in storage.
+  useEffect(() => {
+    if (!form.videoFile) return;
+    if (
+      uploadState.status === "uploading" ||
+      uploadState.status === "preparing"
+    ) {
+      return;
+    }
+    if (
+      uploadState.status === "done" &&
+      lastUploadedFileRef.current === form.videoFile
+    ) {
+      return;
+    }
+    void startVideoUpload(form.videoFile, applicationId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.videoFile]);
+
+  // Clean up any in-flight upload on unmount.
+  useEffect(() => {
+    return () => {
+      tusUploadRef.current?.abort?.();
+    };
+  }, []);
 
   function next() {
     if (!canAdvance(step, form)) {
@@ -153,85 +386,26 @@ export default function ApplyClient() {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  async function uploadVideoInBackground(applicationId: string, file: File) {
-    setVideoStatus("uploading");
-    try {
-      const urlResult = await createVideoUploadUrl(
-        applicationId,
-        file.name,
-        file.size,
-        file.type
-      );
-      if ("error" in urlResult) {
-        setVideoStatus("failed");
-        toast.warning(urlResult.error);
-        return;
-      }
-
-      const supabase = createSupabaseClient();
-      const { error: uploadErr } = await supabase.storage
-        .from("application-videos")
-        .uploadToSignedUrl(urlResult.path, urlResult.token, file, {
-          contentType: file.type,
-          upsert: true,
-        });
-
-      if (uploadErr) {
-        console.error("[video upload]", uploadErr);
-        setVideoStatus("failed");
-        toast.warning("Your application is saved, but the video upload failed. Our team will follow up.");
-        return;
-      }
-
-      const linkResult = await linkApplicationVideo(applicationId, urlResult.path);
-      if ("error" in linkResult) {
-        setVideoStatus("failed");
-        toast.warning("Video uploaded but couldn't be linked. Our team will follow up.");
-        return;
-      }
-
-      setVideoStatus("done");
-    } catch (err) {
-      console.error("[video upload]", err);
-      setVideoStatus("failed");
-      toast.warning("Your application is saved, but the video upload failed. Our team will follow up.");
-    }
-  }
-
   function handleSubmit() {
     setSubmitError(null);
+    if (uploadState.status !== "done" || !applicationId) {
+      setSubmitError(
+        "Please wait for your video to finish uploading before submitting."
+      );
+      return;
+    }
+    const idAtSubmit = applicationId;
     startTransition(async () => {
-      // Submit application data
-      const result = await submitApplication({
-        firstName: form.firstName,
-        lastName: form.lastName,
-        email: form.email,
-        phone: form.phone,
-        playaName: form.playaName,
-        yearsAttended: form.beenToBm
-          ? form.yearsAttended.slice().sort().join(", ")
-          : "Virgin Burner",
-        previousCamps: form.previousCamps,
-        favoritePrinciple: form.favoritePrinciple,
-        principleReason: form.principleReason,
-        skills: form.skills,
-        referredBy: form.referredBy,
-      });
-
+      const result = await finalizeApplication(
+        idAtSubmit,
+        buildApplicationPayload()
+      );
       if ("error" in result) {
         setSubmitError(result.error);
         return;
       }
-
-      // Advance to the confirmation step immediately — the row is saved.
-      // Video uploads directly to Supabase Storage in the background so the
-      // user isn't blocked on a 50MB upload round-tripping through our server.
       setDirection(1);
       setStep(steps.length - 1);
-
-      if (form.videoFile) {
-        void uploadVideoInBackground(result.id, form.videoFile);
-      }
     });
   }
 
@@ -281,9 +455,18 @@ export default function ApplyClient() {
               {step === 1 && <PersonalStep form={form} update={update} />}
               {step === 2 && <ExperienceStep form={form} update={update} />}
               {step === 3 && <ContributionStep form={form} update={update} />}
-              {step === 4 && <VideoStep form={form} update={update} />}
-              {step === 5 && <ReviewStep form={form} />}
-              {step === 6 && <ConfirmStep videoStatus={videoStatus} />}
+              {step === 4 && (
+                <VideoStep
+                  form={form}
+                  update={update}
+                  uploadState={uploadState}
+                  onRetry={retryUpload}
+                />
+              )}
+              {step === 5 && (
+                <ReviewStep form={form} uploadState={uploadState} />
+              )}
+              {step === 6 && <ConfirmStep />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -305,24 +488,52 @@ export default function ApplyClient() {
           >
             Back
           </Button>
-          {step < steps.length - 1 && (
-            <Button
-              onClick={step === steps.length - 2 ? handleSubmit : next}
-              disabled={isPending}
-              className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink justify-center"
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting…
-                </>
-              ) : step === steps.length - 2 ? (
-                "Submit"
-              ) : (
-                "Continue"
-              )}
-            </Button>
-          )}
+          {step < steps.length - 1 && (() => {
+            const isReviewStep = step === steps.length - 2;
+            const uploadInFlight =
+              uploadState.status === "preparing" ||
+              uploadState.status === "uploading";
+            const submitBlocked =
+              isReviewStep && uploadState.status !== "done";
+            const percent = uploadState.bytesTotal
+              ? Math.min(
+                  99,
+                  Math.floor(
+                    (uploadState.bytesUploaded / uploadState.bytesTotal) * 100
+                  )
+                )
+              : 0;
+
+            return (
+              <Button
+                onClick={isReviewStep ? handleSubmit : next}
+                disabled={isPending || submitBlocked}
+                className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink justify-center"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting…
+                  </>
+                ) : isReviewStep ? (
+                  uploadState.status === "done" ? (
+                    "Submit"
+                  ) : uploadInFlight ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Uploading video… {percent}%
+                    </>
+                  ) : uploadState.status === "failed" ? (
+                    "Retry upload to submit"
+                  ) : (
+                    "Submit"
+                  )
+                ) : (
+                  "Continue"
+                )}
+              </Button>
+            );
+          })()}
         </div>
       </div>
     </main>
@@ -620,7 +831,12 @@ function ContributionStep({ form, update }: FormStepProps) {
   );
 }
 
-function VideoStep({ form, update }: FormStepProps) {
+type VideoStepProps = FormStepProps & {
+  uploadState: VideoUploadState;
+  onRetry: () => void;
+};
+
+function VideoStep({ form, update, uploadState, onRetry }: VideoStepProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -766,8 +982,8 @@ function VideoStep({ form, update }: FormStepProps) {
       toast.error("Please upload an MP4, WebM, or MOV video file.");
       return;
     }
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error("Video must be under 50MB.");
+    if (file.size > 200 * 1024 * 1024) {
+      toast.error("Video must be under 200MB.");
       return;
     }
     update("videoFile", file);
@@ -806,17 +1022,22 @@ function VideoStep({ form, update }: FormStepProps) {
                   <span className="text-sm text-sand-200 truncate pr-4">
                     {form.videoFile.name}
                   </span>
-                  <span className="text-xs text-green-400 font-medium whitespace-nowrap">Ready</span>
+                  <UploadStatusBadge state={uploadState} />
                 </div>
                 <Button
                   variant="outline"
                   size="icon"
+                  disabled={
+                    uploadState.status === "preparing" ||
+                    uploadState.status === "uploading"
+                  }
                   className="shrink-0 border-blue-800 hover:bg-red-500/10 hover:text-red-400"
                   onClick={resetVideo}
                 >
                   <RotateCcw className="h-4 w-4" />
                 </Button>
               </div>
+              <UploadProgress state={uploadState} onRetry={onRetry} />
             </div>
           ) : showRecorder ? (
             <div className="p-4 flex flex-col items-center space-y-4 bg-blue-950/30">
@@ -922,7 +1143,134 @@ function VideoStep({ form, update }: FormStepProps) {
   );
 }
 
-function ReviewStep({ form }: { form: ApplyFormData }) {
+function UploadStatusBadge({ state }: { state: VideoUploadState }) {
+  if (state.status === "done") {
+    return (
+      <span className="text-xs text-emerald-400 font-medium whitespace-nowrap">
+        Uploaded
+      </span>
+    );
+  }
+  if (state.status === "uploading" || state.status === "preparing") {
+    const pct = state.bytesTotal
+      ? Math.min(
+          99,
+          Math.floor((state.bytesUploaded / state.bytesTotal) * 100)
+        )
+      : 0;
+    return (
+      <span className="text-xs text-sand-300 font-medium whitespace-nowrap">
+        {state.status === "preparing" ? "Preparing…" : `${pct}%`}
+      </span>
+    );
+  }
+  if (state.status === "failed") {
+    return (
+      <span className="text-xs text-amber-400 font-medium whitespace-nowrap">
+        Failed
+      </span>
+    );
+  }
+  return (
+    <span className="text-xs text-sand-400 font-medium whitespace-nowrap">
+      Selected
+    </span>
+  );
+}
+
+function UploadProgress({
+  state,
+  onRetry,
+}: {
+  state: VideoUploadState;
+  onRetry: () => void;
+}) {
+  if (state.status === "idle") return null;
+
+  if (state.status === "failed") {
+    return (
+      <div className="w-full max-w-sm rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-300">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium">Upload interrupted</p>
+            <p className="mt-1 text-xs text-amber-200/80">
+              {state.error ??
+                "We lost the connection. Tap retry — we'll pick up where it left off, no need to restart."}
+            </p>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          onClick={onRetry}
+          className="mt-3 w-full rounded-md bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 border border-amber-500/30"
+        >
+          Retry upload
+        </Button>
+      </div>
+    );
+  }
+
+  if (state.status === "done") {
+    return (
+      <p className="flex items-center gap-2 text-sm text-emerald-400">
+        <CheckCircle className="h-4 w-4" />
+        Video uploaded and saved.
+      </p>
+    );
+  }
+
+  const pct = state.bytesTotal
+    ? Math.min(99, (state.bytesUploaded / state.bytesTotal) * 100)
+    : 0;
+  const remaining = state.bytesTotal - state.bytesUploaded;
+  const eta =
+    state.bytesPerSecond > 0 ? remaining / state.bytesPerSecond : Infinity;
+  const speedText =
+    state.bytesPerSecond > 0
+      ? `${formatBytes(state.bytesPerSecond)}/s`
+      : null;
+
+  return (
+    <div className="w-full max-w-sm space-y-2">
+      <Progress value={pct} className="h-2 bg-blue-900/50" />
+      <div className="flex items-center justify-between text-xs text-sand-400">
+        <span>
+          {state.status === "preparing"
+            ? "Preparing upload…"
+            : `${formatBytes(state.bytesUploaded)} / ${formatBytes(
+                state.bytesTotal
+              )}`}
+        </span>
+        <span className="text-sand-500">
+          {state.status === "preparing"
+            ? ""
+            : [speedText, eta !== Infinity ? `~${formatDuration(eta)} left` : null]
+                .filter(Boolean)
+                .join(" · ")}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+type ReviewStepProps = {
+  form: ApplyFormData;
+  uploadState: VideoUploadState;
+};
+
+function ReviewStep({ form, uploadState }: ReviewStepProps) {
+  const videoLabel =
+    uploadState.status === "done"
+      ? "Uploaded"
+      : uploadState.status === "uploading" || uploadState.status === "preparing"
+      ? "Uploading…"
+      : uploadState.status === "failed"
+      ? "Upload failed — return to the video step to retry"
+      : form.videoFile
+      ? "Selected"
+      : "—";
+
   const fields = [
     { label: "Name", value: `${form.firstName} ${form.lastName}` },
     { label: "Email", value: form.email },
@@ -949,7 +1297,7 @@ function ReviewStep({ form }: { form: ApplyFormData }) {
       : [{ label: "Previous Camps", value: form.previousCamps || "—" }]),
     { label: "Skills", value: form.skills || "—" },
     { label: "Referred By", value: form.referredBy || "—" },
-    { label: "Video", value: form.videoFile ? "Uploaded" : "—" },
+    { label: "Video", value: videoLabel },
   ];
 
   return (
@@ -966,11 +1314,19 @@ function ReviewStep({ form }: { form: ApplyFormData }) {
           </div>
         ))}
       </div>
+      {(uploadState.status === "uploading" ||
+        uploadState.status === "preparing") && (
+        <p className="flex items-center gap-2 text-sm text-sand-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Your video is still uploading — submit becomes available as soon as
+          it finishes.
+        </p>
+      )}
     </div>
   );
 }
 
-function ConfirmStep({ videoStatus }: { videoStatus: VideoUploadStatus }) {
+function ConfirmStep() {
   return (
     <div className="flex flex-col items-center text-center">
       <CheckCircle className="mb-4 h-16 w-16 text-pink-400" />
@@ -981,23 +1337,6 @@ function ConfirmStep({ videoStatus }: { videoStatus: VideoUploadStatus }) {
         Thanks for applying. We&apos;ll review your application and get back
         to you within 2 weeks.
       </p>
-      {videoStatus === "uploading" && (
-        <p className="mt-6 flex items-center gap-2 text-sm text-sand-400">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Uploading your video… you can leave this page once it finishes.
-        </p>
-      )}
-      {videoStatus === "done" && (
-        <p className="mt-6 flex items-center gap-2 text-sm text-emerald-400">
-          <CheckCircle className="h-4 w-4" />
-          Video uploaded.
-        </p>
-      )}
-      {videoStatus === "failed" && (
-        <p className="mt-6 text-sm text-amber-400">
-          Video upload failed — our team will follow up to collect it.
-        </p>
-      )}
       <p className="mt-6 text-sm text-sand-500">
         Keep an eye on your email.
       </p>

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     submitApplication,
-    createVideoUploadUrl,
+    prepareVideoUpload,
     linkApplicationVideo,
 } from '../applications';
 import type { ApplicationFormData } from '@/lib/types/application';
@@ -151,11 +151,11 @@ describe('applications server actions', () => {
             } as unknown as ApplicationFormData;
 
             const res = await submitApplication(data);
-            expect(res).toEqual({ error: 'Failed to submit application. Please try again.' });
+            expect(res).toEqual({ error: 'Failed to save draft. Please try again.' });
         });
     });
 
-    describe('createVideoUploadUrl', () => {
+    describe('prepareVideoUpload', () => {
         beforeEach(() => {
             // Make the .from('applications').select().eq().maybeSingle() chain
             // return an existing app. We wire the admin mock to the appLookup
@@ -163,18 +163,18 @@ describe('applications server actions', () => {
             mockAdminSupabase.from = vi.fn().mockReturnValue(appLookup);
         });
 
-        it('rejects files over 50MB', async () => {
-            const res = await createVideoUploadUrl(
+        it('rejects files over 200MB', async () => {
+            const res = await prepareVideoUpload(
                 'app-id-123',
                 'big.mp4',
-                51 * 1024 * 1024,
+                201 * 1024 * 1024,
                 'video/mp4'
             );
-            expect(res).toEqual({ error: 'Video must be under 50MB.' });
+            expect(res).toEqual({ error: 'Video must be under 200MB.' });
         });
 
         it('rejects invalid mime types', async () => {
-            const res = await createVideoUploadUrl(
+            const res = await prepareVideoUpload(
                 'app-id-123',
                 'bad.txt',
                 100,
@@ -183,27 +183,19 @@ describe('applications server actions', () => {
             expect(res).toEqual({ error: 'Only MP4, WebM, MOV, and AVI video files are allowed.' });
         });
 
-        it('returns a signed upload URL for a valid file', async () => {
-            // storage.from().createSignedUploadUrl() needs to exist on adminClient
-            mockAdminSupabase.storage = {
-                from: vi.fn().mockReturnValue(storageBucket),
-            };
-            const res = await createVideoUploadUrl(
+        it('returns a storage path for a valid file', async () => {
+            const res = await prepareVideoUpload(
                 'app-id-123',
                 'my vid.mp4',
                 10 * 1024 * 1024,
                 'video/mp4'
             );
-            expect(res).toEqual({ path: 'app-id-123/my-vid.mp4', token: 'signed-token' });
-            expect(storageBucket.createSignedUploadUrl).toHaveBeenCalledWith(
-                'app-id-123/my_vid.mp4',
-                { upsert: true }
-            );
+            expect(res).toEqual({ path: 'app-id-123/my_vid.mp4' });
         });
 
         it('returns error when application does not exist', async () => {
             appLookup.maybeSingle.mockResolvedValueOnce({ data: null });
-            const res = await createVideoUploadUrl(
+            const res = await prepareVideoUpload(
                 'missing-id',
                 'my-vid.mp4',
                 100,

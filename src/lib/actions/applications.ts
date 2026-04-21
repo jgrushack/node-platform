@@ -24,9 +24,29 @@ const ALLOWED_VIDEO_TYPES = [
   "video/quicktime",
   "video/x-msvideo",
 ];
-const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200MB — bucket-enforced upper bound
 const AUTO_APPROVE_THRESHOLD = 4;
 const DUPLICATE_WINDOW_MS = 10 * 60 * 1000; // 10 min
+
+function applicationFields(data: ApplicationFormData) {
+  return {
+    first_name: data.firstName,
+    last_name: data.lastName,
+    email: data.email,
+    phone: data.phone || null,
+    playa_name: data.playaName || null,
+    years_attended: data.yearsAttended,
+    previous_camps: data.previousCamps || null,
+    favorite_principle: data.favoritePrinciple || null,
+    principle_reason: data.principleReason || null,
+    skills: data.skills || null,
+    referred_by: data.referredBy || null,
+  };
+}
+
+function sanitizeVideoFilename(fileName: string): string {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+}
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -110,7 +130,11 @@ async function requireAuth() {
   return { error: null, supabase, user };
 }
 
-export async function submitApplication(
+// Create a pending application row up front so the browser can start a
+// resumable video upload while the user is still filling out the form.
+// Validates with the full schema so the draft carries the same guarantees
+// as a finalized submission.
+export async function createDraftApplication(
   data: ApplicationFormData
 ): Promise<{ id: string } | { error: string }> {
   const parsed = applicationSchema.safeParse(data);
@@ -118,26 +142,11 @@ export async function submitApplication(
     return { error: parsed.error.issues[0].message };
   }
 
-  const fields = {
-    first_name: parsed.data.firstName,
-    last_name: parsed.data.lastName,
-    email: parsed.data.email,
-    phone: parsed.data.phone || null,
-    playa_name: parsed.data.playaName || null,
-    years_attended: parsed.data.yearsAttended,
-    previous_camps: parsed.data.previousCamps || null,
-    favorite_principle: parsed.data.favoritePrinciple || null,
-    principle_reason: parsed.data.principleReason || null,
-    skills: parsed.data.skills || null,
-    referred_by: parsed.data.referredBy || null,
-  };
-
-  const supabase = await createClient();
   const adminClient = createAdminClient();
 
-  // Reuse a pending application submitted in the last 10 min for the same
-  // email — guards against duplicates when a user retries after the previous
-  // attempt hung on video upload.
+  // Reuse any pending row already created for this email in the dedupe window
+  // — covers the "went back, edited email, came forward" case without leaving
+  // two half-finished rows behind.
   const cutoff = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
   const { data: existing } = await adminClient
     .from("applications")
@@ -149,32 +158,59 @@ export async function submitApplication(
     .limit(1)
     .maybeSingle();
 
-  let id: string;
+  const fields = applicationFields(parsed.data);
+
   if (existing?.id) {
-    id = existing.id;
     const { error: updateError } = await adminClient
       .from("applications")
       .update(fields)
-      .eq("id", id);
+      .eq("id", existing.id);
     if (updateError) {
-      console.error("[submitApplication] update", updateError);
-      return { error: "Failed to submit application. Please try again." };
+      console.error("[createDraftApplication] update", updateError);
+      return { error: "Failed to save draft. Please try again." };
     }
-  } else {
-    id = randomUUID();
-    const { error } = await supabase
-      .from("applications")
-      .insert({ id, ...fields });
-    if (error) {
-      console.error("[submitApplication]", error);
-      return { error: "Failed to submit application. Please try again." };
-    }
+    return { id: existing.id };
   }
 
-  // Non-blocking: sync to Google Sheet for redundancy. `after()` keeps the
-  // serverless invocation alive until the Sheets write finishes, after the
-  // response has already been sent to the client — so slow/failed Sheets
-  // calls never block or time out the submit.
+  // Use the anon client for the initial insert so existing RLS policies on
+  // `applications` remain load-bearing. The dedupe + update paths above go
+  // through adminClient because they need to see pending rows across users.
+  const supabase = await createClient();
+  const id = randomUUID();
+  const { error } = await supabase
+    .from("applications")
+    .insert({ id, ...fields });
+  if (error) {
+    console.error("[createDraftApplication] insert", error);
+    return { error: "Failed to save draft. Please try again." };
+  }
+  return { id };
+}
+
+// Stamp the final form values onto an existing draft and sync to Sheets.
+// Idempotent: safe to call multiple times (e.g. if the user clicks submit
+// twice or comes back after a retry).
+export async function finalizeApplication(
+  applicationId: string,
+  data: ApplicationFormData
+): Promise<{ id: string } | { error: string }> {
+  const parsed = applicationSchema.safeParse(data);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
+  const adminClient = createAdminClient();
+  const { error: updateError } = await adminClient
+    .from("applications")
+    .update(applicationFields(parsed.data))
+    .eq("id", applicationId);
+  if (updateError) {
+    console.error("[finalizeApplication]", updateError);
+    return { error: "Failed to submit application. Please try again." };
+  }
+
+  // Sheets sync runs after the response is flushed so slow/failing Sheets
+  // calls never delay or time out the submit.
   after(async () => {
     try {
       await appendApplicationToSheet(parsed.data);
@@ -183,17 +219,32 @@ export async function submitApplication(
     }
   });
 
-  return { id };
+  return { id: applicationId };
 }
 
-export async function createVideoUploadUrl(
+// Backwards-compatible single-shot submit. The new flow uses
+// createDraftApplication + finalizeApplication, but this stays so the
+// existing test suite and any other callers keep working.
+export async function submitApplication(
+  data: ApplicationFormData
+): Promise<{ id: string } | { error: string }> {
+  const draft = await createDraftApplication(data);
+  if ("error" in draft) return draft;
+  return finalizeApplication(draft.id, data);
+}
+
+// Returns the resumable upload path for a given application. The browser
+// uploads directly to Supabase Storage via the tus protocol — chunked,
+// retrying, and survivable across connection drops — so this action does
+// not handle any bytes itself.
+export async function prepareVideoUpload(
   applicationId: string,
   fileName: string,
   fileSize: number,
   fileType: string
-): Promise<{ path: string; token: string } | { error: string }> {
+): Promise<{ path: string } | { error: string }> {
   if (fileSize > MAX_VIDEO_SIZE) {
-    return { error: "Video must be under 50MB." };
+    return { error: "Video must be under 200MB." };
   }
   if (!ALLOWED_VIDEO_TYPES.includes(fileType)) {
     return { error: "Only MP4, WebM, MOV, and AVI video files are allowed." };
@@ -205,24 +256,11 @@ export async function createVideoUploadUrl(
     .select("id")
     .eq("id", applicationId)
     .maybeSingle();
-
   if (appError || !app) {
     return { error: "Application not found." };
   }
 
-  const safeFilename = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${applicationId}/${safeFilename}`;
-
-  const { data, error } = await adminClient.storage
-    .from("application-videos")
-    .createSignedUploadUrl(path, { upsert: true });
-
-  if (error || !data) {
-    console.error("[createVideoUploadUrl]", error);
-    return { error: "Failed to create upload URL." };
-  }
-
-  return { path: data.path, token: data.token };
+  return { path: `${applicationId}/${sanitizeVideoFilename(fileName)}` };
 }
 
 export async function linkApplicationVideo(
