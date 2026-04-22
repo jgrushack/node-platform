@@ -205,27 +205,12 @@ export default function ApplyClient() {
   }
 
   const startVideoUpload = useCallback(
-    async (file: File, existingId: string | null) => {
+    async (file: File, id: string) => {
       setUploadState({
         ...INITIAL_UPLOAD_STATE,
         status: "preparing",
         bytesTotal: file.size,
       });
-
-      let id = existingId;
-      if (!id) {
-        const draft = await createDraftApplication(buildApplicationPayload());
-        if ("error" in draft) {
-          setUploadState((s) => ({
-            ...s,
-            status: "failed",
-            error: draft.error,
-          }));
-          return;
-        }
-        id = draft.id;
-        setApplicationId(id);
-      }
 
       const prep = await prepareVideoUpload(
         id,
@@ -254,11 +239,9 @@ export default function ApplyClient() {
       }
 
       const tus = await import("tus-js-client");
-      // Abort any prior upload for this mount
       tusUploadRef.current?.abort?.();
       uploadStartRef.current = Date.now();
       const pathForLink = prep.path;
-      const idForLink = id;
 
       const upload = new tus.Upload(file, {
         endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
@@ -288,10 +271,7 @@ export default function ApplyClient() {
           });
         },
         async onSuccess() {
-          const linkResult = await linkApplicationVideo(
-            idForLink,
-            pathForLink
-          );
+          const linkResult = await linkApplicationVideo(id, pathForLink);
           if ("error" in linkResult) {
             setUploadState((s) => ({
               ...s,
@@ -327,39 +307,14 @@ export default function ApplyClient() {
       }
       upload.start();
     },
-    // `buildApplicationPayload` reads from `form`, but we only call this when
-    // the user picks/records a video (step 5), and the form fields through
-    // step 4 are already populated by then. Intentionally not in deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
   function retryUpload() {
     const file = form.videoFile ?? lastUploadedFileRef.current;
-    if (!file) return;
+    if (!file || !applicationId) return;
     void startVideoUpload(file, applicationId);
   }
-
-  // Kick off the upload as soon as a video is selected/recorded. The upload
-  // runs in the background while the user finishes the review step, so by
-  // the time they hit Submit the file is usually already in storage.
-  useEffect(() => {
-    if (!form.videoFile) return;
-    if (
-      uploadState.status === "uploading" ||
-      uploadState.status === "preparing"
-    ) {
-      return;
-    }
-    if (
-      uploadState.status === "done" &&
-      lastUploadedFileRef.current === form.videoFile
-    ) {
-      return;
-    }
-    void startVideoUpload(form.videoFile, applicationId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.videoFile]);
 
   // Clean up any in-flight upload on unmount.
   useEffect(() => {
@@ -388,24 +343,39 @@ export default function ApplyClient() {
 
   function handleSubmit() {
     setSubmitError(null);
-    if (uploadState.status !== "done" || !applicationId) {
-      setSubmitError(
-        "Please wait for your video to finish uploading before submitting."
-      );
-      return;
-    }
-    const idAtSubmit = applicationId;
     startTransition(async () => {
-      const result = await finalizeApplication(
-        idAtSubmit,
-        buildApplicationPayload()
-      );
-      if ("error" in result) {
-        setSubmitError(result.error);
+      const payload = buildApplicationPayload();
+
+      // Save the application first — this is the critical path. If anything
+      // after this point fails (video upload, network, browser close), the
+      // committee still has the application and can reach out.
+      let id = applicationId;
+      if (!id) {
+        const draft = await createDraftApplication(payload);
+        if ("error" in draft) {
+          setSubmitError(draft.error);
+          return;
+        }
+        id = draft.id;
+        setApplicationId(id);
+      }
+
+      const finalized = await finalizeApplication(id, payload);
+      if ("error" in finalized) {
+        setSubmitError(finalized.error);
         return;
       }
+
+      // Advance to confirmation immediately — the row is saved.
       setDirection(1);
       setStep(steps.length - 1);
+
+      // Kick off the chunked, resumable video upload from the confirmation
+      // screen. Progress + retry surface there; the user can try again
+      // without losing their application if the upload fails.
+      if (form.videoFile) {
+        void startVideoUpload(form.videoFile, id);
+      }
     });
   }
 
@@ -455,18 +425,15 @@ export default function ApplyClient() {
               {step === 1 && <PersonalStep form={form} update={update} />}
               {step === 2 && <ExperienceStep form={form} update={update} />}
               {step === 3 && <ContributionStep form={form} update={update} />}
-              {step === 4 && (
-                <VideoStep
-                  form={form}
-                  update={update}
+              {step === 4 && <VideoStep form={form} update={update} />}
+              {step === 5 && <ReviewStep form={form} />}
+              {step === 6 && (
+                <ConfirmStep
                   uploadState={uploadState}
+                  hasVideo={!!form.videoFile}
                   onRetry={retryUpload}
                 />
               )}
-              {step === 5 && (
-                <ReviewStep form={form} uploadState={uploadState} />
-              )}
-              {step === 6 && <ConfirmStep />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -488,52 +455,24 @@ export default function ApplyClient() {
           >
             Back
           </Button>
-          {step < steps.length - 1 && (() => {
-            const isReviewStep = step === steps.length - 2;
-            const uploadInFlight =
-              uploadState.status === "preparing" ||
-              uploadState.status === "uploading";
-            const submitBlocked =
-              isReviewStep && uploadState.status !== "done";
-            const percent = uploadState.bytesTotal
-              ? Math.min(
-                  99,
-                  Math.floor(
-                    (uploadState.bytesUploaded / uploadState.bytesTotal) * 100
-                  )
-                )
-              : 0;
-
-            return (
-              <Button
-                onClick={isReviewStep ? handleSubmit : next}
-                disabled={isPending || submitBlocked}
-                className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink justify-center"
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting…
-                  </>
-                ) : isReviewStep ? (
-                  uploadState.status === "done" ? (
-                    "Submit"
-                  ) : uploadInFlight ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading video… {percent}%
-                    </>
-                  ) : uploadState.status === "failed" ? (
-                    "Retry upload to submit"
-                  ) : (
-                    "Submit"
-                  )
-                ) : (
-                  "Continue"
-                )}
-              </Button>
-            );
-          })()}
+          {step < steps.length - 1 && (
+            <Button
+              onClick={step === steps.length - 2 ? handleSubmit : next}
+              disabled={isPending}
+              className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink justify-center"
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting…
+                </>
+              ) : step === steps.length - 2 ? (
+                "Submit"
+              ) : (
+                "Continue"
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </main>
@@ -831,12 +770,7 @@ function ContributionStep({ form, update }: FormStepProps) {
   );
 }
 
-type VideoStepProps = FormStepProps & {
-  uploadState: VideoUploadState;
-  onRetry: () => void;
-};
-
-function VideoStep({ form, update, uploadState, onRetry }: VideoStepProps) {
+function VideoStep({ form, update }: FormStepProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -1022,22 +956,19 @@ function VideoStep({ form, update, uploadState, onRetry }: VideoStepProps) {
                   <span className="text-sm text-sand-200 truncate pr-4">
                     {form.videoFile.name}
                   </span>
-                  <UploadStatusBadge state={uploadState} />
+                  <span className="text-xs text-emerald-400 font-medium whitespace-nowrap">
+                    Ready
+                  </span>
                 </div>
                 <Button
                   variant="outline"
                   size="icon"
-                  disabled={
-                    uploadState.status === "preparing" ||
-                    uploadState.status === "uploading"
-                  }
                   className="shrink-0 border-blue-800 hover:bg-red-500/10 hover:text-red-400"
                   onClick={resetVideo}
                 >
                   <RotateCcw className="h-4 w-4" />
                 </Button>
               </div>
-              <UploadProgress state={uploadState} onRetry={onRetry} />
             </div>
           ) : showRecorder ? (
             <div className="p-4 flex flex-col items-center space-y-4 bg-blue-950/30">
@@ -1143,41 +1074,6 @@ function VideoStep({ form, update, uploadState, onRetry }: VideoStepProps) {
   );
 }
 
-function UploadStatusBadge({ state }: { state: VideoUploadState }) {
-  if (state.status === "done") {
-    return (
-      <span className="text-xs text-emerald-400 font-medium whitespace-nowrap">
-        Uploaded
-      </span>
-    );
-  }
-  if (state.status === "uploading" || state.status === "preparing") {
-    const pct = state.bytesTotal
-      ? Math.min(
-          99,
-          Math.floor((state.bytesUploaded / state.bytesTotal) * 100)
-        )
-      : 0;
-    return (
-      <span className="text-xs text-sand-300 font-medium whitespace-nowrap">
-        {state.status === "preparing" ? "Preparing…" : `${pct}%`}
-      </span>
-    );
-  }
-  if (state.status === "failed") {
-    return (
-      <span className="text-xs text-amber-400 font-medium whitespace-nowrap">
-        Failed
-      </span>
-    );
-  }
-  return (
-    <span className="text-xs text-sand-400 font-medium whitespace-nowrap">
-      Selected
-    </span>
-  );
-}
-
 function UploadProgress({
   state,
   onRetry,
@@ -1185,7 +1081,14 @@ function UploadProgress({
   state: VideoUploadState;
   onRetry: () => void;
 }) {
-  if (state.status === "idle") return null;
+  if (state.status === "idle") {
+    return (
+      <p className="flex items-center justify-center gap-2 text-sm text-sand-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Starting video upload…
+      </p>
+    );
+  }
 
   if (state.status === "failed") {
     return (
@@ -1254,23 +1157,7 @@ function UploadProgress({
   );
 }
 
-type ReviewStepProps = {
-  form: ApplyFormData;
-  uploadState: VideoUploadState;
-};
-
-function ReviewStep({ form, uploadState }: ReviewStepProps) {
-  const videoLabel =
-    uploadState.status === "done"
-      ? "Uploaded"
-      : uploadState.status === "uploading" || uploadState.status === "preparing"
-      ? "Uploading…"
-      : uploadState.status === "failed"
-      ? "Upload failed — return to the video step to retry"
-      : form.videoFile
-      ? "Selected"
-      : "—";
-
+function ReviewStep({ form }: { form: ApplyFormData }) {
   const fields = [
     { label: "Name", value: `${form.firstName} ${form.lastName}` },
     { label: "Email", value: form.email },
@@ -1297,14 +1184,15 @@ function ReviewStep({ form, uploadState }: ReviewStepProps) {
       : [{ label: "Previous Camps", value: form.previousCamps || "—" }]),
     { label: "Skills", value: form.skills || "—" },
     { label: "Referred By", value: form.referredBy || "—" },
-    { label: "Video", value: videoLabel },
+    { label: "Video", value: form.videoFile ? "Ready to upload" : "—" },
   ];
 
   return (
     <div className="space-y-5">
       <h2 className="text-2xl font-bold text-sand-100">Review</h2>
       <p className="text-sm text-sand-400">
-        Look everything over before you submit.
+        Look everything over before you submit. Your video will finish
+        uploading on the next screen.
       </p>
       <div className="space-y-3">
         {fields.map((f) => (
@@ -1314,19 +1202,17 @@ function ReviewStep({ form, uploadState }: ReviewStepProps) {
           </div>
         ))}
       </div>
-      {(uploadState.status === "uploading" ||
-        uploadState.status === "preparing") && (
-        <p className="flex items-center gap-2 text-sm text-sand-400">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Your video is still uploading — submit becomes available as soon as
-          it finishes.
-        </p>
-      )}
     </div>
   );
 }
 
-function ConfirmStep() {
+type ConfirmStepProps = {
+  uploadState: VideoUploadState;
+  hasVideo: boolean;
+  onRetry: () => void;
+};
+
+function ConfirmStep({ uploadState, hasVideo, onRetry }: ConfirmStepProps) {
   return (
     <div className="flex flex-col items-center text-center">
       <CheckCircle className="mb-4 h-16 w-16 text-pink-400" />
@@ -1337,6 +1223,13 @@ function ConfirmStep() {
         Thanks for applying. We&apos;ll review your application and get back
         to you within 2 weeks.
       </p>
+
+      {hasVideo && (
+        <div className="mt-8 w-full max-w-sm">
+          <UploadProgress state={uploadState} onRetry={onRetry} />
+        </div>
+      )}
+
       <p className="mt-6 text-sm text-sand-500">
         Keep an eye on your email.
       </p>
