@@ -219,10 +219,11 @@ export default function ApplyClient() {
         file.type
       );
       if ("error" in prep) {
+        console.error("[tus prep]", prep.error);
         setUploadState((s) => ({
           ...s,
           status: "failed",
-          error: prep.error,
+          error: null,
         }));
         return;
       }
@@ -230,10 +231,11 @@ export default function ApplyClient() {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       if (!supabaseUrl || !anonKey) {
+        console.error("[tus] missing supabase env");
         setUploadState((s) => ({
           ...s,
           status: "failed",
-          error: "Upload is not configured. Please refresh and try again.",
+          error: null,
         }));
         return;
       }
@@ -248,6 +250,7 @@ export default function ApplyClient() {
         retryDelays: [0, 1000, 3000, 5000, 10000, 20000, 30000],
         headers: {
           authorization: `Bearer ${anonKey}`,
+          apikey: anonKey,
           "x-upsert": "true",
         },
         uploadDataDuringCreation: true,
@@ -273,10 +276,11 @@ export default function ApplyClient() {
         async onSuccess() {
           const linkResult = await linkApplicationVideo(id, pathForLink);
           if ("error" in linkResult) {
+            console.error("[tus link]", linkResult.error);
             setUploadState((s) => ({
               ...s,
               status: "failed",
-              error: linkResult.error,
+              error: null,
             }));
             return;
           }
@@ -290,10 +294,11 @@ export default function ApplyClient() {
         },
         onError(err: Error) {
           console.error("[tus]", err);
+          upload.abort(true).catch(() => {});
           setUploadState((s) => ({
             ...s,
             status: "failed",
-            error: err.message || "Upload failed. Check your connection.",
+            error: null,
           }));
         },
       });
@@ -1096,10 +1101,10 @@ function UploadProgress({
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="font-medium">Upload interrupted</p>
+            <p className="font-medium">Video didn&apos;t upload</p>
             <p className="mt-1 text-xs text-amber-200/80">
-              {state.error ??
-                "We lost the connection. Tap retry — we'll pick up where it left off, no need to restart."}
+              Your application is safe — it&apos;s already submitted. Tap
+              retry to send your video.
             </p>
           </div>
         </div>
