@@ -82,6 +82,7 @@ interface StorageQuantities {
 export function PaymentsClient() {
   const [view, setView] = useState<View>("dashboard");
   const [balance, setBalance] = useState<number | null>(null);
+  const [hasTicketInvoice, setHasTicketInvoice] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export function PaymentsClient() {
 
       const { data: invoices } = await supabase
         .from("invoices")
-        .select("amount_cents, amount_paid_cents, status")
+        .select("amount_cents, amount_paid_cents, status, description")
         .eq("profile_id", user.id)
         .not("status", "in", '("cancelled","refunded")');
 
@@ -102,6 +103,11 @@ export function PaymentsClient() {
           0
         );
         setBalance(total / 100);
+        setHasTicketInvoice(
+          invoices.some((inv) =>
+            (inv.description ?? "").toLowerCase().includes("main sale ticket")
+          )
+        );
       } else {
         setBalance(0);
       }
@@ -117,6 +123,7 @@ export function PaymentsClient() {
           <DashboardView
             key="dashboard"
             balance={balance}
+            hasTicketInvoice={hasTicketInvoice}
             loading={loading}
             onNavigate={setView}
           />
@@ -139,13 +146,24 @@ export function PaymentsClient() {
 
 function DashboardView({
   balance,
+  hasTicketInvoice,
   loading,
   onNavigate,
 }: {
   balance: number | null;
+  hasTicketInvoice: boolean;
   loading: boolean;
   onNavigate: (view: View) => void;
 }) {
+  const formattedBalance =
+    balance !== null
+      ? balance.toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2,
+        })
+      : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -160,16 +178,23 @@ function DashboardView({
 
       {/* Balance Summary */}
       <Card className="glass-card border-0">
-        <CardContent className="flex items-center justify-between py-6">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-sand-400">
-              Total Balance
-            </p>
-            <p className="mt-1 text-lg font-bold text-sand-400">
-              Coming Soon
-            </p>
+        <CardContent className="py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-sand-400">
+                Total Balance
+              </p>
+              <p className="mt-1 text-2xl font-bold text-sand-100">
+                {loading ? "…" : formattedBalance ?? "$0.00"}
+              </p>
+            </div>
+            <DollarSign className="h-8 w-8 text-sand-600" />
           </div>
-          <DollarSign className="h-8 w-8 text-sand-600" />
+          {hasTicketInvoice && (
+            <p className="mt-4 text-xs text-sand-400 border-t border-blue-900/30 pt-3">
+              Includes 1 main sale ticket at $675 + taxes &amp; fees.
+            </p>
+          )}
         </CardContent>
       </Card>
 

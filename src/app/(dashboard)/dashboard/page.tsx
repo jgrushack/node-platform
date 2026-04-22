@@ -141,6 +141,7 @@ export default function DashboardPage() {
   const [hasTicket, setHasTicket] = useState<boolean | null>(null);
   const [carPassStatus, setCarPassStatus] = useState<CarPassStatus | null>(null);
   const [editingTicketStatus, setEditingTicketStatus] = useState(false);
+  const [showTicketSaleModal, setShowTicketSaleModal] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [nextEvent, setNextEvent] = useState<{
     id: string;
@@ -230,6 +231,12 @@ export default function DashboardPage() {
                   if (reg && reg.status === "confirmed") {
                     setHasTicket(!!reg.has_ticket);
                     setCarPassStatus((reg.has_car_pass as CarPassStatus) || "no");
+                    if (!reg.has_ticket && typeof window !== "undefined") {
+                      const dismissed = window.localStorage.getItem(
+                        "node:ticketSaleModalDismissed"
+                      );
+                      if (!dismissed) setShowTicketSaleModal(true);
+                    }
                     // Registration confirmed — check invoices for payment state
                     supabase
                       .from("invoices")
@@ -493,6 +500,86 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Ticket sale reminder — shown once for members without a ticket */}
+      <Dialog
+        open={showTicketSaleModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowTicketSaleModal(false);
+            if (typeof window !== "undefined") {
+              window.localStorage.setItem(
+                "node:ticketSaleModalDismissed",
+                "1"
+              );
+            }
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <Ticket className="h-5 w-5 text-pink-400" />
+              Ticket registration is open
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-sand-300">
+            <p>
+              The <strong className="text-sand-100">Main Sale</strong> is{" "}
+              <strong className="text-sand-100">
+                April 29, 2026 at 12:00 PM (noon) PDT
+              </strong>
+              .
+            </p>
+            <p>
+              Head to{" "}
+              <a
+                href="https://tickets.burningman.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-pink-400 hover:text-pink-300 underline"
+              >
+                tickets.burningman.org
+              </a>{" "}
+              to register for the sale.
+            </p>
+            <p className="text-amber-300 text-xs">
+              You must register in order to be eligible to purchase.
+            </p>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowTicketSaleModal(false);
+                if (typeof window !== "undefined") {
+                  window.localStorage.setItem(
+                    "node:ticketSaleModalDismissed",
+                    "1"
+                  );
+                }
+              }}
+              className="text-sand-400 hover:text-sand-200"
+            >
+              Got it
+            </Button>
+            <Button
+              size="sm"
+              asChild
+              className="bg-pink-500 text-white hover:bg-pink-600"
+            >
+              <a
+                href="https://tickets.burningman.org"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Register now
+              </a>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Greeting */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -802,7 +889,7 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-2 text-sm">
                             <span className="text-sand-400">Driving:</span>
                             <span className="text-sand-200 font-medium">
-                              {carPassStatus === "yes" && "Car Pass"}
+                              {carPassStatus === "yes" && "Car / Car Pass"}
                               {carPassStatus === "no" && "TBD"}
                               {carPassStatus === "need_ride" && "Need a ride"}
                               {carPassStatus === "burner_express" && "Burner Express"}
@@ -1135,7 +1222,7 @@ function TicketStatusForm({
           </div>
           <p className="text-sm text-sand-300">How are you getting to the playa?</p>
           <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => selectCarPass("yes")} disabled={saving} className={carPass === "yes" ? btnActiveClass : btnClass}>Car Pass</button>
+            <button onClick={() => selectCarPass("yes")} disabled={saving} className={carPass === "yes" ? btnActiveClass : btnClass}>Car / Car Pass</button>
             <button onClick={() => selectCarPass("no")} disabled={saving} className={carPass === "no" ? btnActiveClass : btnClass}>TBD</button>
             <button onClick={() => selectCarPass("need_ride")} disabled={saving} className={carPass === "need_ride" ? btnActiveClass : btnClass}>Need a Ride</button>
             <button onClick={() => selectCarPass("burner_express")} disabled={saving} className={carPass === "burner_express" ? btnActiveClass : btnClass}>Burner Express</button>
