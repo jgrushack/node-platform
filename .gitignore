@@ -24,6 +24,29 @@
 .DS_Store
 *.pem
 
+# editor / AI assistant local state
+.claude/
+.cursor/
+.windsurf/
+.aider*
+
+# supabase CLI cache (project ref, version pins)
+supabase/.temp/
+
+# local-only ops scripts (may contain member emails / one-off targets)
+scripts/check-auth.ts
+scripts/send-cody-invite.ts
+scripts/test-gotrue.ts
+scripts/.invitees.local.json
+
+# raw asset dumps (curate before adding to public/)
+Node.Family Website Photos/
+camp photos/
+
+# planning docs (local notes — not for public repo)
+optimization-plan.md
+WEBSITE_FEEDBACK.md
+
 # debug
 npm-debug.log*
 yarn-debug.log*

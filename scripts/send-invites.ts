@@ -18,17 +18,22 @@ const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "NODE <noreply@node.family>";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
 
-// Members to invite — remaining from rate-limited batch
-const SEARCH_NAMES = [
-  { first: "REDACTED", last: "REDACTED" },
-  { first: "REDACTED", last: "REDACTED" },
-  { first: "REDACTED", last: "REDACTED" },
-  { first: "REDACTED", last: "REDACTED" },
-  { first: "REDACTED", last: "REDACTED" },
-  { first: "REDACTED", last: "REDACTED" },
-  { first: "REDACTED", last: "REDACTED" },
-  { first: "REDACTED", last: "REDACTED" },
-];
+// Members to invite — load from a gitignored file to keep names out of the public repo.
+// Create scripts/.invitees.local.json with shape: [{ "first": "first-name-lowercase", "last": "last-name-lowercase" }]
+import { readFileSync } from "fs";
+import { resolve } from "path";
+
+type Invitee = { first: string; last?: string; lastInitial?: string };
+
+const SEARCH_NAMES: Invitee[] = (() => {
+  try {
+    const raw = readFileSync(resolve(process.cwd(), "scripts/.invitees.local.json"), "utf8");
+    return JSON.parse(raw) as Invitee[];
+  } catch {
+    console.error("Missing scripts/.invitees.local.json — see comment above for the expected shape.");
+    process.exit(1);
+  }
+})();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
