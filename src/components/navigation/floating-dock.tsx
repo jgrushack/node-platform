@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   User,
   LogOut,
+  Home,
 } from "lucide-react";
 
 function NodeLogo({ className }: { className?: string }) {
@@ -42,14 +43,42 @@ const publicNavItems = [
 ];
 
 const memberNavItems = [
-  { href: "/", label: "Home", icon: NodeIcon },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/profile", label: "Profile", icon: User },
 ];
 
+const memberExpandedNavItems = [
+  { href: "/", label: "Home", icon: Home },
+  { href: "/about", label: "About", icon: Users },
+  { href: "/vibes", label: "Vibes", icon: Sparkles },
+  { href: "/pics", label: "Gallery", icon: ImageIcon },
+  { href: "/apply", label: "Apply", icon: FileText },
+];
+
+const DOCK_EXPANDED_KEY = "node:dock-expanded";
+
 export function FloatingDock() {
   const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpandedState] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(DOCK_EXPANDED_KEY) === "1") {
+        setExpandedState(true);
+      }
+    } catch {}
+  }, []);
+
+  const setExpanded = (next: boolean | ((prev: boolean) => boolean)) => {
+    setExpandedState((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      try {
+        window.localStorage.setItem(DOCK_EXPANDED_KEY, value ? "1" : "0");
+      } catch {}
+      return value;
+    });
+  };
 
   useEffect(() => {
     const supabase = createClient();
@@ -73,20 +102,41 @@ export function FloatingDock() {
 
   return (
     <>
-      <DesktopDock user={user} loading={loading} />
-      <MobileDock user={user} loading={loading} />
+      <DesktopDock
+        user={user}
+        loading={loading}
+        expanded={expanded}
+        setExpanded={setExpanded}
+      />
+      <MobileDock
+        user={user}
+        loading={loading}
+        expanded={expanded}
+        setExpanded={setExpanded}
+      />
     </>
   );
 }
 
 type DockUser = { id: string; email?: string } | null;
 
-function DesktopDock({ user, loading }: { user: DockUser; loading: boolean }) {
+type DockProps = {
+  user: DockUser;
+  loading: boolean;
+  expanded: boolean;
+  setExpanded: (next: boolean | ((prev: boolean) => boolean)) => void;
+};
+
+function DesktopDock({ user, loading, expanded, setExpanded }: DockProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const navItems = user ? memberNavItems : publicNavItems;
+  const navItems = user
+    ? expanded
+      ? memberExpandedNavItems
+      : memberNavItems
+    : publicNavItems;
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -111,6 +161,25 @@ function DesktopDock({ user, loading }: { user: DockUser; loading: boolean }) {
           exit={{ y: -20, opacity: 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.1 }}
         >
+          {/* NODE logo toggle (members only) */}
+          {user && (
+            <motion.button
+              onClick={() => setExpanded((e) => !e)}
+              aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
+              aria-pressed={expanded}
+              className={`flex items-center justify-center rounded-full p-2 transition-colors ${
+                expanded
+                  ? "bg-amber/20 text-amber"
+                  : "text-sand-200 hover:text-amber"
+              }`}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.94 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            >
+              <NodeLogo className="h-5 w-5" />
+            </motion.button>
+          )}
+
           {navItems.map((item) => {
             const isActive =
               item.href === "/"
@@ -181,13 +250,17 @@ function DesktopDock({ user, loading }: { user: DockUser; loading: boolean }) {
   );
 }
 
-function MobileDock({ user, loading }: { user: DockUser; loading: boolean }) {
+function MobileDock({ user, loading, expanded, setExpanded }: DockProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [visible, setVisible] = useState(true);
 
-  const navItems = user ? memberNavItems : publicNavItems;
+  const navItems = user
+    ? expanded
+      ? memberExpandedNavItems
+      : memberNavItems
+    : publicNavItems;
 
   useEffect(() => {
     let lastY = window.scrollY;
@@ -220,6 +293,21 @@ function MobileDock({ user, loading }: { user: DockUser; loading: boolean }) {
             user ? "glass-dock-member" : "glass-dock-nav"
           }`}
         >
+          {user && (
+            <button
+              onClick={() => setExpanded((e) => !e)}
+              aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
+              aria-pressed={expanded}
+              className={`flex items-center justify-center rounded-full p-3 transition-colors ${
+                expanded
+                  ? "bg-amber/20 text-amber"
+                  : "text-sand-200 active:text-amber"
+              }`}
+            >
+              <NodeLogo className="h-5 w-5" />
+            </button>
+          )}
+
           {navItems.map((item) => {
             const isActive =
               item.href === "/"
