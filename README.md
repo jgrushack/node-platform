@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NODE
 
-## Getting Started
+The web home of [NODE](https://node.family) — a Burning Man camp.
 
-First, run the development server:
+This is the platform behind `node.family`: applications, member registration,
+volunteer jobs/shifts, photo galleries, and the admin tools that keep us
+organized between burns. Currently focused on **NODE 2026**.
+
+## Stack
+
+- **Next.js 16** (App Router) · **React 19** · **TypeScript**
+- **Supabase** — Postgres + Auth (magic-link / OTP)
+- **Tailwind CSS 4** + **shadcn/ui** + **Framer Motion**
+- **Resend** for transactional email
+- Deployed on **Vercel** → `node.family`
+
+## Run it locally
 
 ```bash
+git clone https://github.com/jgrushack/node-platform.git
+cd node-platform
+npm install
+cp .env.local.example .env.local   # then fill in Supabase + Resend keys
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev      # next dev
+npm run build    # next build (strict TS — run before pushing big changes)
+npm run lint     # eslint
+npm run test     # vitest
+```
 
-## Learn More
+## Repo layout
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+  app/
+    (public)/     # marketing: /, /about, /vibes, /pics, /apply
+    (auth)/       # /login, /signup, /verify, /auth/callback
+    (dashboard)/  # member-only: /dashboard, /dashboard/jobs, /dashboard/profile
+    (admin)/      # admin-only: /admin, /admin/jobs, /admin/applications, /admin/users
+    api/          # route handlers
+  components/
+    ui/           # shadcn primitives — don't edit directly, override via className
+  lib/
+    actions/      # server actions (forms, mutations)
+    supabase/     # client.ts (browser) · server.ts (RSC/actions) · admin.ts (service role)
+    email/        # Resend templates + send helpers
+supabase/
+  migrations/     # numbered SQL migrations — run via Supabase MCP or CLI
+public/           # static assets, fonts, gallery images
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Pages follow a `page.tsx` (server) → `*-client.tsx` (client) split.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Contributing
 
-## Deploy on Vercel
+NODE campers — yes, this means you. PRs welcome.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- New to the codebase? Read [`CLAUDE.md`](./CLAUDE.md). It's the orientation
+  doc for both humans and AI assistants (Claude Code, Cursor, etc.) and
+  covers conventions, the auth flow, and gotchas. [`AGENTS.md`](./AGENTS.md)
+  points there too for non-Claude tools.
+- Run `npm run build` and `npm run test` before opening a PR.
+- Keep server actions in `src/lib/actions/`. Don't put client logic in
+  `page.tsx` — use the `*-client.tsx` pattern.
+- Don't commit `.env.local` or service-role keys.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+[AGPL-3.0](./LICENSE) · © The Node Foundation
+
+This is a network-copyleft license: if you fork this and run a modified
+version as a public service, you must publish your source. See AGPL §13.
