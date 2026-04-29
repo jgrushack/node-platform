@@ -65,7 +65,7 @@ describe('applications server actions', () => {
         };
         storageBucket = {
             createSignedUploadUrl: vi.fn().mockResolvedValue({
-                data: { path: 'app-id-123/my-vid.mp4', token: 'signed-token' },
+                data: { signedUrl: 'https://mock.com/upload?token=signed-token', token: 'signed-token', path: 'app-id-123/my_vid.mp4' },
                 error: null,
             }),
         };
@@ -190,7 +190,11 @@ describe('applications server actions', () => {
                 10 * 1024 * 1024,
                 'video/mp4'
             );
-            expect(res).toEqual({ path: 'app-id-123/my_vid.mp4' });
+            expect(res).toEqual({
+                path: 'app-id-123/my_vid.mp4',
+                signedUploadUrl: 'https://mock.com/upload?token=signed-token',
+                token: 'signed-token',
+            });
         });
 
         it('returns error when application does not exist', async () => {
@@ -206,13 +210,58 @@ describe('applications server actions', () => {
     });
 
     describe('linkApplicationVideo', () => {
+        function mockStorageList(
+            objects: Array<{ name: string; metadata?: { size?: number; mimetype?: string } }>,
+            error: { message: string } | null = null
+        ) {
+            const list = vi.fn().mockResolvedValue({ data: objects, error });
+            mockAdminSupabase.storage = {
+                from: vi.fn().mockReturnValue({ list }),
+            };
+            return list;
+        }
+
         it('rejects paths outside the application folder', async () => {
             const res = await linkApplicationVideo('app-id-123', 'other-id/foo.mp4');
             expect(res).toEqual({ error: 'Invalid video path.' });
         });
 
-        it('updates video_url via the admin client', async () => {
-            // terminal .eq should resolve after .update()
+        it('rejects traversal in the path tail', async () => {
+            const res = await linkApplicationVideo('app-id-123', 'app-id-123/../other/foo.mp4');
+            expect(res).toEqual({ error: 'Invalid video path.' });
+        });
+
+        it('rejects empty filename', async () => {
+            const res = await linkApplicationVideo('app-id-123', 'app-id-123/');
+            expect(res).toEqual({ error: 'Invalid video path.' });
+        });
+
+        it('rejects when the object is not in storage', async () => {
+            mockStorageList([]);
+            const res = await linkApplicationVideo('app-id-123', 'app-id-123/my-vid.mp4');
+            expect(res).toEqual({ error: 'Video upload not found in storage.' });
+        });
+
+        it('rejects empty uploads', async () => {
+            mockStorageList([
+                { name: 'my-vid.mp4', metadata: { size: 0, mimetype: 'video/mp4' } },
+            ]);
+            const res = await linkApplicationVideo('app-id-123', 'app-id-123/my-vid.mp4');
+            expect(res).toEqual({ error: 'Uploaded video is empty.' });
+        });
+
+        it('rejects unsupported mime types reported by storage', async () => {
+            mockStorageList([
+                { name: 'my-vid.mp4', metadata: { size: 1024, mimetype: 'application/pdf' } },
+            ]);
+            const res = await linkApplicationVideo('app-id-123', 'app-id-123/my-vid.mp4');
+            expect(res).toEqual({ error: 'Uploaded video has an unsupported format.' });
+        });
+
+        it('updates video_url, size, and content_type via the admin client', async () => {
+            mockStorageList([
+                { name: 'my-vid.mp4', metadata: { size: 12345, mimetype: 'video/mp4' } },
+            ]);
             const update = vi.fn().mockReturnValue({
                 eq: vi.fn().mockResolvedValue({ error: null }),
             });
@@ -220,7 +269,11 @@ describe('applications server actions', () => {
 
             const res = await linkApplicationVideo('app-id-123', 'app-id-123/my-vid.mp4');
             expect(res).toEqual({ success: true });
-            expect(update).toHaveBeenCalledWith({ video_url: 'app-id-123/my-vid.mp4' });
+            expect(update).toHaveBeenCalledWith({
+                video_url: 'app-id-123/my-vid.mp4',
+                video_size_bytes: 12345,
+                video_content_type: 'video/mp4',
+            });
         });
     });
 });

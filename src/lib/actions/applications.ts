@@ -242,7 +242,7 @@ export async function prepareVideoUpload(
   fileName: string,
   fileSize: number,
   fileType: string
-): Promise<{ path: string } | { error: string }> {
+): Promise<{ path: string; signedUploadUrl: string; token: string } | { error: string }> {
   if (fileSize > MAX_VIDEO_SIZE) {
     return { error: "Video must be under 200MB." };
   }
@@ -260,7 +260,18 @@ export async function prepareVideoUpload(
     return { error: "Application not found." };
   }
 
-  return { path: `${applicationId}/${sanitizeVideoFilename(fileName)}` };
+  const path = `${applicationId}/${sanitizeVideoFilename(fileName)}`;
+
+  const { data: uploadData, error: uploadError } = await adminClient.storage
+    .from("application-videos")
+    .createSignedUploadUrl(path, { upsert: true });
+
+  if (uploadError || !uploadData) {
+    console.error("[prepareVideoUpload] createSignedUploadUrl", uploadError);
+    return { error: "Failed to generate upload URL." };
+  }
+
+  return { path, signedUploadUrl: uploadData.signedUrl, token: uploadData.token };
 }
 
 export async function linkApplicationVideo(
@@ -270,11 +281,64 @@ export async function linkApplicationVideo(
   if (!path.startsWith(`${applicationId}/`)) {
     return { error: "Invalid video path." };
   }
+  // Reject traversal / empty segments — `applicationId/` prefix alone is not
+  // enough; `${applicationId}/../other-id/foo.mp4` would otherwise pass.
+  const rest = path.slice(applicationId.length + 1);
+  if (
+    rest.length === 0 ||
+    rest.includes("..") ||
+    rest.includes("//") ||
+    rest.startsWith("/")
+  ) {
+    return { error: "Invalid video path." };
+  }
 
   const adminClient = createAdminClient();
+  const fileName = rest;
+
+  // Verify the object actually landed in storage before trusting the client's
+  // onSuccess. Without this, a flaky network or a malicious client calling
+  // linkApplicationVideo directly could write video_url for a path that holds
+  // no bytes, partial bytes, or a non-video file.
+  const { data: listed, error: listError } = await adminClient.storage
+    .from("application-videos")
+    .list(applicationId, { search: fileName });
+
+  if (listError) {
+    console.error("[linkApplicationVideo] storage.list", listError);
+    return { error: "Failed to verify uploaded video." };
+  }
+
+  const object = listed?.find((o) => o.name === fileName);
+  if (!object) {
+    return { error: "Video upload not found in storage." };
+  }
+
+  // metadata is loosely typed by the storage client; pull what we need.
+  const meta = (object.metadata ?? {}) as {
+    size?: number;
+    mimetype?: string;
+  };
+  const size = typeof meta.size === "number" ? meta.size : 0;
+  const mimetype = typeof meta.mimetype === "string" ? meta.mimetype : "";
+
+  if (size <= 0) {
+    return { error: "Uploaded video is empty." };
+  }
+  if (size > MAX_VIDEO_SIZE) {
+    return { error: "Uploaded video exceeds the 200MB limit." };
+  }
+  if (!ALLOWED_VIDEO_TYPES.includes(mimetype)) {
+    return { error: "Uploaded video has an unsupported format." };
+  }
+
   const { error } = await adminClient
     .from("applications")
-    .update({ video_url: path })
+    .update({
+      video_url: path,
+      video_size_bytes: size,
+      video_content_type: mimetype,
+    })
     .eq("id", applicationId);
 
   if (error) {

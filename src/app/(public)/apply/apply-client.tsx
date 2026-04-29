@@ -228,10 +228,9 @@ export default function ApplyClient() {
         return;
       }
 
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !anonKey) {
-        console.error("[tus] missing supabase env");
+      if (!anonKey || !prep.signedUploadUrl || !prep.token) {
+        console.error("[tus] missing upload env or token");
         setUploadState((s) => ({
           ...s,
           status: "failed",
@@ -246,10 +245,10 @@ export default function ApplyClient() {
       const pathForLink = prep.path;
 
       const upload = new tus.Upload(file, {
-        endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+        endpoint: prep.signedUploadUrl,
         retryDelays: [0, 1000, 3000, 5000, 10000, 20000, 30000],
         headers: {
-          authorization: `Bearer ${anonKey}`,
+          "x-signature": prep.token,
           apikey: anonKey,
           "x-upsert": "true",
         },
