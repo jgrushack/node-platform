@@ -1,19 +1,42 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
-const campPhotos = Array.from({ length: 47 }, (_, i) => ({
-  src: `/images/gallery/camp/camp-${String(i + 1).padStart(2, "0")}.jpg`,
-})).filter((p) => p.src !== "/images/gallery/camp/camp-30.jpg");
+type Category = {
+  id: string;
+  label: string;
+  slug: string;
+  count: number;
+  /** photo numbers to skip (e.g., gaps in the camp folder) */
+  skip?: number[];
+  /** photo numbers that are .png instead of .jpg */
+  png?: number[];
+};
 
-const bbqPhotos = Array.from({ length: 12 }, (_, i) => ({
-  src: `/images/gallery/bbq/bbq-${String(i + 1).padStart(2, "0")}.jpg`,
-}));
+const categories: Category[] = [
+  { id: "camp", label: "Camp Life", slug: "camp", count: 47, skip: [11, 23, 24, 30, 32] },
+  { id: "bbq", label: "Hip-Hop BBQ", slug: "bbq", count: 12 },
+  { id: "music", label: "Music", slug: "music", count: 16 },
+  { id: "yoga", label: "Morning Yoga", slug: "yoga", count: 14 },
+  { id: "coffee", label: "Rocket Fuel Coffee", slug: "coffee", count: 10, png: [10] },
+  { id: "pickle", label: "Pickle Ball 2025", slug: "pickle", count: 10, png: [10] },
+  { id: "croquet", label: "Rose & Croquet 2024", slug: "croquet", count: 12 },
+  { id: "reno", label: "Reno Pre-Builds", slug: "reno", count: 20, skip: [7] },
+];
 
-const allPhotos = [...campPhotos, ...bbqPhotos];
+function buildPhotos(cat: Category): { src: string }[] {
+  const photos: { src: string }[] = [];
+  for (let i = 1; i <= cat.count; i++) {
+    if (cat.skip?.includes(i)) continue;
+    const num = String(i).padStart(2, "0");
+    const ext = cat.png?.includes(i) ? "png" : "jpg";
+    photos.push({ src: `/images/gallery/${cat.slug}/${cat.slug}-${num}.${ext}` });
+  }
+  return photos;
+}
 
 function Lightbox({
   photos,
@@ -63,7 +86,8 @@ function Lightbox({
         if (touchStart === null) return;
         const diff = e.changedTouches[0].clientX - touchStart;
         if (Math.abs(diff) > 50) {
-          diff > 0 ? prev() : next();
+          if (diff > 0) prev();
+          else next();
         }
         setTouchStart(null);
       }}
@@ -146,7 +170,7 @@ function PhotoCard({
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.4, delay: index * 0.03 }}
+      transition={{ duration: 0.4, delay: Math.min(index * 0.02, 0.3) }}
       onClick={onClick}
     >
       <Image
@@ -154,14 +178,26 @@ function PhotoCard({
         alt=""
         fill
         className="object-cover transition-transform duration-500 hover:scale-105"
-        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
       />
     </motion.div>
   );
 }
 
 export default function PicsClient() {
+  const [activeId, setActiveId] = useState<string>(categories[0].id);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const activeCategory = useMemo(
+    () => categories.find((c) => c.id === activeId) ?? categories[0],
+    [activeId]
+  );
+  const photos = useMemo(() => buildPhotos(activeCategory), [activeCategory]);
+
+  // Reset lightbox if user switches categories
+  useEffect(() => {
+    setLightboxIndex(null);
+  }, [activeId]);
 
   return (
     <main className="min-h-screen px-4 py-20 sm:px-6 sm:py-24">
@@ -185,63 +221,70 @@ export default function PicsClient() {
         </motion.p>
       </section>
 
-      {/* Camp Photos Gallery */}
-      <section className="mx-auto mt-16 max-w-6xl">
-        <motion.h2
-          className="mb-8 text-center text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-        >
-          Camp Life
-        </motion.h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {campPhotos.map((photo, i) => (
-            <PhotoCard
-              key={photo.src}
-              src={photo.src}
-              index={i}
-              onClick={() => setLightboxIndex(i)}
-            />
-          ))}
-        </div>
+      {/* Sub-nav: category tabs — uses CSS Grid so the 8 items always split evenly (4×2 on small viewports, 2×4 on tablet+) instead of leaving an odd one on its own row */}
+      <nav
+        aria-label="Gallery categories"
+        className="mx-auto mt-12 max-w-6xl py-2"
+      >
+        <ul className="mx-auto grid grid-cols-2 justify-items-center gap-x-1 gap-y-2 px-2 py-1 sm:grid-cols-4 sm:gap-x-2">
+          {categories.map((cat) => {
+            const isActive = cat.id === activeId;
+            return (
+              <li key={cat.id}>
+                <button
+                  type="button"
+                  onClick={() => setActiveId(cat.id)}
+                  aria-pressed={isActive}
+                  className={`relative whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors sm:text-base ${
+                    isActive
+                      ? "text-sand-100"
+                      : "text-sand-400 hover:text-sand-200"
+                  }`}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="gallery-tab-pill"
+                      className="absolute inset-0 rounded-full bg-pink-500/20 ring-1 ring-pink-400/60"
+                      transition={{ type: "spring", duration: 0.45, bounce: 0.2 }}
+                    />
+                  )}
+                  <span className="relative z-10">{cat.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* Active gallery */}
+      <section className="mx-auto mt-10 max-w-6xl">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeCategory.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25 }}
+          >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {photos.map((photo, i) => (
+                <PhotoCard
+                  key={photo.src}
+                  src={photo.src}
+                  index={i}
+                  onClick={() => setLightboxIndex(i)}
+                />
+              ))}
+            </div>
+          </motion.div>
+        </AnimatePresence>
       </section>
 
-      {/* Hip Hop BBQ Gallery */}
-      <section className="mx-auto mt-24 max-w-6xl">
-        <motion.h2
-          className="mb-4 text-center text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-        >
-          Big Pete&apos;s Hip-Hop BBQ
-        </motion.h2>
-        <motion.p
-          className="mb-8 text-center text-sand-400"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-        >
-          Our signature event — beats, eats, and community.
-        </motion.p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {bbqPhotos.map((photo, i) => (
-            <PhotoCard
-              key={photo.src}
-              src={photo.src}
-              index={i}
-              onClick={() => setLightboxIndex(campPhotos.length + i)}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Lightbox */}
+      {/* Lightbox — scoped to current category */}
       <AnimatePresence>
         {lightboxIndex !== null && (
           <Lightbox
-            photos={allPhotos}
+            photos={photos}
             index={lightboxIndex}
             onClose={() => setLightboxIndex(null)}
             onChange={setLightboxIndex}

@@ -42,6 +42,14 @@ scripts/.invitees.local.json
 # raw asset dumps (curate before adding to public/)
 Node.Family Website Photos/
 camp photos/
+/new photos/
+/morning yoga/
+/music/
+/pickle ball/
+/rocket fuel coffee/
+/rose croquet/
+/reno prebuild/
+/scorp.jpg
 
 # planning docs (local notes — not for public repo)
 optimization-plan.md
