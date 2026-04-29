@@ -11,14 +11,6 @@ vi.mock('@/lib/actions/applications', () => ({
     linkApplicationVideo: vi.fn(),
 }));
 
-vi.mock('tus-js-client', () => ({
-    Upload: vi.fn().mockImplementation(() => ({
-        start: vi.fn(),
-        abort: vi.fn(),
-        findPreviousUploads: vi.fn().mockResolvedValue([]),
-        resumeFromPreviousUpload: vi.fn(),
-    })),
-}));
 
 describe('ApplyClient Component', () => {
     beforeEach(() => {
