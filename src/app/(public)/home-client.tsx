@@ -1,9 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+
+// Burning Man 2026: Aug 30 – Sep 7. Gates open Sunday Aug 30 at midnight PT.
+const BURN_START = new Date("2026-08-30T00:00:00-07:00").getTime();
+
+function timeUntil(target: number) {
+  const diff = Math.max(0, target - Date.now());
+  return {
+    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+    minutes: Math.floor((diff / (1000 * 60)) % 60),
+    seconds: Math.floor((diff / 1000) % 60),
+  };
+}
 
 // Bubbles live in the dead space outside the centered card column (max-w-5xl = 1024px).
 // We position them with calc(50% - HALF_CARD - bubble_size - gap) so they always sit
@@ -196,21 +208,14 @@ export default function HomeClient() {
           <p>Born in the desert. Built for the future.</p>
         </motion.div>
 
-        {/* CTA */}
+        {/* Countdown to Burning Man 2026 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6 }}
           className="mt-10"
         >
-          <Link href="/apply">
-            <Button
-              size="lg"
-              className="rounded-full bg-pink-500 px-8 text-lg font-semibold text-white hover:bg-pink-600 glow-pink justify-center"
-            >
-              Apply to NODE
-            </Button>
-          </Link>
+          <BurnCountdown />
         </motion.div>
 
       </section>
@@ -266,5 +271,49 @@ export default function HomeClient() {
         </div>
       </section>
     </main>
+  );
+}
+
+function BurnCountdown() {
+  // Render zeros on first paint to avoid SSR/CSR hydration mismatch on Date.now().
+  const [t, setT] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    setT(timeUntil(BURN_START));
+    const id = setInterval(() => setT(timeUntil(BURN_START)), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const items = [
+    { label: "Days", value: t.days },
+    { label: "Hours", value: t.hours },
+    { label: "Minutes", value: t.minutes },
+    { label: "Seconds", value: t.seconds },
+  ];
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <p className="text-xs uppercase tracking-[0.2em] text-sand-400">
+        Burning Man 2026 starts in
+      </p>
+      <div className="flex items-stretch gap-2 sm:gap-3">
+        {items.map((it) => (
+          <div
+            key={it.label}
+            className="min-w-[68px] rounded-xl border border-pink-500/30 bg-pink-500/10 px-3 py-2 text-center backdrop-blur-sm sm:min-w-[80px] sm:px-4 sm:py-3"
+          >
+            <div className="font-brand text-3xl font-semibold text-gradient-warm tabular-nums sm:text-4xl">
+              {mounted ? String(it.value).padStart(2, "0") : "00"}
+            </div>
+            <div className="mt-1 text-[10px] uppercase tracking-wider text-sand-400 sm:text-xs">
+              {it.label}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-sand-500">Aug 30 – Sep 7 · Black Rock City</p>
+    </div>
   );
 }
