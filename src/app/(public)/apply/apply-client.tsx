@@ -142,8 +142,10 @@ function canAdvance(step: number, form: ApplyFormData): boolean {
     case 1: return !!(form.firstName && form.lastName && form.email);
     case 2: {
       if (form.beenToBm === null) return false;
-      if (form.beenToBm) return form.yearsAttended.length > 0;
-      return !!form.favoritePrinciple;
+      if (form.beenToBm) {
+        return form.yearsAttended.length > 0 && !!form.previousCamps.trim();
+      }
+      return !!form.favoritePrinciple && !!form.principleReason.trim();
     }
     case 3: return !!(form.skills && form.referredBy);
     case 4: return !!form.videoFile;
@@ -668,7 +670,7 @@ function ExperienceStep({ form, update }: FormStepProps) {
             )}
           </div>
           <div className="space-y-2">
-            <Label className="text-sand-300">Previous camps or communities</Label>
+            <Label className="text-sand-300">Previous camps or communities *</Label>
             <Textarea
               value={form.previousCamps}
               onChange={(e) => update("previousCamps", e.target.value)}
@@ -726,7 +728,7 @@ function ExperienceStep({ form, update }: FormStepProps) {
           {form.favoritePrinciple && (
             <div className="animate-in fade-in slide-in-from-top-4 space-y-2">
               <Label className="text-sand-300">
-                Why does {form.favoritePrinciple} matter to you?
+                Why does {form.favoritePrinciple} matter to you? *
               </Label>
               <Textarea
                 value={form.principleReason}
