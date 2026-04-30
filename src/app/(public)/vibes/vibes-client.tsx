@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "framer-motion";
+import Image from "next/image";
 import { useRef, useState, useEffect } from "react";
 
 const statements: Array<{ text: string; color: string; hasBrand?: boolean }> = [
@@ -100,6 +101,21 @@ export default function VibesClient() {
     <main className="min-h-screen overflow-hidden">
       {/* Opening — "What we're about" */}
       <section className="mx-auto max-w-3xl px-6 pt-24 text-center sm:pt-32">
+        <motion.div
+          className="relative mx-auto mb-12 aspect-[21/9] w-full max-w-3xl overflow-hidden rounded-2xl ring-1 ring-white/10"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+        >
+          <Image
+            src="/images/vibes/what-were-about.jpg"
+            alt=""
+            fill
+            className="object-cover"
+            sizes="(min-width: 768px) 768px, 100vw"
+            priority
+          />
+        </motion.div>
         <motion.h1
           className="text-sm font-medium uppercase tracking-[0.3em] text-pink-400"
           initial={{ opacity: 0 }}
@@ -133,36 +149,52 @@ export default function VibesClient() {
             {
               title: "Fail Fast",
               desc: "BM is about trying new things, take that risk. Fail or succeed, what matters is you learn and you are also aware of when it's time to reset.",
+              image: "/images/vibes/fail-fast.jpg",
             },
             {
               title: "Evolve or Repeat (Somewhere Else)",
               desc: "We take risks but we learn, evolve and make the next opportunity better than the first. We do not continue to make the same mistakes at NODE because we believe in supporting each other's growth.",
+              image: "/images/vibes/evolve-or-repeat.jpg",
             },
             {
               title: "Responsibility",
               desc: "You have a civic responsibility as a resident of BRC. That carries to NODE even more so. We take care of each other. We clean up after ourselves. We accept responsibility and acknowledge mistakes. We continue to build a better home than we started with.",
+              image: "/images/vibes/responsibility.jpeg",
             },
             {
               title: "Live Free",
               desc: "Don't avoid / delay conflict. Make the effort to resolve situations before they have a chance to fester. Take your quandaries to the temple and release that energy. Keep your mind free of conflict and your burn will be much lighter.",
+              image: "/images/vibes/live-free.jpg",
             },
             {
               title: "Consent",
               desc: "Not just important. Sacred. Zero-strike policy. Anyone who violates this will be asked to leave NODE immediately. This is non-negotiable.",
+              image: "/images/vibes/consent.jpg",
             },
           ].map((value, i) => (
             <motion.div
               key={value.title}
-              className="glass-card rounded-2xl p-6"
+              className="glass-card mx-auto w-full max-w-[280px] overflow-hidden rounded-2xl"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
             >
-              <h3 className="text-lg font-bold text-sand-100">
-                {value.title}
-              </h3>
-              <p className="mt-2 text-sm text-sand-300">{value.desc}</p>
+              <div className="relative aspect-square w-full overflow-hidden">
+                <Image
+                  src={value.image}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="280px"
+                />
+              </div>
+              <div className="p-5">
+                <h3 className="text-lg font-bold text-sand-100">
+                  {value.title}
+                </h3>
+                <p className="mt-2 text-sm text-sand-300">{value.desc}</p>
+              </div>
             </motion.div>
           ))}
         </div>
