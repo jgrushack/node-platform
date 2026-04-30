@@ -142,8 +142,10 @@ function canAdvance(step: number, form: ApplyFormData): boolean {
     case 1: return !!(form.firstName && form.lastName && form.email);
     case 2: {
       if (form.beenToBm === null) return false;
-      if (form.beenToBm) return form.yearsAttended.length > 0;
-      return !!form.favoritePrinciple;
+      if (form.beenToBm) {
+        return form.yearsAttended.length > 0 && !!form.previousCamps.trim();
+      }
+      return !!form.favoritePrinciple && !!form.principleReason.trim();
     }
     case 3: return !!(form.skills && form.referredBy);
     case 4: return !!form.videoFile;
@@ -180,9 +182,8 @@ export default function ApplyClient() {
     INITIAL_UPLOAD_STATE
   );
 
-  // Holds the active tus Upload instance so we can abort / retry it.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tusUploadRef = useRef<any>(null);
+  // Holds the active upload XHR so we can abort / retry it.
+  const uploadXhrRef = useRef<XMLHttpRequest | null>(null);
   const uploadStartRef = useRef<number>(0);
   const lastUploadedFileRef = useRef<File | null>(null);
 
@@ -228,10 +229,8 @@ export default function ApplyClient() {
         return;
       }
 
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !anonKey) {
-        console.error("[tus] missing supabase env");
+      if (!prep.signedUploadUrl || !prep.token) {
+        console.error("[upload] missing signed url or token");
         setUploadState((s) => ({
           ...s,
           status: "failed",
@@ -240,43 +239,41 @@ export default function ApplyClient() {
         return;
       }
 
-      const tus = await import("tus-js-client");
-      tusUploadRef.current?.abort?.();
+      // Single-shot PUT against a Supabase signed-upload URL. tus is not used
+      // here: anon-key tus is blocked by missing DML on storage.s3_multipart_*
+      // and the signed-upload endpoint is not a tus endpoint. The signed token
+      // bypasses RLS for this exact object path, scoped + short-lived.
+      uploadXhrRef.current?.abort();
       uploadStartRef.current = Date.now();
       const pathForLink = prep.path;
 
-      const upload = new tus.Upload(file, {
-        endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
-        retryDelays: [0, 1000, 3000, 5000, 10000, 20000, 30000],
-        headers: {
-          authorization: `Bearer ${anonKey}`,
-          apikey: anonKey,
-          "x-upsert": "true",
-        },
-        uploadDataDuringCreation: true,
-        removeFingerprintOnSuccess: true,
-        metadata: {
-          bucketName: "application-videos",
-          objectName: pathForLink,
-          contentType: file.type || "application/octet-stream",
-          cacheControl: "3600",
-        },
-        chunkSize: 6 * 1024 * 1024,
-        onProgress(bytesUploaded: number, bytesTotal: number) {
-          const elapsedSec = (Date.now() - uploadStartRef.current) / 1000;
-          const speed = elapsedSec > 0 ? bytesUploaded / elapsedSec : 0;
-          setUploadState({
-            status: "uploading",
-            bytesUploaded,
-            bytesTotal,
-            bytesPerSecond: speed,
-            error: null,
-          });
-        },
-        async onSuccess() {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", prep.signedUploadUrl, true);
+      xhr.setRequestHeader("Authorization", `Bearer ${prep.token}`);
+      xhr.setRequestHeader(
+        "Content-Type",
+        file.type || "application/octet-stream"
+      );
+      xhr.setRequestHeader("x-upsert", "true");
+
+      xhr.upload.onprogress = (e: ProgressEvent) => {
+        if (!e.lengthComputable) return;
+        const elapsedSec = (Date.now() - uploadStartRef.current) / 1000;
+        const speed = elapsedSec > 0 ? e.loaded / elapsedSec : 0;
+        setUploadState({
+          status: "uploading",
+          bytesUploaded: e.loaded,
+          bytesTotal: e.total,
+          bytesPerSecond: speed,
+          error: null,
+        });
+      };
+
+      xhr.onload = async () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
           const linkResult = await linkApplicationVideo(id, pathForLink);
           if ("error" in linkResult) {
-            console.error("[tus link]", linkResult.error);
+            console.error("[upload link]", linkResult.error);
             setUploadState((s) => ({
               ...s,
               status: "failed",
@@ -291,26 +288,28 @@ export default function ApplyClient() {
             bytesPerSecond: 0,
             error: null,
           }));
-        },
-        onError(err: Error) {
-          console.error("[tus]", err);
-          upload.abort(true).catch(() => {});
+        } else {
+          console.error("[upload]", xhr.status, xhr.responseText);
           setUploadState((s) => ({
             ...s,
             status: "failed",
             error: null,
           }));
-        },
-      });
+        }
+      };
 
-      tusUploadRef.current = upload;
+      xhr.onerror = () => {
+        console.error("[upload] network error");
+        setUploadState((s) => ({
+          ...s,
+          status: "failed",
+          error: null,
+        }));
+      };
+
+      uploadXhrRef.current = xhr;
       lastUploadedFileRef.current = file;
-
-      const previousUploads = await upload.findPreviousUploads();
-      if (previousUploads.length > 0) {
-        upload.resumeFromPreviousUpload(previousUploads[0]);
-      }
-      upload.start();
+      xhr.send(file);
     },
     []
   );
@@ -324,7 +323,7 @@ export default function ApplyClient() {
   // Clean up any in-flight upload on unmount.
   useEffect(() => {
     return () => {
-      tusUploadRef.current?.abort?.();
+      uploadXhrRef.current?.abort();
     };
   }, []);
 
@@ -671,7 +670,7 @@ function ExperienceStep({ form, update }: FormStepProps) {
             )}
           </div>
           <div className="space-y-2">
-            <Label className="text-sand-300">Previous camps or communities</Label>
+            <Label className="text-sand-300">Previous camps or communities *</Label>
             <Textarea
               value={form.previousCamps}
               onChange={(e) => update("previousCamps", e.target.value)}
@@ -729,7 +728,7 @@ function ExperienceStep({ form, update }: FormStepProps) {
           {form.favoritePrinciple && (
             <div className="animate-in fade-in slide-in-from-top-4 space-y-2">
               <Label className="text-sand-300">
-                Why does {form.favoritePrinciple} matter to you?
+                Why does {form.favoritePrinciple} matter to you? *
               </Label>
               <Textarea
                 value={form.principleReason}

@@ -31,6 +31,8 @@ export interface ApplicationRow {
   skills: string | null;
   referred_by: string | null;
   video_url: string | null;
+  video_size_bytes: number | null;
+  video_content_type: string | null;
   status: "pending" | "approved" | "rejected" | "waitlist";
   reviewed_by: string | null;
   reviewed_at: string | null;
