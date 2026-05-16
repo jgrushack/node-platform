@@ -528,19 +528,19 @@ export async function approveApplication(
         return { error: "Failed to create user account." };
       }
 
-      const { data: lookup, error: lookupError } = await adminClient
-        .schema("auth")
-        .from("users")
-        .select("id")
-        .eq("email", application.email)
-        .maybeSingle();
+      // auth schema isn't exposed via PostgREST, so we call a
+      // SECURITY DEFINER RPC (migration 00040) to resolve the user id.
+      const { data: lookupId, error: lookupError } = await adminClient.rpc(
+        "get_user_id_by_email",
+        { p_email: application.email }
+      );
 
-      if (lookupError || !lookup?.id) {
+      if (lookupError || !lookupId) {
         console.error("[approveApplication] lookup existing user", lookupError);
         return { error: "Failed to create user account." };
       }
 
-      profileId = lookup.id;
+      profileId = lookupId as string;
     }
   }
 
