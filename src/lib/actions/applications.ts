@@ -493,32 +493,55 @@ export async function approveApplication(
     return { error: "Failed to fetch application." };
   }
 
-  // Check if user already exists for this email
+  // Check if a profile already exists for this email
   const { data: existingProfile } = await adminClient
     .from("profiles")
     .select("id")
     .eq("email", application.email)
     .maybeSingle();
-  const existingUser = existingProfile;
 
   let profileId: string;
 
-  if (existingUser) {
-    profileId = existingUser.id;
+  if (existingProfile) {
+    profileId = existingProfile.id;
   } else {
-    // Create user account via admin API
+    // Try to create the auth user. If one already exists for this email
+    // (e.g. previous approval attempt or prior signup), fall back to
+    // looking it up — the auto-profile trigger was removed in 00028, so
+    // an auth user can exist with no profile row.
     const { data: createData, error: createError } =
       await adminClient.auth.admin.createUser({
         email: application.email,
         email_confirm: true,
       });
 
-    if (createError || !createData?.user) {
-      console.error("[approveApplication] create user", createError);
-      return { error: "Failed to create user account." };
-    }
+    if (createData?.user) {
+      profileId = createData.user.id;
+    } else {
+      const isEmailExists =
+        createError?.code === "email_exists" ||
+        createError?.status === 422 ||
+        /already.*registered/i.test(createError?.message ?? "");
 
-    profileId = createData.user.id;
+      if (!isEmailExists) {
+        console.error("[approveApplication] create user", createError);
+        return { error: "Failed to create user account." };
+      }
+
+      const { data: lookup, error: lookupError } = await adminClient
+        .schema("auth")
+        .from("users")
+        .select("id")
+        .eq("email", application.email)
+        .maybeSingle();
+
+      if (lookupError || !lookup?.id) {
+        console.error("[approveApplication] lookup existing user", lookupError);
+        return { error: "Failed to create user account." };
+      }
+
+      profileId = lookup.id;
+    }
   }
 
   // Generate magic link and send branded "You're In!" email
@@ -549,16 +572,22 @@ export async function approveApplication(
     }
   }
 
-  // Update profile with applicant's info
+  // Upsert profile with applicant's info. Upsert (not update) because the
+  // auto-profile trigger was removed in 00028, so a profile row may not
+  // exist yet for a freshly created (or reused) auth user.
   const { error: profileError } = await adminClient
     .from("profiles")
-    .update({
-      first_name: application.first_name,
-      last_name: application.last_name,
-      phone: application.phone,
-      playa_name: application.playa_name,
-    })
-    .eq("id", profileId);
+    .upsert(
+      {
+        id: profileId,
+        email: application.email,
+        first_name: application.first_name,
+        last_name: application.last_name,
+        phone: application.phone,
+        playa_name: application.playa_name,
+      },
+      { onConflict: "id" }
+    );
 
   if (profileError) {
     console.error("[approveApplication] profile update", profileError);
