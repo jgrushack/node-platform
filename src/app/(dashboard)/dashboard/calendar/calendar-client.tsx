@@ -32,6 +32,8 @@ import {
   Clock,
   Loader2,
   Phone,
+  Mail,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarDayEvent } from "@/lib/types/event";
@@ -40,6 +42,7 @@ import {
   createNodeEvent,
   updateNodeEvent,
   deleteNodeEvent,
+  sendEventInvites,
 } from "@/lib/actions/events";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -69,6 +72,7 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
   const [editingEvent, setEditingEvent] = useState<CalendarDayEvent | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [sendingInvites, setSendingInvites] = useState<string | null>(null);
 
   const isAdmin = userRole === "admin" || userRole === "super_admin";
   const isSuperAdmin = userRole === "super_admin";
@@ -262,6 +266,37 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
       (e) => e.id !== eventId && e.event_date === selectedDate
     );
     if (remaining.length === 0) setSelectedDate(null);
+  }
+
+  async function handleSendInvites(event: CalendarDayEvent) {
+    const confirmed = window.confirm(
+      `Send calendar invites for "${event.title}" to all confirmed NODE 2026 members? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setSendingInvites(event.id);
+    const result = await sendEventInvites(event.id);
+    if ("error" in result) {
+      toast.error(result.error);
+      setSendingInvites(null);
+      return;
+    }
+
+    const sentAt = new Date().toISOString();
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === event.id ? { ...e, invites_sent_at: sentAt } : e
+      )
+    );
+
+    if (result.failed > 0) {
+      toast.warning(
+        `Sent ${result.sent} of ${result.recipients} invites — ${result.failed} failed.`
+      );
+    } else {
+      toast.success(`Sent ${result.sent} invite${result.sent === 1 ? "" : "s"}.`);
+    }
+    setSendingInvites(null);
   }
 
   function formatTime(time: string | null): string {
@@ -519,8 +554,8 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
                           </a>
                         )}
 
-                        {isAdmin && (
-                          <div className="flex items-center gap-2 pt-1">
+                        {isAdmin && event.event_type !== "bm" && (
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -530,6 +565,27 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
                               <Pencil className="h-3 w-3" />
                               Edit
                             </Button>
+                            {event.invites_sent_at ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400">
+                                <Check className="h-3 w-3" />
+                                Invites sent {new Date(event.invites_sent_at).toLocaleDateString()}
+                              </span>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSendInvites(event)}
+                                disabled={sendingInvites === event.id}
+                                className="h-7 gap-1.5 text-xs text-pink-400 hover:text-pink-300 hover:bg-pink-500/10"
+                              >
+                                {sendingInvites === event.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Mail className="h-3 w-3" />
+                                )}
+                                Send invites
+                              </Button>
+                            )}
                             {(isSuperAdmin || event.created_by === userId) && (
                               <Button
                                 variant="ghost"

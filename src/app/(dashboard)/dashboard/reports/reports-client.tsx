@@ -291,7 +291,7 @@ export default function ReportsClient() {
                 className="pl-9 bg-blue-950/30 border-amber/10 text-sand-200 placeholder:text-sand-600"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {(["all", "confirmed", "pending", "waitlisted", "cancelled"] as StatusFilter[]).map(
                 (s) => (
                   <button
@@ -411,7 +411,7 @@ export default function ReportsClient() {
                 className="pl-9 bg-blue-950/30 border-amber/10 text-sand-200 placeholder:text-sand-600"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {["all", "pending", "approved", "waitlist", "rejected"].map(
                 (s) => (
                   <button

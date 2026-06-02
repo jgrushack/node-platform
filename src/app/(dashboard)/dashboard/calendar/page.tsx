@@ -24,6 +24,7 @@ export default async function CalendarPage() {
           join_link: e.join_link,
           description: e.description,
           created_by: e.created_by,
+          invites_sent_at: e.invites_sent_at,
         }));
 
   // BM calendar events visible to admin/super_admin only

@@ -1,6 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { sendEventInviteBatch } from "@/lib/email/send";
+import { REPLY_TO_EMAIL } from "@/lib/email/resend";
 import {
   nodeEventSchema,
   type NodeEventFormData,
@@ -179,4 +182,131 @@ export async function deleteNodeEvent(
   }
 
   return { success: true };
+}
+
+function formatWhenLabel(
+  eventDate: string,
+  startTime: string | null,
+  endTime: string | null
+): string {
+  const [y, m, d] = eventDate.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const datePart = dt.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  if (!startTime) return datePart;
+  const fmtTime = (t: string) => {
+    const [hh, mm] = t.split(":").map(Number);
+    const ampm = hh >= 12 ? "PM" : "AM";
+    const h12 = hh % 12 || 12;
+    return `${h12}:${String(mm).padStart(2, "0")} ${ampm}`;
+  };
+  const range = endTime
+    ? `${fmtTime(startTime)} – ${fmtTime(endTime)}`
+    : fmtTime(startTime);
+  return `${datePart} at ${range}`;
+}
+
+export async function sendEventInvites(
+  eventId: string
+): Promise<
+  | { success: true; sent: number; failed: number; recipients: number }
+  | { error: string }
+> {
+  const { error: authError, supabase } = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  // Load the event (server client OK — admin RLS allows read).
+  const { data: event, error: eventError } = await supabase
+    .from("node_events")
+    .select(
+      "id, camp_year_id, title, description, event_date, start_time, end_time, join_link, created_at, updated_at, invites_sent_at"
+    )
+    .eq("id", eventId)
+    .single();
+
+  if (eventError || !event) {
+    console.error("[sendEventInvites] event lookup", eventError);
+    return { error: "Event not found." };
+  }
+
+  if (event.invites_sent_at) {
+    return { error: "Invites have already been sent for this event." };
+  }
+
+  // Admin client is required to resolve cross-user recipient emails
+  // (profiles/registrations RLS blocks reading other members' contact info).
+  const admin = createAdminClient();
+
+  const { data: regs, error: regError } = await admin
+    .from("registrations")
+    .select("profile_id, profiles(first_name, email)")
+    .eq("camp_year_id", event.camp_year_id)
+    .eq("status", "confirmed");
+
+  if (regError) {
+    console.error("[sendEventInvites] registrations", regError);
+    return { error: "Failed to resolve recipients." };
+  }
+
+  const recipients = (regs ?? [])
+    .map((r) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const p = (r as any).profiles;
+      const email = p?.email as string | undefined;
+      const firstName = (p?.first_name as string | undefined) ?? "there";
+      return email ? { email, firstName } : null;
+    })
+    .filter((r): r is { email: string; firstName: string } => r !== null);
+
+  if (recipients.length === 0) {
+    return { error: "No confirmed members to invite." };
+  }
+
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
+  const webcalUrl = siteUrl.replace(/^https?:/, "webcal:") + "/api/calendar.ics";
+  const organizerEmail = REPLY_TO_EMAIL.replace(/^.*<(.+)>.*$/, "$1");
+
+  const { sent, failed } = await sendEventInviteBatch({
+    recipients,
+    event: {
+      uid: `${event.id}@node.family`,
+      title: event.title,
+      description: event.description,
+      date: event.event_date,
+      startTime: event.start_time,
+      endTime: event.end_time,
+      url: event.join_link,
+      createdAt: event.created_at,
+      updatedAt: event.updated_at,
+    },
+    organizer: { email: organizerEmail, name: "NODE" },
+    whenLabel: formatWhenLabel(
+      event.event_date,
+      event.start_time,
+      event.end_time
+    ),
+    siteUrl,
+    webcalUrl,
+  });
+
+  // Stamp invites_sent_at even on partial failure — re-sending would double-invite
+  // members who already got it. Failures are returned to the caller to surface.
+  const sentAt = new Date().toISOString();
+  const { error: stampError } = await admin
+    .from("node_events")
+    .update({ invites_sent_at: sentAt })
+    .eq("id", eventId);
+
+  if (stampError) {
+    console.error("[sendEventInvites] stamp", stampError);
+  }
+
+  return { success: true, sent, failed, recipients: recipients.length };
 }

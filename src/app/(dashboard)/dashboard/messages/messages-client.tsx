@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import DOMPurify from "dompurify";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,10 +58,20 @@ import {
   updateDraft,
   deleteDraft,
   deleteMessage,
+  dismissMessage,
   getEmailPreview,
 } from "@/lib/actions/messages";
 
 const NODE_YEARS = [2018, 2019, 2022, 2023, 2024, 2025, 2026];
+
+/** Sanitize admin-authored HTML before it touches innerHTML (defense-in-depth). */
+function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ["b", "strong", "i", "em", "u", "a", "ul", "ol", "li", "hr", "br", "p", "div", "span", "h1", "h2", "h3", "font"],
+    ALLOWED_ATTR: ["href", "target", "rel", "style", "color", "size"],
+    ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
+  });
+}
 
 function audienceLabel(filter: AudienceFilter): string {
   if (filter.type === "all") return "All active members";
@@ -153,6 +164,13 @@ export function MessagesClient({
     setOnboardingIncomplete(f.onboarding_incomplete || false);
     setPreviewResult(null);
     setTab("compose");
+    // Mark freshly loaded state as "already saved" so autosave doesn't fire on
+    // load and (critically) doesn't create a duplicate draft.
+    lastSavedRef.current = {
+      subject: draft.subject,
+      bodyHtml: draft.body_html,
+      filter: JSON.stringify(draft.audience_filter),
+    };
   }
 
   function resetCompose() {
@@ -167,6 +185,7 @@ export function MessagesClient({
     setTenure("");
     setOnboardingIncomplete(false);
     setPreviewResult(null);
+    lastSavedRef.current = { subject: "", bodyHtml: "", filter: JSON.stringify({ type: "all" }) };
   }
 
   async function handlePreview() {
@@ -282,6 +301,16 @@ export function MessagesClient({
     toast.success("Message deleted");
   }
 
+  /** Remove a message from the current user's own inbox (not for everyone). */
+  async function handleDismissMessage(recipientId: string) {
+    setDeletingId(recipientId);
+    const result = await dismissMessage(recipientId);
+    setDeletingId(null);
+    if ("error" in result) { toast.error(result.error); return; }
+    setMyMessages((prev) => prev.filter((m) => m.id !== recipientId));
+    toast.success("Message dismissed");
+  }
+
   async function handleReadMessage(msg: UnreadMessage) {
     setReadingMessage(msg);
     if (!msg.read_at) {
@@ -311,26 +340,34 @@ export function MessagesClient({
       // Safe: content is authored by admins, stored in our DB
       const el = editorRef.current;
       el.textContent = "";
-      if (html) {
+      const clean = sanitizeHtml(html);
+      if (clean) {
         const range = document.createRange();
-        const frag = range.createContextualFragment(html);
+        const frag = range.createContextualFragment(clean);
         el.appendChild(frag);
       }
+      setBodyHtml(el.innerHTML);
+      return;
     }
-    setBodyHtml(html);
+    setBodyHtml(sanitizeHtml(html));
   }, []);
 
   const unreadCount = myMessages.filter((m) => !m.read_at).length;
 
   // Autosave draft every 3 seconds after changes (only on compose tab)
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedRef = useRef({ subject: "", bodyHtml: "" });
+  const lastSavedRef = useRef({ subject: "", bodyHtml: "", filter: "" });
 
   useEffect(() => {
     if (tab !== "compose" || !isAdmin) return;
     if (!subject.trim() && !bodyHtml.trim()) return;
-    // Skip if nothing changed since last save
-    if (subject === lastSavedRef.current.subject && bodyHtml === lastSavedRef.current.bodyHtml) return;
+    const filterKey = JSON.stringify(buildFilter());
+    // Skip if nothing changed since last save (subject, body, AND audience).
+    if (
+      subject === lastSavedRef.current.subject &&
+      bodyHtml === lastSavedRef.current.bodyHtml &&
+      filterKey === lastSavedRef.current.filter
+    ) return;
 
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(async () => {
@@ -345,14 +382,16 @@ export function MessagesClient({
           upsertLocalDraft(result.id);
         }
       }
-      lastSavedRef.current = { subject, bodyHtml };
+      lastSavedRef.current = { subject, bodyHtml, filter: filterKey };
       setAutosaveStatus("saved");
       setTimeout(() => setAutosaveStatus(null), 2000);
     }, 3000);
 
     return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
+  // editingDraftId + audience state included so autosave targets the right draft
+  // and persists audience-only edits.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subject, bodyHtml, tab]);
+  }, [subject, bodyHtml, tab, editingDraftId, filterType, selectedYears, selectedRoles, isCommittee, isBuildCrew, tenure, onboardingIncomplete]);
 
   return (
     <div className="space-y-6">
@@ -396,8 +435,8 @@ export function MessagesClient({
                   </div>
                   {!isRead && <Badge className="shrink-0 bg-pink-500/20 text-pink-400 text-[10px]">New</Badge>}
                   {isAdmin && (
-                    <Button variant="ghost" size="sm" className="h-7 shrink-0 text-sand-400 hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.message_id); setMyMessages((prev) => prev.filter((m) => m.message_id !== msg.message_id)); }} disabled={deletingId === msg.message_id}>
-                      {deletingId === msg.message_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                    <Button variant="ghost" size="sm" className="h-7 shrink-0 text-sand-400 hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleDismissMessage(msg.id); }} disabled={deletingId === msg.id} title="Remove from your inbox">
+                      {deletingId === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                     </Button>
                   )}
                 </CardContent>
@@ -711,7 +750,7 @@ function RenderHtml({ html }: { html: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (ref.current) ref.current.innerHTML = html;
+    if (ref.current) ref.current.innerHTML = sanitizeHtml(html);
   }, [html]);
 
   return (

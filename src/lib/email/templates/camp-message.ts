@@ -1,3 +1,13 @@
+/** Escape text for safe interpolation into HTML (prevents tag injection). */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function campMessageEmail({
   subject,
   bodyHtml,
@@ -7,13 +17,14 @@ export function campMessageEmail({
   bodyHtml: string;
   siteUrl: string;
 }): string {
+  const safeSubject = escapeHtml(subject);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
     @font-face {

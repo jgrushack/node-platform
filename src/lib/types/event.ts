@@ -25,6 +25,7 @@ export interface NodeEventRow {
   created_by: string;
   created_at: string;
   updated_at: string;
+  invites_sent_at: string | null;
 }
 
 export interface CalendarDayEvent {
@@ -37,4 +38,5 @@ export interface CalendarDayEvent {
   join_link: string | null;
   description: string | null;
   created_by?: string;
+  invites_sent_at?: string | null;
 }
