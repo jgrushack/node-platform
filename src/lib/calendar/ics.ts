@@ -31,24 +31,51 @@ export interface IcsOrganizer {
 function escapeText(value: string): string {
   return value
     .replace(/\\/g, "\\\\")
-    .replace(/\n/g, "\\n")
+    // Normalize all line breaks (CRLF, CR, LF) to an escaped \n. A bare CR left
+    // unescaped can break line folding / inject lines in some parsers.
+    .replace(/\r\n|\r|\n/g, "\\n")
     .replace(/,/g, "\\,")
-    .replace(/;/g, "\\;");
+    .replace(/;/g, "\\;")
+    // Strip remaining control chars that are not valid in iCal text values.
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
+}
+
+/**
+ * Sanitize a URI for emission as a URL/property value. Only http(s) is allowed,
+ * and any control chars (incl. CR/LF) reject the value to prevent line injection.
+ * Returns null if the URI is unsafe to emit.
+ */
+function sanitizeUri(value: string): string | null {
+  if (!/^https?:\/\//i.test(value)) return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(value)) return null;
+  return value;
 }
 
 /** Fold lines longer than 75 octets per RFC 5545 §3.1 (CRLF + space). */
 function foldLine(line: string): string {
-  if (line.length <= 75) return line;
+  const encoder = new TextEncoder();
+  if (encoder.encode(line).length <= 75) return line;
+  // Fold on UTF-8 byte boundaries, never splitting a multi-byte code point.
+  // First line holds 75 octets; continuation lines hold 74 (+ the leading space = 75).
   const chunks: string[] = [];
-  let i = 0;
-  // First chunk: 75 chars; subsequent: 74 chars (the leading space counts).
-  chunks.push(line.slice(i, i + 75));
-  i += 75;
-  while (i < line.length) {
-    chunks.push(" " + line.slice(i, i + 74));
-    i += 74;
+  let current = "";
+  let currentBytes = 0;
+  let limit = 75;
+  for (const ch of Array.from(line)) {
+    const chBytes = encoder.encode(ch).length;
+    if (currentBytes + chBytes > limit) {
+      chunks.push(current);
+      current = ch;
+      currentBytes = chBytes;
+      limit = 74;
+    } else {
+      current += ch;
+      currentBytes += chBytes;
+    }
   }
-  return chunks.join("\r\n");
+  if (current) chunks.push(current);
+  return chunks.map((c, i) => (i === 0 ? c : " " + c)).join("\r\n");
 }
 
 function compactDate(date: string): string {
@@ -56,9 +83,21 @@ function compactDate(date: string): string {
   return date.replace(/-/g, "");
 }
 
+/** "19:00" or "19:00:00" -> "190000". Postgres `time` columns serialize as
+ *  HH:MM:SS; <input type=time> gives HH:MM. Normalize to HHMMSS either way. */
+function compactTime(time: string): string {
+  return time.slice(0, 5).replace(":", "") + "00";
+}
+
 function compactDateTime(date: string, time: string): string {
-  // "2026-06-15", "19:00" -> "20260615T190000"
-  return `${compactDate(date)}T${time.replace(":", "")}00`;
+  // "2026-06-15", "19:00:00" -> "20260615T190000"
+  return `${compactDate(date)}T${compactTime(time)}`;
+}
+
+/** Minutes-since-midnight for an "HH:MM[:SS]" string (for end<=start rollover). */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.slice(0, 5).split(":").map(Number);
+  return h * 60 + m;
 }
 
 function utcStamp(iso?: string | null): string {
@@ -92,7 +131,13 @@ function buildEventBlock(
   if (event.startTime) {
     lines.push(`DTSTART:${compactDateTime(event.date, event.startTime)}`);
     if (event.endTime) {
-      lines.push(`DTEND:${compactDateTime(event.date, event.endTime)}`);
+      // If the end time is at/before the start (overnight event entered on a
+      // single date), roll DTEND to the next day so it's never before DTSTART.
+      const endDate =
+        timeToMinutes(event.endTime) <= timeToMinutes(event.startTime)
+          ? addOneDay(event.date)
+          : compactDate(event.date);
+      lines.push(`DTEND:${endDate}T${compactTime(event.endTime)}`);
     } else {
       // Default 1-hour duration when end time is missing.
       const [h, m] = event.startTime.split(":").map(Number);
@@ -117,7 +162,8 @@ function buildEventBlock(
     lines.push(`LOCATION:${escapeText(event.location)}`);
   }
   if (event.url) {
-    lines.push(`URL:${event.url}`);
+    const safeUrl = sanitizeUri(event.url);
+    if (safeUrl) lines.push(`URL:${safeUrl}`);
   }
   if (organizer) {
     const cn = organizer.name ? `;CN=${escapeText(organizer.name)}` : "";

@@ -1,3 +1,13 @@
+/** Escape text for safe interpolation into HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function calendarInviteEmail({
   firstName,
   title,
@@ -15,13 +25,18 @@ export function calendarInviteEmail({
   siteUrl: string;
   webcalUrl: string;
 }): string {
-  const safeDescription = (description ?? "").trim();
+  // firstName is member-controlled profile data; title/description are admin
+  // authored. Escape all before interpolating into HTML (then convert newlines).
+  const safeFirstName = escapeHtml(firstName);
+  const safeTitle = escapeHtml(title);
+  const safeDescription = escapeHtml((description ?? "").trim());
+  const safeJoinLink = joinLink ? escapeHtml(joinLink) : joinLink;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${title}</title>
+  <title>${safeTitle}</title>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700&display=swap" rel="stylesheet" />
 </head>
 <body style="margin:0;padding:0;background-color:#0F0120;font-family:'Exo 2',Arial,Helvetica,sans-serif;">
@@ -36,14 +51,14 @@ export function calendarInviteEmail({
           </tr>
           <tr>
             <td style="padding:32px;background-color:#1a0a2e;border-left:1px solid rgba(249,0,119,0.2);border-right:1px solid rgba(249,0,119,0.2);">
-              <p style="margin:0 0 16px;font-size:16px;color:#F9EDD8;">Hey ${firstName},</p>
+              <p style="margin:0 0 16px;font-size:16px;color:#F9EDD8;">Hey ${safeFirstName},</p>
               <p style="margin:0 0 24px;font-size:16px;color:#F9EDD8;line-height:1.6;">
                 You&rsquo;re invited to a NODE event. The calendar invite is attached &mdash; tap it from your email app to add it to your calendar and RSVP.
               </p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background-color:rgba(249,0,119,0.08);border:1px solid rgba(249,0,119,0.2);border-radius:12px;">
                 <tr>
                   <td style="padding:20px;">
-                    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#F9EDD8;">${title}</p>
+                    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#F9EDD8;">${safeTitle}</p>
                     <p style="margin:0 0 8px;font-size:14px;color:#F9EDD8;opacity:0.8;">${whenLabel}</p>
                     ${safeDescription ? `<p style="margin:8px 0 0;font-size:14px;color:#F9EDD8;line-height:1.5;opacity:0.9;">${safeDescription.replace(/\n/g, "<br/>")}</p>` : ""}
                   </td>
@@ -53,7 +68,7 @@ export function calendarInviteEmail({
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
                 <tr>
                   <td align="center" style="border-radius:12px;background:linear-gradient(135deg,#F90077,#FF3399,#FFB800);">
-                    <a href="${joinLink}" target="_blank" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;letter-spacing:1px;">
+                    <a href="${safeJoinLink}" target="_blank" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;letter-spacing:1px;">
                       Join the Call
                     </a>
                   </td>

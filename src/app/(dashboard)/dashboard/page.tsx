@@ -204,7 +204,11 @@ export default function DashboardPage() {
         .then(({ data: profile }) => {
           const realRole = profile?.role || "member";
           setOnboardingComplete(!!profile?.onboarding_completed_at);
-          setShowStorageSurvey(!profile?.storage_survey_completed_at);
+          const storageDismissed =
+            sessionStorage.getItem("storageSurveyDismissed") === "1";
+          setShowStorageSurvey(
+            !profile?.storage_survey_completed_at && !storageDismissed
+          );
           // Support view-as mode for super_admins
           const viewAs = localStorage.getItem("viewAsRole");
           const role =
@@ -538,6 +542,10 @@ export default function DashboardPage() {
         onSubmitted={(chargeCents) => {
           setShowStorageSurvey(false);
           if (chargeCents > 0) refreshBalance();
+        }}
+        onDismiss={() => {
+          sessionStorage.setItem("storageSurveyDismissed", "1");
+          setShowStorageSurvey(false);
         }}
       />
 

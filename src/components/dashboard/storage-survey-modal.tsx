@@ -49,9 +49,12 @@ type ItemState = { quantity: number; description: string };
 interface Props {
   open: boolean;
   onSubmitted: (chargeCents: number) => void;
+  /** Optional escape hatch — closes the survey for this session without
+   *  submitting. Surfaced only when a submit error would otherwise trap the user. */
+  onDismiss?: () => void;
 }
 
-export function StorageSurveyModal({ open, onSubmitted }: Props) {
+export function StorageSurveyModal({ open, onSubmitted, onDismiss }: Props) {
   const [step, setStep] = useState<Step>("ask");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -287,10 +290,21 @@ export function StorageSurveyModal({ open, onSubmitted }: Props) {
               >
                 {submitting
                   ? "Saving…"
-                  : `Continue — add $${(totalCents / 100).toFixed(2)} to balance`}
+                  : `Add $${(totalCents / 100).toFixed(2)} to balance`}
               </Button>
             </div>
           </div>
+        )}
+
+        {/* Always offer a way out so the modal never hard-traps the user. */}
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="mt-2 w-full text-center text-xs text-sand-500 underline hover:text-sand-300"
+          >
+            Maybe later
+          </button>
         )}
       </DialogContent>
     </Dialog>
