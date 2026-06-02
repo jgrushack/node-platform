@@ -39,8 +39,40 @@ Full review of the NODE platform (Next.js 16 / React 19 / Supabase) for mobile-f
 
 ---
 
+---
+
+## Security follow-up: CSP hardening (`next.config.ts`)
+
+Tightened the Content-Security-Policy with `form-action 'self'` and
+`frame-ancestors 'none'` (alongside the existing `object-src 'none'` /
+`base-uri 'self'`).
+
+**Attempted but reverted: a strict per-request nonce CSP** (removing
+`script-src 'unsafe-inline'`). A nonce-based CSP was implemented in middleware
+and then **reverted after a production smoke test caught a regression**: most
+pages here are statically prerendered (`○` in the build), so their inline
+bootstrap scripts are emitted at *build* time and can't carry a per-request
+nonce — the strict CSP blocked all 7 inline scripts (verified: 0/25 scripts
+nonced), which would white-screen those pages in a browser. Making it strict
+would force every page (including the public marketing pages) into dynamic
+rendering, a poor trade for defense-in-depth given the actual stored-content
+XSS sink (camp messages) is already DOMPurify-sanitized (#4).
+
+`script-src` therefore intentionally keeps `'unsafe-inline'`/`'unsafe-eval'`;
+the rationale is documented inline in `next.config.ts`.
+
+**Verified safe** via `next build` + `next start` smoke test: `/login` and `/`
+return 200 with all inline scripts intact; `/dashboard` still 307-redirects
+unauthenticated users; new directives present on every response.
+
+---
+
 ## Verification
-- `npm run build` — type-check / compile
-- `npm run test` — existing test suite
+- `npm run build` — type-check / compile (passes)
+- `npm run test` — existing test suite (18/18 pass)
+- `next start` production smoke test — CSP header correct, static pages render,
+  auth redirect intact
+- Migration `00041` applied to live DB (`qcbghpsrcjkjeykrxkcd`) and policy
+  verified via `pg_policy`
 
 See git diff for exact line-level changes.
