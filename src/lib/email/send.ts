@@ -1,4 +1,4 @@
-import { resend, FROM_EMAIL, REPLY_TO_EMAIL } from "./resend";
+import { getResend, FROM_EMAIL, REPLY_TO_EMAIL } from "./resend";
 import { existingMemberInviteEmail } from "./templates/existing-member-invite";
 import { approvedApplicantEmail } from "./templates/approved-applicant";
 import { campMessageEmail } from "./templates/camp-message";
@@ -40,7 +40,7 @@ export async function sendExistingMemberInvite({
   magicLink: string;
 }): Promise<{ success: true } | { error: string }> {
   const html = existingMemberInviteEmail({ firstName, magicLink });
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: FROM_EMAIL,
     replyTo: REPLY_TO_EMAIL,
     to: email,
@@ -67,7 +67,7 @@ export async function sendApprovedApplicantEmail({
   magicLink: string;
 }): Promise<{ success: true } | { error: string }> {
   const html = approvedApplicantEmail({ firstName, magicLink });
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: FROM_EMAIL,
     replyTo: REPLY_TO_EMAIL,
     to: email,
@@ -120,7 +120,7 @@ export async function sendCampMessageBatch({
       };
     });
 
-    const { error } = await resend.batch.send(emails);
+    const { error } = await getResend().batch.send(emails);
     if (error) {
       console.error("[sendCampMessageBatch]", error);
       failed += batch.length;
@@ -190,7 +190,7 @@ export async function sendEventInviteBatch({
       };
     });
 
-    const { error } = await resend.batch.send(emails);
+    const { error } = await getResend().batch.send(emails);
     if (error) {
       console.error("[sendEventInviteBatch]", error);
       failed += batch.length;
