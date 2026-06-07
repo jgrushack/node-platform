@@ -24,6 +24,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
+import { StorageSurveyModal } from "@/components/dashboard/storage-survey-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -157,6 +158,7 @@ export default function DashboardPage() {
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [showPwaPrompt, setShowPwaPrompt] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showStorageSurvey, setShowStorageSurvey] = useState(false);
   const [showTicketPopup, setShowTicketPopup] = useState(false);
   const [savingTicket, setSavingTicket] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
@@ -196,12 +198,17 @@ export default function DashboardPage() {
 
       supabase
         .from("profiles")
-        .select("role, onboarding_completed_at, is_committee_member")
+        .select("role, onboarding_completed_at, is_committee_member, storage_survey_completed_at")
         .eq("id", authUser.id)
         .single()
         .then(({ data: profile }) => {
           const realRole = profile?.role || "member";
           setOnboardingComplete(!!profile?.onboarding_completed_at);
+          const storageDismissed =
+            sessionStorage.getItem("storageSurveyDismissed") === "1";
+          setShowStorageSurvey(
+            !profile?.storage_survey_completed_at && !storageDismissed
+          );
           // Support view-as mode for super_admins
           const viewAs = localStorage.getItem("viewAsRole");
           const role =
@@ -447,6 +454,35 @@ export default function DashboardPage() {
     });
   }
 
+  function refreshBalance() {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      if (!authUser) return;
+      supabase
+        .from("camp_years")
+        .select("id")
+        .eq("year", 2026)
+        .single()
+        .then(({ data: campYear }) => {
+          if (!campYear) return;
+          supabase
+            .from("invoices")
+            .select("amount_cents, amount_paid_cents")
+            .eq("profile_id", authUser.id)
+            .eq("camp_year_id", campYear.id)
+            .then(({ data: invoices }) => {
+              if (!invoices) return;
+              const totalOwed = invoices.reduce((s, i) => s + i.amount_cents, 0);
+              const totalPaid = invoices.reduce(
+                (s, i) => s + i.amount_paid_cents,
+                0
+              );
+              setBalance(Math.max(0, totalOwed - totalPaid));
+            });
+        });
+    });
+  }
+
   const statusDisplay = campStatus ? getStatusDisplay(campStatus) : "—";
   const statusSubtext = campStatus ? getStatusSubtext(campStatus) : null;
   const statusIconColor = campStatus
@@ -500,6 +536,19 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* One-time storage survey — every user answers once */}
+      <StorageSurveyModal
+        open={showStorageSurvey}
+        onSubmitted={(chargeCents) => {
+          setShowStorageSurvey(false);
+          if (chargeCents > 0) refreshBalance();
+        }}
+        onDismiss={() => {
+          sessionStorage.setItem("storageSurveyDismissed", "1");
+          setShowStorageSurvey(false);
+        }}
+      />
+
       {/* Ticket sale reminder — shown once for members without a ticket */}
       <Dialog
         open={showTicketSaleModal}

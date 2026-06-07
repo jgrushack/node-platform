@@ -18,6 +18,13 @@ const nextConfig: NextConfig = {
           value: "camera=(self), microphone=(self), geolocation=()",
         },
         {
+          // NOTE: script-src keeps 'unsafe-inline'/'unsafe-eval' because most
+          // pages are statically prerendered — their inline bootstrap scripts
+          // are emitted at build time and cannot carry a per-request nonce
+          // (a nonce CSP would block them). The actual stored-content XSS sink
+          // (camp messages) is sanitized with DOMPurify at render instead.
+          // form-action / frame-ancestors / object-src / base-uri are the
+          // static-rendering-safe hardening we can enforce here.
           key: "Content-Security-Policy",
           value: [
             "default-src 'self'",
@@ -30,6 +37,8 @@ const nextConfig: NextConfig = {
             "frame-src https://www.instagram.com https://docs.google.com",
             "object-src 'none'",
             "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
           ].join("; "),
         },
       ],

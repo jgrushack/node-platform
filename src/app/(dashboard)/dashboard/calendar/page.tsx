@@ -1,5 +1,6 @@
 import { getNodeEvents } from "@/lib/actions/events";
 import { getCurrentUserRole, getCurrentUserId } from "@/lib/actions/applications";
+import { getConnectionStatus } from "@/lib/google/calendar";
 import { CalendarClient } from "./calendar-client";
 import type { CalendarDayEvent } from "@/lib/types/event";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
@@ -10,6 +11,13 @@ export default async function CalendarPage() {
     getCurrentUserRole(),
     getCurrentUserId(),
   ]);
+
+  const isAdmin = role === "admin" || role === "super_admin";
+
+  // Only admins see/use the connection — skip the service-role read for members.
+  const connStatus = isAdmin
+    ? await getConnectionStatus()
+    : { connected: false, accountEmail: null };
 
   const nodeEvents: CalendarDayEvent[] =
     "error" in eventsResult
@@ -24,6 +32,7 @@ export default async function CalendarPage() {
           join_link: e.join_link,
           description: e.description,
           created_by: e.created_by,
+          invites_sent_at: e.invites_sent_at,
         }));
 
   // BM calendar events visible to admin/super_admin only
@@ -48,6 +57,8 @@ export default async function CalendarPage() {
       events={allEvents}
       userRole={role ?? "member"}
       userId={userId ?? ""}
+      calendarConnected={connStatus.connected}
+      connectedEmail={connStatus.accountEmail}
     />
   );
 }

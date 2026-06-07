@@ -112,18 +112,21 @@ export default function DashboardLayout({
 
   // Re-fetch unread message count when navigating between pages
   useEffect(() => {
+    let ignore = false;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (!user || ignore) return;
       supabase
         .from("message_recipients")
         .select("id", { count: "exact", head: true })
         .eq("profile_id", user.id)
         .is("read_at", null)
         .then(({ count }) => {
-          setUnreadCount(count || 0);
+          if (!ignore) setUnreadCount(count || 0);
         });
     });
+    // Guard against out-of-order responses on fast navigation.
+    return () => { ignore = true; };
   }, [pathname]);
 
   async function handleLogout() {
@@ -172,8 +175,9 @@ export default function DashboardLayout({
         </ScrollArea>
       </aside>
 
-      {/* Main area */}
-      <div className="flex flex-1 flex-col">
+      {/* Main area — min-w-0 lets wide children (tables, emails) scroll inside
+          their own cards instead of widening the whole page on mobile. */}
+      <div className="flex flex-1 flex-col min-w-0">
         {/* Top header */}
         <header className="flex h-16 items-center justify-between border-b border-pink-500/10 px-4 md:px-6">
           {/* Mobile: hamburger + logo */}
@@ -275,7 +279,7 @@ export default function DashboardLayout({
         )}
 
         {/* Page content */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-w-0">
           <main className="p-4 md:p-8">{children}</main>
         </ScrollArea>
       </div>

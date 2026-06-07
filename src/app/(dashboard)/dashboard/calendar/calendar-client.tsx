@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,11 @@ import {
   Clock,
   Loader2,
   Phone,
+  Mail,
+  Check,
+  CalendarPlus,
+  Copy,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarDayEvent } from "@/lib/types/event";
@@ -40,6 +45,9 @@ import {
   createNodeEvent,
   updateNodeEvent,
   deleteNodeEvent,
+  sendEventInvites,
+  getEventRsvps,
+  type EventRsvpSummary,
 } from "@/lib/actions/events";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -59,9 +67,26 @@ interface CalendarClientProps {
   events: CalendarDayEvent[];
   userId: string;
   userRole: string;
+  calendarConnected: boolean;
+  connectedEmail: string | null;
 }
 
-export function CalendarClient({ events: initialEvents, userRole, userId }: CalendarClientProps) {
+function rsvpStatusLabel(status: string): string {
+  switch (status) {
+    case "accepted": return "Going";
+    case "tentative": return "Maybe";
+    case "declined": return "Can't";
+    default: return "No reply";
+  }
+}
+
+export function CalendarClient({
+  events: initialEvents,
+  userRole,
+  userId,
+  calendarConnected,
+  connectedEmail,
+}: CalendarClientProps) {
   const [events, setEvents] = useState(initialEvents);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -69,6 +94,62 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
   const [editingEvent, setEditingEvent] = useState<CalendarDayEvent | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [sendingInvites, setSendingInvites] = useState<string | null>(null);
+
+  // Calendar-subscribe (webcal) feed — built from the live origin to avoid a
+  // hydration mismatch (window is only available client-side).
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [feedUrl, setFeedUrl] = useState("");
+  const [webcalUrl, setWebcalUrl] = useState("");
+  useEffect(() => {
+    const origin = window.location.origin;
+    setFeedUrl(`${origin}/api/calendar.ics`);
+    setWebcalUrl(`${origin.replace(/^https?:/, "webcal:")}/api/calendar.ics`);
+  }, []);
+
+  async function copyFeedUrl() {
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      toast.success("Calendar link copied");
+    } catch {
+      toast.error("Couldn't copy — long-press the link to copy it.");
+    }
+  }
+
+  // RSVP viewer (responses pulled back from Google Calendar)
+  const [rsvpOpen, setRsvpOpen] = useState(false);
+  const [rsvpLoading, setRsvpLoading] = useState(false);
+  const [rsvpData, setRsvpData] = useState<EventRsvpSummary | null>(null);
+  const [rsvpTitle, setRsvpTitle] = useState("");
+
+  async function viewRsvps(event: CalendarDayEvent) {
+    setRsvpTitle(event.title);
+    setRsvpData(null);
+    setRsvpLoading(true);
+    setRsvpOpen(true);
+    const res = await getEventRsvps(event.id);
+    setRsvpLoading(false);
+    if ("error" in res) {
+      toast.error(res.error);
+      setRsvpOpen(false);
+      return;
+    }
+    setRsvpData(res);
+  }
+
+  // Surface the result of the Google OAuth connect flow (?gcal=...) as a toast.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const g = params.get("gcal");
+    if (!g) return;
+    if (g === "connected") toast.success("Google Calendar connected");
+    else if (g === "denied") toast.error("Google Calendar connection was cancelled");
+    else if (g === "misconfigured") toast.error("Google OAuth isn't configured yet (check env vars)");
+    else toast.error("Couldn't connect Google Calendar — please try again");
+    params.delete("gcal");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+  }, []);
 
   const isAdmin = userRole === "admin" || userRole === "super_admin";
   const isSuperAdmin = userRole === "super_admin";
@@ -264,6 +345,37 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
     if (remaining.length === 0) setSelectedDate(null);
   }
 
+  async function handleSendInvites(event: CalendarDayEvent) {
+    const confirmed = window.confirm(
+      `Send calendar invites for "${event.title}" to all confirmed NODE 2026 members? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setSendingInvites(event.id);
+    const result = await sendEventInvites(event.id);
+    if ("error" in result) {
+      toast.error(result.error);
+      setSendingInvites(null);
+      return;
+    }
+
+    const sentAt = new Date().toISOString();
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === event.id ? { ...e, invites_sent_at: sentAt } : e
+      )
+    );
+
+    if (result.failed > 0) {
+      toast.warning(
+        `Sent ${result.sent} of ${result.recipients} invites — ${result.failed} failed.`
+      );
+    } else {
+      toast.success(`Sent ${result.sent} invite${result.sent === 1 ? "" : "s"}.`);
+    }
+    setSendingInvites(null);
+  }
+
   function formatTime(time: string | null): string {
     if (!time) return "";
     const [h, m] = time.split(":");
@@ -307,6 +419,28 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
         )}
       </motion.div>
 
+      {/* Google Calendar connection (admin) — needed to send invites + collect RSVPs */}
+      {isAdmin && !calendarConnected && (
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-amber-200">
+            Connect a Google account to send calendar invites and collect RSVPs.
+          </span>
+          <a
+            href="/api/google/calendar/connect"
+            className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-pink-500 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-pink-600"
+          >
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Connect Google Calendar
+          </a>
+        </div>
+      )}
+      {isAdmin && calendarConnected && connectedEmail && (
+        <p className="text-xs text-sand-500">
+          Calendar invites send from{" "}
+          <span className="text-sand-400">{connectedEmail}</span>.
+        </p>
+      )}
+
       {/* Month Navigation */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -323,7 +457,7 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <h2 className="text-xl font-semibold text-sand-100 min-w-[200px] text-center">
+          <h2 className="text-lg sm:text-xl font-semibold text-sand-100 min-w-[140px] sm:min-w-[200px] text-center">
             {MONTHS[month]} {year}
           </h2>
           <Button
@@ -335,15 +469,128 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
             <ChevronRight className="h-5 w-5" />
           </Button>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goToToday}
-          className="border-pink-500/20 text-sand-300 hover:text-sand-100 hover:bg-pink-500/10"
-        >
-          Today
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSubscribeOpen(true)}
+            className="gap-1.5 border-pink-500/20 text-sand-300 hover:text-sand-100 hover:bg-pink-500/10"
+          >
+            <CalendarPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Subscribe</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToToday}
+            className="border-pink-500/20 text-sand-300 hover:text-sand-100 hover:bg-pink-500/10"
+          >
+            Today
+          </Button>
+        </div>
       </motion.div>
+
+      {/* Subscribe to the live calendar feed (webcal) */}
+      <Dialog open={subscribeOpen} onOpenChange={setSubscribeOpen}>
+        <DialogContent className="border-pink-500/10 sm:max-w-md bg-[rgba(36,3,68,0.92)] backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <CalendarPlus className="h-5 w-5 text-pink-400" />
+              Subscribe to the NODE calendar
+            </DialogTitle>
+            <DialogDescription className="text-sand-400">
+              Add every NODE event to your calendar app — new events show up
+              automatically as we add them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <a
+              href={webcalUrl || undefined}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-pink-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-pink-600"
+            >
+              <CalendarPlus className="h-4 w-4" />
+              Add to my calendar
+            </a>
+            <p className="text-center text-xs text-sand-500">
+              Opens Apple Calendar or Google Calendar to subscribe. On Android,
+              copy the link below and add it under{" "}
+              <span className="text-sand-400">Other calendars → From URL</span>.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={feedUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="border-pink-500/20 text-xs text-sand-300"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyFeedUrl}
+                aria-label="Copy calendar link"
+                className="shrink-0 border-pink-500/20 text-sand-300 hover:text-sand-100"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <a
+              href={feedUrl || undefined}
+              download="node-2026.ics"
+              className="block text-center text-xs text-pink-400 underline hover:text-pink-300"
+            >
+              Or download the .ics file
+            </a>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* RSVP viewer — responses synced from Google Calendar */}
+      <Dialog open={rsvpOpen} onOpenChange={setRsvpOpen}>
+        <DialogContent className="border-pink-500/10 sm:max-w-md bg-[rgba(36,3,68,0.92)] backdrop-blur-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <Users className="h-5 w-5 text-pink-400" />
+              RSVPs — {rsvpTitle}
+            </DialogTitle>
+            <DialogDescription className="text-sand-400">
+              Responses collected by Google Calendar.
+            </DialogDescription>
+          </DialogHeader>
+          {rsvpLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-pink-400" />
+            </div>
+          ) : rsvpData ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {[
+                  { label: "Going", n: rsvpData.counts.accepted, c: "text-emerald-400" },
+                  { label: "Maybe", n: rsvpData.counts.tentative, c: "text-amber-300" },
+                  { label: "Can't", n: rsvpData.counts.declined, c: "text-red-400" },
+                  { label: "No reply", n: rsvpData.counts.needsAction, c: "text-sand-400" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-lg bg-white/5 p-2">
+                    <p className={`text-lg font-semibold ${s.c}`}>{s.n}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-sand-500">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {rsvpData.attendees.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-sand-500">No attendees yet.</p>
+                ) : (
+                  rsvpData.attendees.map((a, i) => (
+                    <div key={`${a.email}-${i}`} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-sand-200">{a.name}</span>
+                      <span className="shrink-0 text-sand-500">{rsvpStatusLabel(a.status)}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs text-sand-400">
@@ -519,24 +766,56 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
                           </a>
                         )}
 
-                        {isAdmin && (
-                          <div className="flex items-center gap-2 pt-1">
+                        {isAdmin && event.event_type !== "bm" && (
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => openEditForm(event)}
-                              className="h-7 gap-1.5 text-xs text-sand-400 hover:text-sand-200 hover:bg-pink-500/10"
+                              className="h-9 gap-1.5 text-xs text-sand-400 hover:text-sand-200 hover:bg-pink-500/10"
                             >
                               <Pencil className="h-3 w-3" />
                               Edit
                             </Button>
+                            {event.invites_sent_at ? (
+                              <>
+                                <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400">
+                                  <Check className="h-3 w-3" />
+                                  Invites sent {new Date(event.invites_sent_at).toLocaleDateString()}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => viewRsvps(event)}
+                                  className="h-9 gap-1.5 text-xs text-sand-400 hover:text-sand-200 hover:bg-pink-500/10"
+                                >
+                                  <Users className="h-3 w-3" />
+                                  RSVPs
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSendInvites(event)}
+                                disabled={sendingInvites === event.id}
+                                className="h-9 gap-1.5 text-xs text-pink-400 hover:text-pink-300 hover:bg-pink-500/10"
+                              >
+                                {sendingInvites === event.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Mail className="h-3 w-3" />
+                                )}
+                                Send invites
+                              </Button>
+                            )}
                             {(isSuperAdmin || event.created_by === userId) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleDelete(event.id)}
                                 disabled={deleting === event.id}
-                                className="h-7 gap-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                className="h-9 gap-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
                               >
                                 {deleting === event.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -598,7 +877,7 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
         </DialogContent>
       </Dialog>
 
-      {/* Event Form Dialog (super_admin only) */}
+      {/* Event Form Dialog (admin + super_admin) */}
       <Dialog
         open={formOpen}
         onOpenChange={(open) => {
@@ -677,7 +956,7 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
                   id="start_time"
                   name="start_time"
                   type="time"
-                  defaultValue={editingEvent?.start_time ?? ""}
+                  defaultValue={editingEvent?.start_time?.slice(0, 5) ?? ""}
                   className="border-pink-500/20"
                 />
               </div>
@@ -690,7 +969,7 @@ export function CalendarClient({ events: initialEvents, userRole, userId }: Cale
                   id="end_time"
                   name="end_time"
                   type="time"
-                  defaultValue={editingEvent?.end_time ?? ""}
+                  defaultValue={editingEvent?.end_time?.slice(0, 5) ?? ""}
                   className="border-pink-500/20"
                 />
               </div>

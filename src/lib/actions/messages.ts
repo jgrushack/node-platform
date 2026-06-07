@@ -81,23 +81,32 @@ export async function previewRecipients(
     .select("profile_id, camp_years(year)")
     .neq("status", "cancelled");
 
-  // Build per-profile registration year sets
-  const yearsByProfile: Record<string, number[]> = {};
+  // Build per-profile registration year sets (deduped — a profile can have
+  // multiple registration rows for the same year, which would otherwise
+  // inflate tenure counts).
+  const yearSetByProfile: Record<string, Set<number>> = {};
   for (const r of regs || []) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const year = (r as any).camp_years?.year;
     if (year) {
-      if (!yearsByProfile[r.profile_id]) yearsByProfile[r.profile_id] = [];
-      yearsByProfile[r.profile_id].push(year);
+      if (!yearSetByProfile[r.profile_id]) yearSetByProfile[r.profile_id] = new Set();
+      yearSetByProfile[r.profile_id].add(year);
     }
+  }
+  const yearsByProfile: Record<string, number[]> = {};
+  for (const id in yearSetByProfile) {
+    yearsByProfile[id] = [...yearSetByProfile[id]];
   }
 
   let candidates = allProfiles;
 
-  // Standing gate: exclude not_invited_back and reapply (they're effectively out)
+  // Standing gate: exclude not_invited_back and reapply (they're effectively
+  // out), and anyone without a deliverable email (they can't be messaged and
+  // would otherwise inflate the recipient count).
   candidates = candidates.filter((p) => {
     const s = standings[p.id];
-    return s !== "not_invited_back" && s !== "reapply";
+    if (s === "not_invited_back" || s === "reapply") return false;
+    return !!p.email && p.email.trim().length > 0;
   });
 
   // If type is "all", return everyone who passed the standing gate
@@ -375,19 +384,22 @@ export async function sendMessage(
   // Send emails
   const emailRecipients = preview.recipients.map((r) => ({
     email: r.email,
+    profileId: r.id,
   }));
 
-  const { sent, failed } = await sendCampMessageBatch({
+  const { sent, failed, sentProfileIds } = await sendCampMessageBatch({
     recipients: emailRecipients,
     subject,
     bodyHtml: body_html,
   });
 
-  if (sent > 0) {
+  // Only mark recipients whose batch actually succeeded as emailed.
+  if (sentProfileIds.length > 0) {
     await admin
       .from("message_recipients")
       .update({ email_sent: true })
-      .eq("message_id", messageId);
+      .eq("message_id", messageId)
+      .in("profile_id", sentProfileIds);
   }
 
   return { success: true, messageId, sent, failed };
@@ -582,6 +594,35 @@ export async function markMessageRead(
   if (error) {
     console.error("[markMessageRead]", error);
     return { error: "Failed to mark message as read." };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Dismiss a message from the current user's own inbox.
+ * Removes only the caller's recipient row (scoped by RLS to their own row) —
+ * does NOT delete the message for other recipients. Use deleteMessage() (admin)
+ * to remove a message entirely.
+ */
+export async function dismissMessage(
+  recipientId: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { error } = await supabase
+    .from("message_recipients")
+    .delete()
+    .eq("id", recipientId)
+    .eq("profile_id", user.id);
+
+  if (error) {
+    console.error("[dismissMessage]", error);
+    return { error: "Failed to dismiss message." };
   }
 
   return { success: true };
