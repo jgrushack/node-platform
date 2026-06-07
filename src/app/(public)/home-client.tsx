@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { MapPin } from "lucide-react";
 
 // Burning Man 2026: Aug 30 – Sep 7. Gates open Sunday Aug 30 at midnight PT.
 const BURN_START = new Date("2026-08-30T00:00:00-07:00").getTime();
@@ -206,6 +207,21 @@ export default function HomeClient() {
         >
           <p>A network of dreamers and explorers.</p>
           <p>Born in the desert. Built for the future.</p>
+        </motion.div>
+
+        {/* Camp location — NODE's 2026 placement in Black Rock City */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.5 }}
+          className="mt-6"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-pink-500/30 bg-pink-500/10 px-4 py-2 backdrop-blur-sm">
+            <MapPin className="h-4 w-4 shrink-0 text-pink-400" aria-hidden="true" />
+            <span className="text-sm font-semibold text-sand-100 sm:text-base">
+              9:00 &amp; G Plaza
+            </span>
+          </div>
         </motion.div>
 
         {/* Countdown to Burning Man 2026 */}
