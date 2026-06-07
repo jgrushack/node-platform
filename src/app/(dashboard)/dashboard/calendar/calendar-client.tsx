@@ -877,7 +877,7 @@ export function CalendarClient({
         </DialogContent>
       </Dialog>
 
-      {/* Event Form Dialog (super_admin only) */}
+      {/* Event Form Dialog (admin + super_admin) */}
       <Dialog
         open={formOpen}
         onOpenChange={(open) => {
