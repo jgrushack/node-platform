@@ -3,6 +3,7 @@ import { existingMemberInviteEmail } from "./templates/existing-member-invite";
 import { approvedApplicantEmail } from "./templates/approved-applicant";
 import { campMessageEmail } from "./templates/camp-message";
 import { calendarInviteEmail } from "./templates/calendar-invite";
+import { duesPaymentFailedEmail } from "./templates/dues-payment-failed";
 import { buildInviteIcs, type IcsEvent, type IcsOrganizer } from "@/lib/calendar/ics";
 
 /** Strip HTML tags and decode entities into plain text for email fallback. */
@@ -51,6 +52,32 @@ export async function sendExistingMemberInvite({
 
   if (error) {
     console.error("[sendExistingMemberInvite]", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
+}
+
+export async function sendDuesPaymentFailed({
+  email,
+  firstName,
+}: {
+  email: string;
+  firstName: string;
+}): Promise<{ success: true } | { error: string }> {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://node.family";
+  const html = duesPaymentFailedEmail({ firstName, siteUrl });
+  const { error } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
+    to: email,
+    subject: "Your NODE 2026 dues payment didn't go through",
+    html,
+    text: htmlToPlainText(html),
+  });
+
+  if (error) {
+    console.error("[sendDuesPaymentFailed]", error);
     return { error: error.message };
   }
 

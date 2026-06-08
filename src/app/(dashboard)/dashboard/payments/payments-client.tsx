@@ -87,6 +87,7 @@ export function PaymentsClient() {
   const [view, setView] = useState<View>("dashboard");
   const [balance, setBalance] = useState<number | null>(null);
   const [hasTicketInvoice, setHasTicketInvoice] = useState(false);
+  const [hasProcessing, setHasProcessing] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -100,6 +101,8 @@ export function PaymentsClient() {
         .select("amount_cents, amount_paid_cents, status, description")
         .eq("profile_id", user.id)
         .not("status", "in", '("cancelled","refunded")');
+
+      setHasProcessing((invoices ?? []).some((inv) => inv.status === "processing"));
 
       if (invoices && invoices.length > 0) {
         const total = invoices.reduce(
@@ -152,6 +155,7 @@ export function PaymentsClient() {
             key="dashboard"
             balance={balance}
             hasTicketInvoice={hasTicketInvoice}
+            pending={hasProcessing}
             loading={loading}
             onNavigate={setView}
           />
@@ -175,11 +179,13 @@ export function PaymentsClient() {
 function DashboardView({
   balance,
   hasTicketInvoice,
+  pending,
   loading,
   onNavigate,
 }: {
   balance: number | null;
   hasTicketInvoice: boolean;
+  pending: boolean;
   loading: boolean;
   onNavigate: (view: View) => void;
 }) {
@@ -221,6 +227,11 @@ function DashboardView({
           {hasTicketInvoice && (
             <p className="mt-4 text-xs text-sand-400 border-t border-blue-900/30 pt-3">
               Includes 1 main sale ticket at $675 + taxes &amp; fees.
+            </p>
+          )}
+          {pending && (
+            <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
+              Bank payment pending — clears in 3–5 business days
             </p>
           )}
         </CardContent>

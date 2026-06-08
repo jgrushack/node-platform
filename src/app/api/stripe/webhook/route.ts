@@ -50,6 +50,28 @@ async function applyPayment(
   return row ?? null;
 }
 
+/** Best-effort dues-failure email — never let an email error fail the webhook. */
+async function notifyPaymentFailed(admin: Admin, invoiceId: string): Promise<void> {
+  try {
+    const { data: inv } = await admin
+      .from("invoices")
+      .select("profile_id")
+      .eq("id", invoiceId)
+      .maybeSingle();
+    if (!inv?.profile_id) return;
+    const { data: userRes } = await admin.auth.admin.getUserById(inv.profile_id);
+    const email = userRes?.user?.email;
+    if (!email) return;
+    const fullName =
+      (userRes.user?.user_metadata?.full_name as string | undefined) ?? "";
+    const firstName = (fullName || email.split("@")[0]).split(" ")[0] || "there";
+    const { sendDuesPaymentFailed } = await import("@/lib/email/send");
+    await sendDuesPaymentFailed({ email, firstName });
+  } catch (e) {
+    console.error("[stripe webhook] notifyPaymentFailed", e);
+  }
+}
+
 async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
   const stripe = getStripe();
 
@@ -115,6 +137,7 @@ async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
         .update({ status: "sent" })
         .eq("id", invoiceId)
         .eq("status", "processing");
+      await notifyPaymentFailed(admin, invoiceId);
       return;
     }
 
@@ -157,6 +180,7 @@ async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
         .from("invoices")
         .update({ status: "overdue" })
         .eq("id", ourInvoiceId);
+      await notifyPaymentFailed(admin, ourInvoiceId);
       return;
     }
 

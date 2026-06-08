@@ -241,6 +241,7 @@ export default function DashboardPage() {
   const [arrivalDate, setArrivalDate] = useState<string | null>(null);
   const [departureDate, setDepartureDate] = useState<string | null>(null);
   const [duesState, setDuesState] = useState<ChecklistState>("todo");
+  const [duesProcessing, setDuesProcessing] = useState(false);
   const [showTicketTravelModal, setShowTicketTravelModal] = useState(false);
   const [showStorageEdit, setShowStorageEdit] = useState(false);
   const [showArrivalModal, setShowArrivalModal] = useState(false);
@@ -354,6 +355,9 @@ export default function DashboardPage() {
 
                         // Dues row of the Road to 2026 checklist.
                         const dues = active.filter((i) => i.kind === "dues_2026");
+                        setDuesProcessing(
+                          dues.some((i) => i.status === "processing")
+                        );
                         if (dues.length === 0) {
                           setDuesState("todo");
                         } else {
@@ -670,9 +674,11 @@ export default function DashboardPage() {
       detail:
         duesState === "done"
           ? "Paid"
-          : duesState === "attention"
-            ? "Balance due"
-            : "Not set up yet",
+          : duesProcessing
+            ? "Bank payment processing"
+            : duesState === "attention"
+              ? "Balance due"
+              : "Not set up yet",
       onClick: () => router.push("/dashboard/payments"),
     },
     {
