@@ -29,6 +29,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { STORAGE_PRICES_CENTS } from "@/lib/actions/storage-survey";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -49,10 +50,12 @@ const PAYMENT_FREQUENCIES = [
 
 const DEPOSIT_AMOUNT = 500; // TBD — placeholder
 
+// Prices mirror the canonical storage survey constant so both surfaces match.
 const STORAGE_ITEMS = [
-  { key: "bins", label: "Storage Bins", price: 50, icon: Package, unit: "bin" },
-  { key: "bikes", label: "Bikes", price: 75, icon: Package, unit: "bike" },
-  { key: "ac", label: "AC Units", price: 100, icon: Package, unit: "unit" },
+  { key: "bins", label: "Storage Bins", price: STORAGE_PRICES_CENTS.bin / 100, icon: Package, unit: "bin" },
+  { key: "bikes", label: "Bikes", price: STORAGE_PRICES_CENTS.bike / 100, icon: Package, unit: "bike" },
+  { key: "ac", label: "AC Units", price: STORAGE_PRICES_CENTS.ac / 100, icon: Package, unit: "unit" },
+  { key: "shiftpods", label: "Shiftpod / Tent", price: STORAGE_PRICES_CENTS.shiftpod / 100, icon: Tent, unit: "shiftpod" },
 ] as const;
 
 const EQUIPMENT_ITEMS = [
@@ -75,6 +78,7 @@ interface StorageQuantities {
   bins: number;
   bikes: number;
   ac: number;
+  shiftpods: number;
 }
 
 // ── Main Component ─────────────────────────────────────────────────
@@ -912,6 +916,7 @@ function StorageFlow({ onBack }: { onBack: () => void }) {
     bins: 0,
     bikes: 0,
     ac: 0,
+    shiftpods: 0,
   });
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [processing, setProcessing] = useState(false);

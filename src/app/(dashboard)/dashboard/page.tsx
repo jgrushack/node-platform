@@ -34,7 +34,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Lock, Loader2 as Spinner, Ticket } from "lucide-react";
+import {
+  Lock,
+  Loader2 as Spinner,
+  Ticket,
+  Package,
+  Bus,
+  Wallet,
+  UserCircle,
+  CalendarCheck,
+} from "lucide-react";
+import { ArrivalDatesModal } from "@/components/dashboard/arrival-dates-modal";
+import {
+  RoadTo2026,
+  type ChecklistRow,
+  type ChecklistState,
+} from "@/components/dashboard/road-to-2026";
+import {
+  getStorageSurvey,
+  type GetStorageSurveyResult,
+} from "@/lib/actions/storage-survey";
+import type { CarPassStatus } from "@/lib/actions/registrations";
+import { useRouter } from "next/navigation";
 
 interface UserData {
   firstName: string;
@@ -130,7 +151,56 @@ const documents: { label: string; type: "action" | "view"; comingSoon: boolean }
   { label: "Budget", type: "view", comingSoon: false },
 ];
 
-type CarPassStatus = "yes" | "no" | "need_ride" | "burner_express";
+// ── Road to 2026 helpers ───────────────────────────────────────────
+function transportLabel(s: CarPassStatus | null): string {
+  switch (s) {
+    case "car_pass_parking":
+      return "Car Pass + Parking";
+    case "burner_express":
+      return "Burner Express";
+    case "ride_sorted":
+      return "Getting a ride";
+    case "ride_unsorted":
+    case "need_ride": // legacy
+      return "Need a ride (unsorted)";
+    case "other":
+      return "Other (plane / bike / etc.)";
+    case "yes": // legacy
+      return "Car Pass";
+    default:
+      return "Not set yet";
+  }
+}
+
+function transportState(s: CarPassStatus | null): ChecklistState {
+  if (!s || s === "no") return "todo";
+  if (s === "ride_unsorted" || s === "need_ride") return "attention";
+  return "done";
+}
+
+function storageRow(info: GetStorageSurveyResult | null): {
+  state: ChecklistState;
+  detail: string;
+} {
+  if (!info || "error" in info || !info.completed)
+    return { state: "todo", detail: "Tell us what you're storing" };
+  if (!info.hasInvoice) return { state: "done", detail: "Nothing in storage" };
+  const due = Math.max(0, info.amountCents - info.amountPaidCents);
+  if (due <= 0) return { state: "done", detail: "Paid" };
+  return {
+    state: "attention",
+    detail: `$${(due / 100).toLocaleString("en-US")} due`,
+  };
+}
+
+function formatDateShort(d: string | null): string | null {
+  if (!d) return null;
+  const [y, m, day] = d.split("-").map(Number);
+  return new Date(y, m - 1, day).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
@@ -166,6 +236,15 @@ export default function DashboardPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  // Road to 2026 checklist data + entry-point modals
+  const [storageInfo, setStorageInfo] = useState<GetStorageSurveyResult | null>(null);
+  const [arrivalDate, setArrivalDate] = useState<string | null>(null);
+  const [departureDate, setDepartureDate] = useState<string | null>(null);
+  const [duesState, setDuesState] = useState<ChecklistState>("todo");
+  const [showTicketTravelModal, setShowTicketTravelModal] = useState(false);
+  const [showStorageEdit, setShowStorageEdit] = useState(false);
+  const [showArrivalModal, setShowArrivalModal] = useState(false);
+  const router = useRouter();
 
   const userTz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -209,6 +288,7 @@ export default function DashboardPage() {
           setShowStorageSurvey(
             !profile?.storage_survey_completed_at && !storageDismissed
           );
+          getStorageSurvey().then((res) => setStorageInfo(res));
           // Support view-as mode for super_admins
           const viewAs = localStorage.getItem("viewAsRole");
           const role =
@@ -230,24 +310,28 @@ export default function DashboardPage() {
               // Check registration
               supabase
                 .from("registrations")
-                .select("status, has_ticket, has_car_pass")
+                .select("status, has_ticket, has_car_pass, arrival_date, departure_date")
                 .eq("profile_id", authUser.id)
                 .eq("camp_year_id", campYear.id)
                 .maybeSingle()
                 .then(({ data: reg }) => {
+                  if (reg) {
+                    setArrivalDate(reg.arrival_date ?? null);
+                    setDepartureDate(reg.departure_date ?? null);
+                  }
                   if (reg && reg.status === "confirmed") {
                     setHasTicket(!!reg.has_ticket);
                     setCarPassStatus((reg.has_car_pass as CarPassStatus) || "no");
                     if (!reg.has_ticket && typeof window !== "undefined") {
                       const dismissed = window.localStorage.getItem(
-                        "node:ticketSaleModalDismissed"
+                        "node:ticketModalDismissed:v2"
                       );
                       if (!dismissed) setShowTicketSaleModal(true);
                     }
                     // Registration confirmed — check invoices for payment state
                     supabase
                       .from("invoices")
-                      .select("amount_cents, amount_paid_cents, status")
+                      .select("amount_cents, amount_paid_cents, status, kind")
                       .eq("profile_id", authUser.id)
                       .eq("camp_year_id", campYear.id)
                       .then(({ data: invoices }) => {
@@ -256,13 +340,27 @@ export default function DashboardPage() {
                           setBalance(0);
                           return;
                         }
-                        const totalOwed = invoices.reduce((s, i) => s + i.amount_cents, 0);
-                        const totalPaid = invoices.reduce((s, i) => s + i.amount_paid_cents, 0);
+                        // Exclude cancelled/refunded — matches the Payments page.
+                        const active = invoices.filter(
+                          (i) => i.status !== "cancelled" && i.status !== "refunded"
+                        );
+                        const totalOwed = active.reduce((s, i) => s + i.amount_cents, 0);
+                        const totalPaid = active.reduce((s, i) => s + i.amount_paid_cents, 0);
                         setBalance(Math.max(0, totalOwed - totalPaid));
                         let payment: PaymentState = "unpaid";
                         if (totalPaid >= totalOwed) payment = "paid";
                         else if (totalPaid > 0) payment = "partial";
                         setCampStatus({ label: "Attending", payment });
+
+                        // Dues row of the Road to 2026 checklist.
+                        const dues = active.filter((i) => i.kind === "dues_2026");
+                        if (dues.length === 0) {
+                          setDuesState("todo");
+                        } else {
+                          const owed = dues.reduce((s, i) => s + i.amount_cents, 0);
+                          const paid = dues.reduce((s, i) => s + i.amount_paid_cents, 0);
+                          setDuesState(paid >= owed ? "done" : "attention");
+                        }
                       });
                   } else if (reg && reg.status === "cancelled") {
                     setCampStatus({ label: "Not Attending", payment: null });
@@ -534,14 +632,87 @@ export default function DashboardPage() {
     },
   ];
 
+  // ── Road to 2026 checklist rows ──────────────────────────────────
+  const storage = storageRow(storageInfo);
+  const checklistRows: ChecklistRow[] = [
+    {
+      key: "ticket",
+      label: "Burning Man Ticket",
+      icon: Ticket,
+      state: hasTicket ? "done" : "todo",
+      detail: hasTicket ? "Got my ticket" : "Still need a ticket",
+      onClick: () => setShowTicketTravelModal(true),
+    },
+    {
+      key: "transport",
+      label: "Transport",
+      icon: Bus,
+      state: transportState(carPassStatus),
+      detail: transportLabel(carPassStatus),
+      onClick: () => setShowTicketTravelModal(true),
+    },
+    {
+      key: "storage",
+      label: "Storage",
+      icon: Package,
+      state: storage.state,
+      detail: storage.detail,
+      onClick: () => setShowStorageEdit(true),
+    },
+    {
+      key: "dues",
+      label: "Dues",
+      icon: Wallet,
+      state: duesState,
+      detail:
+        duesState === "done"
+          ? "Paid"
+          : duesState === "attention"
+            ? "Balance due"
+            : "Not set up yet",
+      onClick: () => router.push("/dashboard/payments"),
+    },
+    {
+      key: "camper",
+      label: "Camper Info",
+      icon: UserCircle,
+      state: onboardingComplete ? "done" : "todo",
+      detail: onboardingComplete ? "Profile complete" : "Finish your profile",
+      onClick: () => router.push("/dashboard/profile"),
+    },
+    {
+      key: "arrival",
+      label: "Arrival Dates",
+      icon: CalendarCheck,
+      state: arrivalDate ? "done" : "todo",
+      detail: arrivalDate
+        ? `Arriving ${formatDateShort(arrivalDate)}${departureDate ? ` – ${formatDateShort(departureDate)}` : ""}`
+        : "Set your playa dates",
+      onClick: () => setShowArrivalModal(true),
+    },
+  ];
+
+  // One load-time modal at a time (priority order). Each modal's own dismissal
+  // flips its flag false, which surfaces the next eligible one.
+  const loadModal = showStorageSurvey
+    ? "storage"
+    : showTicketSaleModal
+      ? "ticket"
+      : showPasswordDialog
+        ? "password"
+        : showPwaPrompt
+          ? "pwa"
+          : null;
+
   return (
     <div className="space-y-8">
       {/* One-time storage survey — every user answers once */}
       <StorageSurveyModal
-        open={showStorageSurvey}
+        open={loadModal === "storage"}
         onSubmitted={(chargeCents) => {
           setShowStorageSurvey(false);
           if (chargeCents > 0) refreshBalance();
+          getStorageSurvey().then((res) => setStorageInfo(res));
         }}
         onDismiss={() => {
           sessionStorage.setItem("storageSurveyDismissed", "1");
@@ -549,50 +720,45 @@ export default function DashboardPage() {
         }}
       />
 
-      {/* Ticket sale reminder — shown once for members without a ticket */}
+      {/* Still-need-a-ticket reminder — shown once for members without a ticket */}
       <Dialog
-        open={showTicketSaleModal}
+        open={loadModal === "ticket"}
         onOpenChange={(open) => {
           if (!open) {
             setShowTicketSaleModal(false);
             if (typeof window !== "undefined") {
-              window.localStorage.setItem(
-                "node:ticketSaleModalDismissed",
-                "1"
-              );
+              window.localStorage.setItem("node:ticketModalDismissed:v2", "1");
             }
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="glass border-pink-500/10 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-sand-100">
               <Ticket className="h-5 w-5 text-pink-400" />
-              Ticket registration is open
+              Still need a ticket?
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm text-sand-300">
             <p>
-              The <strong className="text-sand-100">Main Sale</strong> is{" "}
-              <strong className="text-sand-100">
-                April 29, 2026 at 12:00 PM (noon) PDT
-              </strong>
-              .
+              The <strong className="text-sand-100">Main Sale</strong> has
+              closed — but you&apos;ve still got options:
             </p>
-            <p>
-              Head to{" "}
-              <a
-                href="https://tickets.burningman.org"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-pink-400 hover:text-pink-300 underline"
-              >
-                tickets.burningman.org
-              </a>{" "}
-              to register for the sale.
-            </p>
+            <ul className="space-y-2">
+              <li className="rounded-lg border border-pink-500/15 bg-pink-500/5 p-3">
+                <span className="font-medium text-sand-100">STEP</span> — Burning
+                Man&apos;s official face-value resale. Open{" "}
+                <strong className="text-sand-100">now through Aug 28</strong>.
+              </li>
+              <li className="rounded-lg border border-pink-500/15 bg-pink-500/5 p-3">
+                <span className="font-medium text-sand-100">OMG Sale</span> — the
+                last public sale,{" "}
+                <strong className="text-sand-100">late July / early August</strong>.
+                Limited tickets.
+              </li>
+            </ul>
             <p className="text-amber-300 text-xs">
-              You must register in order to be eligible to purchase.
+              Tickets are limited — register and watch for announcements.
             </p>
           </div>
           <div className="mt-4 flex justify-end gap-2">
@@ -603,7 +769,7 @@ export default function DashboardPage() {
                 setShowTicketSaleModal(false);
                 if (typeof window !== "undefined") {
                   window.localStorage.setItem(
-                    "node:ticketSaleModalDismissed",
+                    "node:ticketModalDismissed:v2",
                     "1"
                   );
                 }
@@ -622,7 +788,7 @@ export default function DashboardPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Register now
+                Ticket info
               </a>
             </Button>
           </div>
@@ -649,6 +815,11 @@ export default function DashboardPage() {
           onStatusChange={refreshDashboardData}
           onComplete={() => setOnboardingComplete(true)}
         />
+      )}
+
+      {/* Road to 2026 — permanent progress checklist for confirmed campers */}
+      {campStatus?.label === "Attending" && (
+        <RoadTo2026 rows={checklistRows} />
       )}
 
       {/* Stats grid */}
@@ -938,10 +1109,7 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-2 text-sm">
                             <span className="text-sand-400">Driving:</span>
                             <span className="text-sand-200 font-medium">
-                              {carPassStatus === "yes" && "Car / Car Pass"}
-                              {carPassStatus === "no" && "TBD"}
-                              {carPassStatus === "need_ride" && "Need a ride"}
-                              {carPassStatus === "burner_express" && "Burner Express"}
+                              {transportLabel(carPassStatus)}
                             </span>
                           </div>
                         </div>
@@ -1128,7 +1296,7 @@ export default function DashboardPage() {
 
 
       {/* PWA Install Prompt (iOS) */}
-      <Dialog open={showPwaPrompt} onOpenChange={setShowPwaPrompt}>
+      <Dialog open={loadModal === "pwa"} onOpenChange={setShowPwaPrompt}>
         <DialogContent className="glass border-pink-500/10 sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-sand-100">
@@ -1153,7 +1321,7 @@ export default function DashboardPage() {
       </Dialog>
 
       {/* Set Password Dialog */}
-      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+      <Dialog open={loadModal === "password"} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="glass border-pink-500/10 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-sand-100">
@@ -1217,6 +1385,60 @@ export default function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Ticket & Travel editor — opened from the Road to 2026 checklist */}
+      <Dialog open={showTicketTravelModal} onOpenChange={setShowTicketTravelModal}>
+        <DialogContent className="glass border-pink-500/10 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sand-100">
+              <Ticket className="h-5 w-5 text-amber" />
+              Ticket &amp; Travel
+            </DialogTitle>
+          </DialogHeader>
+          <TicketStatusForm
+            initialTicket={hasTicket ?? undefined}
+            initialCarPass={carPassStatus ?? undefined}
+            saving={savingTicket}
+            onSave={async (t, c) => {
+              await handleSaveTicketStatus(t, c);
+              setShowTicketTravelModal(false);
+            }}
+            onCancel={() => setShowTicketTravelModal(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Storage edit — opened from the checklist Storage row.
+          key remounts it on open so it re-reads the latest fetched items. */}
+      <StorageSurveyModal
+        key={`storage-edit-${showStorageEdit}`}
+        open={showStorageEdit}
+        mode="edit"
+        initialItems={
+          storageInfo && !("error" in storageInfo) ? storageInfo.items : null
+        }
+        onSubmitted={() => {
+          setShowStorageEdit(false);
+          refreshBalance();
+          getStorageSurvey().then((res) => setStorageInfo(res));
+        }}
+        onDismiss={() => setShowStorageEdit(false)}
+      />
+
+      {/* Arrival dates — opened from the checklist Arrival row.
+          key remounts it on open so it re-reads the saved dates. */}
+      <ArrivalDatesModal
+        key={`arrival-${showArrivalModal}`}
+        open={showArrivalModal}
+        initialArrival={arrivalDate}
+        initialDeparture={departureDate}
+        onSaved={(a, d) => {
+          setArrivalDate(a);
+          setDepartureDate(d);
+          setShowArrivalModal(false);
+        }}
+        onDismiss={() => setShowArrivalModal(false)}
+      />
     </div>
   );
 }
@@ -1271,10 +1493,11 @@ function TicketStatusForm({
           </div>
           <p className="text-sm text-sand-300">How are you getting to the playa?</p>
           <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => selectCarPass("yes")} disabled={saving} className={carPass === "yes" ? btnActiveClass : btnClass}>Car / Car Pass</button>
-            <button onClick={() => selectCarPass("no")} disabled={saving} className={carPass === "no" ? btnActiveClass : btnClass}>TBD</button>
-            <button onClick={() => selectCarPass("need_ride")} disabled={saving} className={carPass === "need_ride" ? btnActiveClass : btnClass}>Need a Ride</button>
+            <button onClick={() => selectCarPass("car_pass_parking")} disabled={saving} className={carPass === "car_pass_parking" ? btnActiveClass : btnClass}>Car Pass + Parking</button>
             <button onClick={() => selectCarPass("burner_express")} disabled={saving} className={carPass === "burner_express" ? btnActiveClass : btnClass}>Burner Express</button>
+            <button onClick={() => selectCarPass("ride_sorted")} disabled={saving} className={carPass === "ride_sorted" ? btnActiveClass : btnClass}>Getting a ride</button>
+            <button onClick={() => selectCarPass("ride_unsorted")} disabled={saving} className={carPass === "ride_unsorted" ? btnActiveClass : btnClass}>Need a ride</button>
+            <button onClick={() => selectCarPass("other")} disabled={saving} className={`col-span-2 ${carPass === "other" ? btnActiveClass : btnClass}`}>Other (plane / bike / etc.)</button>
           </div>
         </div>
       )}
