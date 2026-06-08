@@ -34,11 +34,15 @@ async function applyPayment(
   admin: Admin,
   invoiceId: string,
   deltaCents: number,
+  ref: string,
   pi: string | null
 ): Promise<{ installment_number: number; total_installments: number; status: string } | null> {
+  // `ref` is the Stripe charge identifier — the RPC is a no-op if it's already
+  // been applied, so retries/redelivery can never double-credit.
   const { data, error } = await admin.rpc("apply_invoice_payment", {
     p_invoice_id: invoiceId,
     p_delta_cents: deltaCents,
+    p_ref: ref,
     p_pi: pi,
   });
   if (error) throw error;
@@ -80,7 +84,13 @@ async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
       const pi = event.data.object as Stripe.PaymentIntent;
       const invoiceId = pi.metadata?.invoice_id;
       if (!invoiceId) return; // subscription PIs settle via invoice.paid
-      await applyPayment(admin, invoiceId, pi.amount_received ?? pi.amount, pi.id);
+      await applyPayment(
+        admin,
+        invoiceId,
+        pi.amount_received ?? pi.amount,
+        pi.id,
+        pi.id
+      );
       return;
     }
 
@@ -122,7 +132,8 @@ async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
         .eq("id", ourInvoiceId)
         .is("stripe_subscription_id", null);
       const amount = inv.amount_paid ?? 0;
-      const res = await applyPayment(admin, ourInvoiceId, amount, null);
+      // ref = the Stripe invoice id (unique per installment) for idempotency.
+      const res = await applyPayment(admin, ourInvoiceId, amount, inv.id, null);
       // Cap: cancel the subscription once N successful installments have landed.
       if (res && res.installment_number >= res.total_installments) {
         try {
@@ -149,12 +160,14 @@ async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
       return;
     }
 
-    case "charge.refunded": {
-      const charge = event.data.object as Stripe.Charge;
+    case "refund.created":
+    case "refund.updated": {
+      const refund = event.data.object as Stripe.Refund;
+      if (refund.status !== "succeeded") return; // ACH refunds settle async
       const piId =
-        typeof charge.payment_intent === "string"
-          ? charge.payment_intent
-          : charge.payment_intent?.id;
+        typeof refund.payment_intent === "string"
+          ? refund.payment_intent
+          : refund.payment_intent?.id;
       if (!piId) return;
       const { data: inv } = await admin
         .from("invoices")
@@ -162,9 +175,11 @@ async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
         .eq("stripe_payment_intent_id", piId)
         .maybeSingle();
       if (!inv) return;
+      // ref = refund id — idempotent across refund.created + refund.updated.
       await admin.rpc("apply_invoice_refund", {
         p_invoice_id: inv.id,
-        p_delta_cents: charge.amount_refunded,
+        p_delta_cents: refund.amount,
+        p_ref: refund.id,
       });
       return;
     }
