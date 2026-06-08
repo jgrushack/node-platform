@@ -120,6 +120,30 @@ export function PaymentsClient() {
     fetchBalance();
   }, []);
 
+  // Returning from Stripe-hosted Checkout: surface the result + clean the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("dues_cancel")) {
+      toast.info("Checkout canceled — no charge made.");
+      window.history.replaceState({}, "", "/dashboard/payments");
+      return;
+    }
+    if (params.get("dues_session")) {
+      (async () => {
+        const { getDuesStatus } = await import("@/lib/actions/payments");
+        const s = await getDuesStatus();
+        if (!("error" in s) && s.status === "processing") {
+          toast.success(
+            "Bank payment initiated — it clears in 3–5 business days."
+          );
+        } else {
+          toast.success("Payment received — your balance will update shortly.");
+        }
+        window.history.replaceState({}, "", "/dashboard/payments");
+      })();
+    }
+  }, []);
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <AnimatePresence mode="wait">
@@ -277,14 +301,35 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
 
   const totalSteps = 4;
 
-  function handlePaymentSubmit() {
+  async function handlePaymentSubmit() {
+    if (paymentMethod === "crypto") {
+      toast.info(
+        "Crypto is handled manually — send to the address above and let an organizer know."
+      );
+      return;
+    }
+    if (!selectedTier || !paymentType || !paymentMethod) {
+      toast.error("Pick a tier, payment type, and method first.");
+      return;
+    }
     setProcessing(true);
-    // Placeholder — will integrate Stripe/Mercury/crypto later
-    setTimeout(() => {
+    const { createDuesCheckout } = await import("@/lib/actions/payments");
+    const res = await createDuesCheckout({
+      tierDollars: selectedTier,
+      paymentType,
+      frequency:
+        paymentType === "plan"
+          ? (frequency as "weekly" | "biweekly" | "monthly")
+          : undefined,
+      method: paymentMethod === "cc" ? "card" : "bank",
+    });
+    if ("error" in res) {
+      toast.error(res.error);
       setProcessing(false);
-      toast.success("Payment submitted! (Demo mode — no charge processed)");
-      onBack();
-    }, 2000);
+      return;
+    }
+    // Hand off to Stripe-hosted Checkout.
+    window.location.href = res.url;
   }
 
   function getPaymentAmount(): number {

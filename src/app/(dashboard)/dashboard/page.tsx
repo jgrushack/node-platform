@@ -565,13 +565,16 @@ export default function DashboardPage() {
           if (!campYear) return;
           supabase
             .from("invoices")
-            .select("amount_cents, amount_paid_cents")
+            .select("amount_cents, amount_paid_cents, status")
             .eq("profile_id", authUser.id)
             .eq("camp_year_id", campYear.id)
             .then(({ data: invoices }) => {
               if (!invoices) return;
-              const totalOwed = invoices.reduce((s, i) => s + i.amount_cents, 0);
-              const totalPaid = invoices.reduce(
+              const active = invoices.filter(
+                (i) => i.status !== "cancelled" && i.status !== "refunded"
+              );
+              const totalOwed = active.reduce((s, i) => s + i.amount_cents, 0);
+              const totalPaid = active.reduce(
                 (s, i) => s + i.amount_paid_cents,
                 0
               );
