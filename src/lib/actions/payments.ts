@@ -15,7 +15,6 @@ const checkoutSchema = z.object({
   tierDollars: z.number().int().positive().max(100000),
   paymentType: z.enum(["full", "deposit", "plan"]),
   frequency: z.enum(["weekly", "biweekly", "monthly"]).optional(),
-  method: z.enum(["card", "bank"]),
 });
 
 export type CreateDuesCheckoutInput = z.infer<typeof checkoutSchema>;
@@ -82,7 +81,7 @@ export async function createDuesCheckout(
 ): Promise<CreateDuesCheckoutResult> {
   const parsed = checkoutSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const { tierDollars, paymentType, frequency, method } = parsed.data;
+  const { tierDollars, paymentType, frequency } = parsed.data;
   if (paymentType === "plan" && !frequency)
     return { error: "Pick a payment frequency." };
 
@@ -175,12 +174,10 @@ export async function createDuesCheckout(
     hdrs.get("origin") ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     "https://node.family";
-  const methodTypes =
-    method === "bank"
-      ? (["us_bank_account"] as const)
-      : (["card"] as const);
   const successUrl = `${origin}/dashboard/payments?dues_session={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${origin}/dashboard/payments?dues_cancel=1`;
+  // No payment_method_types — Stripe's dynamic payment methods show whatever is
+  // enabled in the Dashboard (card, ACH, stablecoins/crypto, …).
   const sharedMeta = {
     invoice_id: invoiceId,
     profile_id: user.id,
@@ -195,7 +192,6 @@ export async function createDuesCheckout(
         {
           mode: "subscription",
           customer: customerId,
-          payment_method_types: [...methodTypes],
           line_items: [
             {
               price_data: {
@@ -223,7 +219,6 @@ export async function createDuesCheckout(
       {
         mode: "payment",
         customer: customerId,
-        payment_method_types: [...methodTypes],
         line_items: [
           {
             price_data: {

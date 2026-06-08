@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -25,7 +24,6 @@ import {
   Wallet,
   Building2,
   Bitcoin,
-  Copy,
   ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -65,8 +63,6 @@ const EQUIPMENT_ITEMS = [
   { name: "Cot + Sleeping Pad", description: "Standard cot with foam pad", price: "TBD" },
 ];
 
-// Placeholder crypto address
-const CRYPTO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -307,20 +303,13 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
   const [selectedTier, setSelectedTier] = useState<number | null>(null);
   const [paymentType, setPaymentType] = useState<PaymentType | null>(null);
   const [frequency, setFrequency] = useState<string>("monthly");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [processing, setProcessing] = useState(false);
 
-  const totalSteps = 4;
+  const totalSteps = 3;
 
   async function handlePaymentSubmit() {
-    if (paymentMethod === "crypto") {
-      toast.info(
-        "Crypto is handled manually — send to the address above and let an organizer know."
-      );
-      return;
-    }
-    if (!selectedTier || !paymentType || !paymentMethod) {
-      toast.error("Pick a tier, payment type, and method first.");
+    if (!selectedTier || !paymentType) {
+      toast.error("Pick a tier and payment type first.");
       return;
     }
     setProcessing(true);
@@ -332,22 +321,14 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
         paymentType === "plan"
           ? (frequency as "weekly" | "biweekly" | "monthly")
           : undefined,
-      method: paymentMethod === "cc" ? "card" : "bank",
     });
     if ("error" in res) {
       toast.error(res.error);
       setProcessing(false);
       return;
     }
-    // Hand off to Stripe-hosted Checkout.
+    // Hand off to Stripe-hosted Checkout (payment method chosen there).
     window.location.href = res.url;
-  }
-
-  function getPaymentAmount(): number {
-    if (!selectedTier) return 0;
-    if (paymentType === "full") return selectedTier;
-    if (paymentType === "deposit") return DEPOSIT_AMOUNT;
-    return selectedTier; // plan shows full amount, broken into installments
   }
 
   function getInstallmentAmount(): number | null {
@@ -618,17 +599,17 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
           </motion.div>
         )}
 
-        {/* Step 3: Payment Method */}
+        {/* Step 3: Review & continue to Stripe Checkout */}
         {step === 3 && (
           <motion.div
-            key="method"
+            key="review"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             className="space-y-4"
           >
             <p className="text-sm text-sand-300">
-              How would you like to pay?
+              Review and continue to payment.
             </p>
 
             {/* Summary */}
@@ -661,221 +642,10 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
               </CardContent>
             </Card>
 
-            <div className="grid gap-3">
-              <Card
-                className={`glass-card border-0 cursor-pointer transition-all ${
-                  paymentMethod === "cc"
-                    ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
-                    : "hover:ring-1 hover:ring-pink-500/20"
-                }`}
-                onClick={() => setPaymentMethod("cc")}
-              >
-                <CardContent className="flex items-center gap-3 py-4">
-                  <div
-                    className={`h-4 w-4 rounded-full border-2 transition-colors ${
-                      paymentMethod === "cc"
-                        ? "border-pink-500 bg-pink-500"
-                        : "border-sand-600"
-                    }`}
-                  />
-                  <CreditCard className="h-4 w-4 text-sand-400" />
-                  <span className="font-medium text-sand-100">
-                    Credit / Debit Card
-                  </span>
-                </CardContent>
-              </Card>
-
-              <Card
-                className={`glass-card border-0 cursor-pointer transition-all ${
-                  paymentMethod === "bank"
-                    ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
-                    : "hover:ring-1 hover:ring-pink-500/20"
-                }`}
-                onClick={() => setPaymentMethod("bank")}
-              >
-                <CardContent className="flex items-center gap-3 py-4">
-                  <div
-                    className={`h-4 w-4 rounded-full border-2 transition-colors ${
-                      paymentMethod === "bank"
-                        ? "border-pink-500 bg-pink-500"
-                        : "border-sand-600"
-                    }`}
-                  />
-                  <Building2 className="h-4 w-4 text-sand-400" />
-                  <span className="font-medium text-sand-100">
-                    Bank Transfer
-                  </span>
-                  <Badge className="ml-auto bg-amber/15 text-amber text-[10px]">
-                    Mercury
-                  </Badge>
-                </CardContent>
-              </Card>
-
-              <Card
-                className={`glass-card border-0 cursor-pointer transition-all ${
-                  paymentMethod === "crypto"
-                    ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
-                    : "hover:ring-1 hover:ring-pink-500/20"
-                }`}
-                onClick={() => setPaymentMethod("crypto")}
-              >
-                <CardContent className="flex items-center gap-3 py-4">
-                  <div
-                    className={`h-4 w-4 rounded-full border-2 transition-colors ${
-                      paymentMethod === "crypto"
-                        ? "border-pink-500 bg-pink-500"
-                        : "border-sand-600"
-                    }`}
-                  />
-                  <Bitcoin className="h-4 w-4 text-sand-400" />
-                  <span className="font-medium text-sand-100">Crypto</span>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Button
-              className="w-full rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
-              disabled={!paymentMethod}
-              onClick={() => setStep(4)}
-            >
-              Next
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </motion.div>
-        )}
-
-        {/* Step 4: Payment Page */}
-        {step === 4 && (
-          <motion.div
-            key="pay"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-4"
-          >
-            <p className="text-sm text-sand-300">
-              Complete your payment.
+            <p className="text-xs text-sand-400">
+              You&apos;ll choose how to pay &mdash; card, bank (ACH), or crypto &mdash;
+              securely on the next screen.
             </p>
-
-            {paymentMethod === "cc" && (
-              <Card className="glass-card border-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sand-200 text-base">
-                    <CreditCard className="h-4 w-4 text-pink-400" />
-                    Card Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-sand-300">Card Number</Label>
-                    <Input placeholder="4242 4242 4242 4242" disabled />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label className="text-sand-300">Expiry</Label>
-                      <Input placeholder="MM / YY" disabled />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sand-300">CVC</Label>
-                      <Input placeholder="123" disabled />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-sand-500">
-                    Stripe integration coming soon. No charges will be processed.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {paymentMethod === "bank" && (
-              <Card className="glass-card border-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sand-200 text-base">
-                    <Building2 className="h-4 w-4 text-amber" />
-                    Mercury Invoice
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-sand-300">
-                    A Mercury invoice will be sent to your email with wire
-                    transfer instructions.
-                  </p>
-                  <div className="rounded-lg bg-sand-900/50 p-4 space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-sand-400">Amount</span>
-                      <span className="text-sand-200 font-medium">
-                        ${getPaymentAmount().toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-sand-400">Status</span>
-                      <Badge className="bg-amber/15 text-amber text-[10px]">
-                        Pending
-                      </Badge>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-sand-500">
-                    Mercury integration coming soon.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {paymentMethod === "crypto" && (
-              <Card className="glass-card border-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sand-200 text-base">
-                    <Bitcoin className="h-4 w-4 text-orange-400" />
-                    Crypto Payment
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-sand-300">
-                    Send exactly{" "}
-                    <span className="font-medium text-sand-100">
-                      ${getPaymentAmount().toLocaleString()}
-                    </span>{" "}
-                    equivalent to the following address:
-                  </p>
-                  <div className="flex items-center gap-2 rounded-lg bg-sand-900/50 p-3">
-                    <code className="flex-1 text-xs text-sand-300 truncate font-mono">
-                      {CRYPTO_ADDRESS}
-                    </code>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0 h-7 w-7 text-sand-400 hover:text-sand-200"
-                      onClick={() => {
-                        navigator.clipboard.writeText(CRYPTO_ADDRESS);
-                        toast.success("Address copied!");
-                      }}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-sand-500">
-                    Crypto wallet address TBD. No payments accepted yet.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Amount Summary */}
-            <Card className="glass-card border-0">
-              <CardContent className="py-4">
-                <div className="flex justify-between text-sm font-semibold">
-                  <span className="text-sand-300">Amount due</span>
-                  <span className="text-lg text-sand-100">
-                    ${(paymentType === "deposit"
-                      ? DEPOSIT_AMOUNT
-                      : paymentType === "plan"
-                        ? getInstallmentAmount() ?? 0
-                        : selectedTier ?? 0
-                    ).toLocaleString()}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
 
             <Button
               className="w-full rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
@@ -885,12 +655,12 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
               {processing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
+                  Redirecting&hellip;
                 </>
               ) : (
                 <>
                   <Wallet className="mr-2 h-4 w-4" />
-                  Submit Payment
+                  Continue to payment
                 </>
               )}
             </Button>
