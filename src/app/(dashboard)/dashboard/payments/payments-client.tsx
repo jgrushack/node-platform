@@ -122,9 +122,11 @@ export function PaymentsClient() {
   // Returning from Stripe-hosted Checkout: surface the result + clean the URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("dues_cancel")) {
-      toast.info("Checkout canceled — no charge made.");
+    const clean = () =>
       window.history.replaceState({}, "", "/dashboard/payments");
+    if (params.get("dues_cancel") || params.get("storage_cancel")) {
+      toast.info("Checkout canceled — no charge made.");
+      clean();
       return;
     }
     if (params.get("dues_session")) {
@@ -138,10 +140,25 @@ export function PaymentsClient() {
         } else {
           toast.success("Payment received — your balance will update shortly.");
         }
-        window.history.replaceState({}, "", "/dashboard/payments");
+        clean();
       })();
+    } else if (params.get("storage_session")) {
+      toast.success("Storage payment received — your balance will update shortly.");
+      clean();
     }
   }, []);
+
+  async function handlePayStorage() {
+    const { createStoragePaymentCheckout } = await import(
+      "@/lib/actions/payments"
+    );
+    const res = await createStoragePaymentCheckout();
+    if ("error" in res) {
+      toast.error(res.error);
+      return;
+    }
+    window.location.href = res.url;
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -154,6 +171,7 @@ export function PaymentsClient() {
             pending={hasProcessing}
             loading={loading}
             onNavigate={setView}
+            onPayStorage={handlePayStorage}
           />
         )}
         {view === "dues" && (
@@ -178,12 +196,14 @@ function DashboardView({
   pending,
   loading,
   onNavigate,
+  onPayStorage,
 }: {
   balance: number | null;
   hasTicketInvoice: boolean;
   pending: boolean;
   loading: boolean;
   onNavigate: (view: View) => void;
+  onPayStorage: () => void;
 }) {
   const formattedBalance =
     balance !== null
@@ -267,7 +287,7 @@ function DashboardView({
 
         <Card
           className="glass-card border-0 cursor-pointer transition-all hover:ring-1 hover:ring-blue-500/30 hover:shadow-[0_0_20px_rgba(59,130,246,0.1)]"
-          onClick={() => onNavigate("storage")}
+          onClick={onPayStorage}
         >
           <CardContent className="flex items-center gap-4 py-6">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/15">

@@ -71,7 +71,7 @@ export async function sendDuesPaymentFailed({
     from: FROM_EMAIL,
     replyTo: REPLY_TO_EMAIL,
     to: email,
-    subject: "Your NODE 2026 dues payment didn't go through",
+    subject: "Your NODE 2026 payment didn't go through",
     html,
     text: htmlToPlainText(html),
   });

@@ -11,7 +11,7 @@ export function duesPaymentFailedEmail({
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Your NODE 2026 dues payment didn't go through</title>
+  <title>Your NODE 2026 payment didn't go through</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0F0120;font-family:'Exo 2',Arial,Helvetica,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0F0120;">
@@ -27,7 +27,7 @@ export function duesPaymentFailedEmail({
             <td style="padding:40px 32px;background-color:#1a0a2e;border-left:1px solid rgba(249,0,119,0.2);border-right:1px solid rgba(249,0,119,0.2);">
               <p style="margin:0 0 24px;font-size:18px;line-height:1.6;color:#F9EDD8;">Hey ${firstName},</p>
               <p style="margin:0 0 24px;font-size:16px;line-height:1.7;color:#F9EDD8;">
-                We tried to process your NODE 2026 dues payment and it didn&rsquo;t go through. No worries &mdash; nothing was charged, and your spot is safe.
+                We tried to process your NODE 2026 payment and it didn&rsquo;t go through. No worries &mdash; nothing was charged, and your spot is safe.
               </p>
               <p style="margin:0 0 40px;font-size:16px;line-height:1.7;color:#F9EDD8;">
                 Head to your dashboard to try again with a different card or payment method. If you&rsquo;re on a payment plan, the next attempt will retry automatically.

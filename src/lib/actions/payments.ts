@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe";
 
 const DUES_KIND = "dues_2026";
+const STORAGE_KIND = "storage_survey_2026";
 const DEPOSIT_CENTS = 50000; // $500
 // Installments finish before build week.
 const PLAN_CUTOFF = new Date("2026-08-23T00:00:00-07:00");
@@ -242,6 +243,82 @@ export async function createDuesCheckout(
     return { url: session.url };
   } catch (e) {
     console.error("[createDuesCheckout]", e);
+    return { error: "Payment setup failed. Please try again." };
+  }
+}
+
+/** Pay the outstanding balance on the member's storage-survey invoice. The
+ *  invoice already exists (created by the storage survey); this just collects
+ *  payment for it. The generic webhook credits it by metadata.invoice_id. */
+export async function createStoragePaymentCheckout(): Promise<CreateDuesCheckoutResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const admin = createAdminClient();
+  const { data: campYear } = await admin
+    .from("camp_years")
+    .select("id")
+    .eq("year", 2026)
+    .single();
+  if (!campYear) return { error: "No 2026 camp year configured." };
+
+  const { data: inv } = await admin
+    .from("invoices")
+    .select("id, amount_cents, amount_paid_cents, status")
+    .eq("profile_id", user.id)
+    .eq("camp_year_id", campYear.id)
+    .eq("kind", STORAGE_KIND)
+    .maybeSingle();
+
+  if (!inv || inv.status === "cancelled" || inv.status === "refunded") {
+    return {
+      error: "No storage balance to pay — add items in the storage check-in first.",
+    };
+  }
+  if (inv.status === "processing") {
+    return { error: "A storage payment is already processing." };
+  }
+  const outstanding = inv.amount_cents - inv.amount_paid_cents;
+  if (outstanding <= 0) return { error: "Your storage balance is already paid." };
+
+  const customerId = await ensureStripeCustomer(admin, user.id, user.email ?? undefined);
+
+  const hdrs = await headers();
+  const origin =
+    hdrs.get("origin") ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://node.family";
+  const meta = { invoice_id: inv.id, profile_id: user.id, kind: STORAGE_KIND };
+
+  try {
+    const session = await getStripe().checkout.sessions.create(
+      {
+        mode: "payment",
+        customer: customerId,
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: outstanding,
+              product_data: { name: "NODE 2026 Storage" },
+            },
+            quantity: 1,
+          },
+        ],
+        payment_intent_data: { metadata: meta },
+        metadata: meta,
+        success_url: `${origin}/dashboard/payments?storage_session={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/dashboard/payments?storage_cancel=1`,
+      },
+      { idempotencyKey: `storage-${inv.id}-${outstanding}` }
+    );
+    if (!session.url) return { error: "Failed to start checkout." };
+    return { url: session.url };
+  } catch (e) {
+    console.error("[createStoragePaymentCheckout]", e);
     return { error: "Payment setup failed. Please try again." };
   }
 }
