@@ -27,7 +27,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { STORAGE_PRICES_CENTS } from "@/lib/actions/storage-survey";
+import { STORAGE_PRICES_CENTS } from "@/lib/storage-prices";
 
 // ── Constants ──────────────────────────────────────────────────────
 

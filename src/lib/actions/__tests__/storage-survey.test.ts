@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { updateStorageSurvey, STORAGE_PRICES_CENTS } from "../storage-survey";
+import { updateStorageSurvey } from "../storage-survey";
+import { STORAGE_PRICES_CENTS } from "@/lib/storage-prices";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 

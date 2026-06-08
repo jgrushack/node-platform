@@ -16,9 +16,9 @@ import { Bike, Package, Snowflake, Tent, AlertTriangle } from "lucide-react";
 import {
   submitStorageSurvey,
   updateStorageSurvey,
-  STORAGE_PRICES_CENTS,
   type StorageItems,
 } from "@/lib/actions/storage-survey";
+import { STORAGE_PRICES_CENTS } from "@/lib/storage-prices";
 
 type Step = "ask" | "items";
 
@@ -158,7 +158,7 @@ export function StorageSurveyModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onDismiss?.(); }}>
-      <DialogContent className="glass border-pink-500/10 max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="border border-pink-500/15 bg-[rgba(36,3,68,0.97)] backdrop-blur-xl shadow-2xl max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sand-100">
             <Package className="h-5 w-5 text-pink-400" />
@@ -180,7 +180,8 @@ export function StorageSurveyModal({
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 flex gap-2">
               <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
               <span>
-                Any unclaimed items in NODE storage become property of NODE.
+                Any unclaimed / unpaid items in NODE storage become property of
+                NODE at the beginning of the 2026 Burn.
               </span>
             </div>
 
@@ -289,7 +290,8 @@ export function StorageSurveyModal({
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 flex gap-2">
               <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
               <span>
-                Any unclaimed items in NODE storage become property of NODE.
+                Any unclaimed / unpaid items in NODE storage become property of
+                NODE at the beginning of the 2026 Burn.
               </span>
             </div>
 

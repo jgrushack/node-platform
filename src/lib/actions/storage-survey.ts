@@ -3,14 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-// Per-item pricing for the 2026 storage survey (annual, in cents).
-export const STORAGE_PRICES_CENTS = {
-  bike: 10000,
-  bin: 7500,
-  ac: 15000,
-  shiftpod: 10000,
-} as const;
+import { STORAGE_PRICES_CENTS } from "@/lib/storage-prices";
 
 const STORAGE_KIND = "storage_survey_2026";
 
