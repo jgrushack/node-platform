@@ -12,10 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Bike, Package, Snowflake, AlertTriangle } from "lucide-react";
+import { Bike, Package, Snowflake, Tent, AlertTriangle } from "lucide-react";
 import {
   submitStorageSurvey,
+  updateStorageSurvey,
   STORAGE_PRICES_CENTS,
+  type StorageItems,
 } from "@/lib/actions/storage-survey";
 
 type Step = "ask" | "items";
@@ -42,27 +44,59 @@ const ITEMS = [
     icon: Snowflake,
     placeholder: "e.g. 8000 BTU window unit, gray",
   },
+  {
+    key: "shiftpods" as const,
+    label: "Shiftpod / Tent",
+    priceCents: STORAGE_PRICES_CENTS.shiftpod,
+    icon: Tent,
+    placeholder: "e.g. 8-person Shiftpod, tan",
+  },
 ];
 
 type ItemState = { quantity: number; description: string };
 
+function itemsFromInitial(initial?: StorageItems | null): Record<string, ItemState> {
+  return {
+    bikes: { quantity: initial?.bike.quantity ?? 0, description: initial?.bike.description ?? "" },
+    bins: { quantity: initial?.bin.quantity ?? 0, description: initial?.bin.description ?? "" },
+    acs: { quantity: initial?.ac.quantity ?? 0, description: initial?.ac.description ?? "" },
+    shiftpods: {
+      quantity: initial?.shiftpod.quantity ?? 0,
+      description: initial?.shiftpod.description ?? "",
+    },
+  };
+}
+
 interface Props {
   open: boolean;
+  /** "initial" = first-time survey (charge); "edit" = revisit an existing answer. */
+  mode?: "initial" | "edit";
+  /** Pre-fill values for edit mode. */
+  initialItems?: StorageItems | null;
   onSubmitted: (chargeCents: number) => void;
-  /** Optional escape hatch — closes the survey for this session without
-   *  submitting. Surfaced only when a submit error would otherwise trap the user. */
+  /** Close without submitting. Initial: "Maybe later". Edit: "Cancel". Also fires on
+   *  Esc / outside-click / the X button so the modal never hard-traps the user. */
   onDismiss?: () => void;
 }
 
-export function StorageSurveyModal({ open, onSubmitted, onDismiss }: Props) {
-  const [step, setStep] = useState<Step>("ask");
+export function StorageSurveyModal({
+  open,
+  mode = "initial",
+  initialItems,
+  onSubmitted,
+  onDismiss,
+}: Props) {
+  const isEdit = mode === "edit";
+  const [step, setStep] = useState<Step>(isEdit ? "items" : "ask");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<Record<string, ItemState>>({
-    bikes: { quantity: 0, description: "" },
-    bins: { quantity: 0, description: "" },
-    acs: { quantity: 0, description: "" },
-  });
+  const [items, setItems] = useState<Record<string, ItemState>>(() =>
+    itemsFromInitial(initialItems)
+  );
+
+  // Note: callers remount this modal via a `key` tied to `open`, so the
+  // useState initializers above re-read `initialItems`/`mode` on each open —
+  // no reset effect needed.
 
   function updateItem(key: string, patch: Partial<ItemState>) {
     setItems((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -77,36 +111,23 @@ export function StorageSurveyModal({ open, onSubmitted, onDismiss }: Props) {
     0
   );
 
-  async function handleSubmitNo() {
-    setSubmitting(true);
-    setError(null);
-    const res = await submitStorageSurvey({
-      hasItems: false,
-      bikes: { quantity: 0, description: "" },
-      bins: { quantity: 0, description: "" },
-      acs: { quantity: 0, description: "" },
-    });
-    setSubmitting(false);
-    if ("error" in res) {
-      setError(res.error);
-      return;
-    }
-    onSubmitted(res.chargeCents);
-  }
-
-  async function handleSubmitItems() {
-    if (totalUnits === 0) {
-      setError("Add at least one item, or go back and answer No.");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    const res = await submitStorageSurvey({
-      hasItems: true,
+  function buildPayload(hasItems: boolean) {
+    return {
+      hasItems,
       bikes: items.bikes,
       bins: items.bins,
       acs: items.acs,
-    });
+      shiftpods: items.shiftpods,
+    };
+  }
+
+  async function runSubmit(hasItems: boolean) {
+    setSubmitting(true);
+    setError(null);
+    const payload = buildPayload(hasItems);
+    const res = isEdit
+      ? await updateStorageSurvey(payload)
+      : await submitStorageSurvey(payload);
     setSubmitting(false);
     if ("error" in res) {
       setError(res.error);
@@ -115,23 +136,38 @@ export function StorageSurveyModal({ open, onSubmitted, onDismiss }: Props) {
     onSubmitted(res.chargeCents);
   }
 
+  async function handleSubmitNo() {
+    await runSubmit(false);
+  }
+
+  async function handleSubmitItems() {
+    // Initial mode requires at least one item; edit mode allows zero (which
+    // removes the storage charge).
+    if (!isEdit && totalUnits === 0) {
+      setError("Add at least one item, or go back and answer No.");
+      return;
+    }
+    await runSubmit(totalUnits > 0);
+  }
+
+  const primaryLabel = isEdit
+    ? totalUnits > 0
+      ? "Save changes"
+      : "Remove my storage items"
+    : `Add $${(totalCents / 100).toFixed(2)} to balance`;
+
   return (
-    <Dialog open={open}>
-      <DialogContent
-        className="max-w-lg max-h-[90vh] overflow-y-auto"
-        showCloseButton={false}
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onDismiss?.(); }}>
+      <DialogContent className="glass border-pink-500/10 max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sand-100">
             <Package className="h-5 w-5 text-pink-400" />
-            Storage check-in
+            {isEdit ? "Edit your storage" : "Storage check-in"}
           </DialogTitle>
           <DialogDescription className="text-sand-400">
-            We&apos;re sorting out who&apos;s keeping items in NODE storage
-            from last year. Quick answer required.
+            {isEdit
+              ? "Update the items you're keeping in NODE storage. Your balance will be adjusted."
+              : "We're sorting out who's keeping items in NODE storage from last year. Quick answer required."}
           </DialogDescription>
         </DialogHeader>
 
@@ -148,9 +184,7 @@ export function StorageSurveyModal({ open, onSubmitted, onDismiss }: Props) {
               </span>
             </div>
 
-            {error && (
-              <p className="text-sm text-red-400">{error}</p>
-            )}
+            {error && <p className="text-sm text-red-400">{error}</p>}
 
             <div className="flex gap-3 pt-2">
               <Button
@@ -178,8 +212,9 @@ export function StorageSurveyModal({ open, onSubmitted, onDismiss }: Props) {
         {step === "items" && (
           <div className="space-y-4">
             <p className="text-sm text-sand-300">
-              Tell us how many of each. Annual fees will be added to your
-              balance.
+              {isEdit
+                ? "Update how many of each you're storing. Set all to zero to remove your storage charge."
+                : "Tell us how many of each. Annual fees will be added to your balance."}
             </p>
 
             <div className="space-y-4">
@@ -267,30 +302,28 @@ export function StorageSurveyModal({ open, onSubmitted, onDismiss }: Props) {
               </span>
             </div>
 
-            {error && (
-              <p className="text-sm text-red-400">{error}</p>
-            )}
+            {error && <p className="text-sm text-red-400">{error}</p>}
 
             <div className="flex gap-2 pt-1">
-              <Button
-                variant="ghost"
-                className="text-sand-400"
-                disabled={submitting}
-                onClick={() => {
-                  setError(null);
-                  setStep("ask");
-                }}
-              >
-                Back
-              </Button>
+              {!isEdit && (
+                <Button
+                  variant="ghost"
+                  className="text-sand-400"
+                  disabled={submitting}
+                  onClick={() => {
+                    setError(null);
+                    setStep("ask");
+                  }}
+                >
+                  Back
+                </Button>
+              )}
               <Button
                 className="flex-1 bg-pink-500 text-white hover:bg-pink-600"
-                disabled={submitting || totalUnits === 0}
+                disabled={submitting || (!isEdit && totalUnits === 0)}
                 onClick={handleSubmitItems}
               >
-                {submitting
-                  ? "Saving…"
-                  : `Add $${(totalCents / 100).toFixed(2)} to balance`}
+                {submitting ? "Saving…" : primaryLabel}
               </Button>
             </div>
           </div>
@@ -303,7 +336,7 @@ export function StorageSurveyModal({ open, onSubmitted, onDismiss }: Props) {
             onClick={onDismiss}
             className="mt-2 w-full text-center text-xs text-sand-500 underline hover:text-sand-300"
           >
-            Maybe later
+            {isEdit ? "Cancel" : "Maybe later"}
           </button>
         )}
       </DialogContent>
