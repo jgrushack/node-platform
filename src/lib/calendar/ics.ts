@@ -1,6 +1,6 @@
-// Minimal RFC 5545 helper. Event times are stored as Eastern wall-clock and
-// emitted as absolute UTC (DST-aware) so every recipient's calendar shows the
-// correct local time. All-day events stay as floating DATE values.
+// Minimal RFC 5545 helper. Floating-time semantics (no TZID) — event times are
+// shown in the viewer's local timezone. Events are authored in Eastern, so for
+// the (Eastern) audience the wall-clock matches exactly what was entered.
 
 const PRODID = "-//NODE//Calendar 1.0//EN";
 
@@ -83,56 +83,15 @@ function compactDate(date: string): string {
   return date.replace(/-/g, "");
 }
 
-const EVENT_TZ = "America/New_York";
-
-/** Minutes `timeZone` is offset from UTC at the given UTC instant
- *  (e.g. -240 for America/New_York during EDT). */
-function tzOffsetMinutes(timeZone: string, atUtcMs: number): number {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const parts = dtf.formatToParts(new Date(atUtcMs));
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-  const asUtc = Date.UTC(
-    get("year"),
-    get("month") - 1,
-    get("day"),
-    get("hour"),
-    get("minute"),
-    get("second")
-  );
-  return (asUtc - atUtcMs) / 60000;
+/** "19:00" or "19:00:00" -> "190000". Postgres `time` columns serialize as
+ *  HH:MM:SS; <input type=time> gives HH:MM. Normalize to HHMMSS either way. */
+function compactTime(time: string): string {
+  return time.slice(0, 5).replace(":", "") + "00";
 }
 
-/** Eastern wall-clock (YYYY-MM-DD, HH:MM[:SS]) -> compact UTC "YYYYMMDDTHHMMSSZ". */
-function etToUtcCompact(date: string, time: string): string {
-  const [y, mo, d] = date.split("-").map(Number);
-  const [h, mi] = time.slice(0, 5).split(":").map(Number);
-  // Treat the wall-clock as UTC, then correct by Eastern's offset at that instant.
-  const naiveUtc = Date.UTC(y, mo - 1, d, h, mi, 0);
-  const offsetMin = tzOffsetMinutes(EVENT_TZ, naiveUtc);
-  const real = new Date(naiveUtc - offsetMin * 60000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${real.getUTCFullYear()}${pad(real.getUTCMonth() + 1)}${pad(real.getUTCDate())}` +
-    `T${pad(real.getUTCHours())}${pad(real.getUTCMinutes())}${pad(real.getUTCSeconds())}Z`
-  );
-}
-
-/** "2026-08-15" -> "2026-08-16" (keeps dashes, for etToUtcCompact). */
-function addOneDayDashed(date: string): string {
-  const [y, m, d] = date.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + 1);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+function compactDateTime(date: string, time: string): string {
+  // "2026-06-15", "19:00:00" -> "20260615T190000"
+  return `${compactDate(date)}T${compactTime(time)}`;
 }
 
 /** Minutes-since-midnight for an "HH:MM[:SS]" string (for end<=start rollover). */
@@ -170,26 +129,26 @@ function buildEventBlock(
   lines.push(`SUMMARY:${escapeText(event.title)}`);
 
   if (event.startTime) {
-    lines.push(`DTSTART:${etToUtcCompact(event.date, event.startTime)}`);
-    let endDate = event.date; // dashed YYYY-MM-DD
-    let endTime: string;
+    lines.push(`DTSTART:${compactDateTime(event.date, event.startTime)}`);
     if (event.endTime) {
       // If the end time is at/before the start (overnight event entered on a
       // single date), roll DTEND to the next day so it's never before DTSTART.
-      if (timeToMinutes(event.endTime) <= timeToMinutes(event.startTime)) {
-        endDate = addOneDayDashed(event.date);
-      }
-      endTime = event.endTime.slice(0, 5);
+      const endDate =
+        timeToMinutes(event.endTime) <= timeToMinutes(event.startTime)
+          ? addOneDay(event.date)
+          : compactDate(event.date);
+      lines.push(`DTEND:${endDate}T${compactTime(event.endTime)}`);
     } else {
       // Default 1-hour duration when end time is missing.
       const [h, m] = event.startTime.split(":").map(Number);
       const nextHour = h + 1;
-      // Roll the date forward if the +1h end crosses midnight (e.g. a 23:30
-      // start ends 00:30 the next day) so DTEND is never before DTSTART.
-      if (nextHour >= 24) endDate = addOneDayDashed(event.date);
-      endTime = `${String(nextHour % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      const endH = String(nextHour % 24).padStart(2, "0");
+      const endM = String(m).padStart(2, "0");
+      // Roll the date forward if the +1h end crosses midnight, so DTEND is
+      // never before DTSTART (e.g. a 23:30 start ends 00:30 the next day).
+      const endDate = nextHour >= 24 ? addOneDay(event.date) : compactDate(event.date);
+      lines.push(`DTEND:${endDate}T${endH}${endM}00`);
     }
-    lines.push(`DTEND:${etToUtcCompact(endDate, endTime)}`);
   } else {
     // All-day event. DTEND is exclusive, so push to next day.
     lines.push(`DTSTART;VALUE=DATE:${compactDate(event.date)}`);
