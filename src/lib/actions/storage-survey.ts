@@ -9,7 +9,8 @@ const STORAGE_KIND = "storage_survey_2026";
 
 const itemSchema = z.object({
   quantity: z.number().int().min(0).max(50),
-  description: z.string().max(500).optional().default(""),
+  // Holds the per-unit labels newline-joined (one per item), so allow room.
+  description: z.string().max(2000).optional().default(""),
 });
 
 const storageSurveySchema = z

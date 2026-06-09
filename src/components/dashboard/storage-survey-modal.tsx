@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Bike,
   Package,
@@ -26,20 +27,26 @@ import {
 import { STORAGE_PRICES_CENTS } from "@/lib/storage-prices";
 
 const ITEMS = [
-  { key: "bikes" as const, label: "Bike", priceCents: STORAGE_PRICES_CENTS.bike, icon: Bike, note: null as string | null },
-  { key: "bins" as const, label: "Storage bin", priceCents: STORAGE_PRICES_CENTS.bin, icon: Package, note: null },
-  { key: "acs" as const, label: "AC unit", priceCents: STORAGE_PRICES_CENTS.ac, icon: Snowflake, note: "⚡ power upcharge" },
-  { key: "shiftpods" as const, label: "Shiftpod / Tent", priceCents: STORAGE_PRICES_CENTS.shiftpod, icon: Tent, note: null },
+  { key: "bikes" as const, label: "Bike", priceCents: STORAGE_PRICES_CENTS.bike, icon: Bike, note: false },
+  { key: "bins" as const, label: "Bin", priceCents: STORAGE_PRICES_CENTS.bin, icon: Package, note: false },
+  { key: "acs" as const, label: "AC", priceCents: STORAGE_PRICES_CENTS.ac, icon: Snowflake, note: true },
+  { key: "shiftpods" as const, label: "Tent", priceCents: STORAGE_PRICES_CENTS.shiftpod, icon: Tent, note: false },
 ];
 
-type QtyMap = Record<string, number>;
+type Labels = Record<string, string[]>;
 
-function qtyFromInitial(initial?: StorageItems | null): QtyMap {
+/** Per-unit labels are stored newline-joined in each item's `description`. */
+function labelsFromInitial(initial?: StorageItems | null): Labels {
+  const build = (item?: { quantity: number; description: string }) => {
+    const q = item?.quantity ?? 0;
+    const parts = (item?.description ?? "").split("\n");
+    return Array.from({ length: q }, (_, i) => parts[i] ?? "");
+  };
   return {
-    bikes: initial?.bike.quantity ?? 0,
-    bins: initial?.bin.quantity ?? 0,
-    acs: initial?.ac.quantity ?? 0,
-    shiftpods: initial?.shiftpod.quantity ?? 0,
+    bikes: build(initial?.bike),
+    bins: build(initial?.bin),
+    acs: build(initial?.ac),
+    shiftpods: build(initial?.shiftpod),
   };
 }
 
@@ -62,24 +69,64 @@ export function StorageSurveyModal({
 }: Props) {
   const isEdit = mode === "edit";
   // Callers remount via a `key` tied to `open`, so this re-reads initialItems.
-  const [qty, setQty] = useState<QtyMap>(() => qtyFromInitial(initialItems));
+  const [labels, setLabels] = useState<Labels>(() => labelsFromInitial(initialItems));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function updateQty(key: string, delta: number) {
-    setQty((prev) => ({
-      ...prev,
-      [key]: Math.max(0, Math.min(50, (prev[key] || 0) + delta)),
-    }));
+  function changeQty(key: string, delta: number) {
+    setLabels((prev) => {
+      const arr = prev[key] || [];
+      const next =
+        delta > 0
+          ? arr.length < 50
+            ? [...arr, ""]
+            : arr
+          : arr.slice(0, -1);
+      return { ...prev, [key]: next };
+    });
   }
 
-  const totalUnits = ITEMS.reduce((s, it) => s + (qty[it.key] || 0), 0);
-  const totalCents = ITEMS.reduce((s, it) => s + (qty[it.key] || 0) * it.priceCents, 0);
+  function setLabel(key: string, index: number, value: string) {
+    setLabels((prev) => {
+      const arr = [...(prev[key] || [])];
+      arr[index] = value;
+      return { ...prev, [key]: arr };
+    });
+  }
+
+  const totalUnits = ITEMS.reduce((s, it) => s + (labels[it.key]?.length || 0), 0);
+  const totalCents = ITEMS.reduce(
+    (s, it) => s + (labels[it.key]?.length || 0) * it.priceCents,
+    0
+  );
+
+  // One row per unit (2x tent -> 2 rows).
+  const unitRows = ITEMS.flatMap((it) =>
+    (labels[it.key] || []).map((value, i) => ({
+      id: `${it.key}-${i}`,
+      key: it.key,
+      index: i,
+      label: it.label,
+      showNum: (labels[it.key]?.length || 0) > 1,
+      num: i + 1,
+      icon: it.icon,
+      priceCents: it.priceCents,
+      value,
+    }))
+  );
 
   async function handleSubmit() {
+    // Require a label on every item so storage is identifiable.
+    if (totalUnits > 0 && unitRows.some((r) => r.value.trim() === "")) {
+      setError("Give every item a quick label so we can find it in storage.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
-    const line = (key: string) => ({ quantity: qty[key] || 0, description: "" });
+    const line = (key: string) => ({
+      quantity: labels[key]?.length || 0,
+      description: (labels[key] || []).map((s) => s.trim()).join("\n"),
+    });
     const payload = {
       hasItems: totalUnits > 0,
       bikes: line("bikes"),
@@ -105,16 +152,6 @@ export function StorageSurveyModal({
     : totalUnits > 0
       ? `Add $${(totalCents / 100).toFixed(2)} to balance`
       : "I'm not storing anything";
-
-  // One read-only line per unit (2x tent -> 2 lines).
-  const unitLines = ITEMS.flatMap((it) =>
-    Array.from({ length: qty[it.key] || 0 }, (_, i) => ({
-      id: `${it.key}-${i}`,
-      label: it.label,
-      icon: it.icon,
-      priceCents: it.priceCents,
-    }))
-  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onDismiss?.(); }}>
@@ -143,50 +180,50 @@ export function StorageSurveyModal({
           </span>
         </div>
 
-        {/* Item tiles with steppers */}
-        <div className="space-y-2">
+        {/* 4 even icon buttons with steppers */}
+        <div className="grid grid-cols-4 gap-2">
           {ITEMS.map((item) => {
             const Icon = item.icon;
-            const count = qty[item.key] || 0;
+            const count = labels[item.key]?.length || 0;
             return (
               <div
                 key={item.key}
-                className="flex items-center justify-between rounded-lg border border-blue-900/40 bg-blue-950/30 p-3"
+                className={`flex h-full flex-col items-center justify-between gap-2 rounded-xl border p-2 text-center transition-colors ${
+                  count > 0
+                    ? "border-pink-500/40 bg-pink-500/10"
+                    : "border-blue-900/40 bg-blue-950/30"
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-pink-500/15">
+                <div className="flex flex-col items-center gap-1">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-pink-500/15">
                     <Icon className="h-5 w-5 text-pink-400" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-sand-100">{item.label}</p>
-                    <p className="text-xs text-sand-400">
-                      ${item.priceCents / 100}/yr
-                      {item.note && (
-                        <span className="text-amber-300"> &middot; {item.note}</span>
-                      )}
-                    </p>
-                  </div>
+                  <p className="text-xs font-medium text-sand-100">{item.label}</p>
+                  <p className="whitespace-nowrap text-[10px] leading-none text-sand-400">
+                    ${item.priceCents / 100}/yr
+                    {item.note && <span className="text-amber-300"> &#9889;</span>}
+                  </p>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => updateQty(item.key, -1)}
+                    onClick={() => changeQty(item.key, -1)}
                     disabled={count === 0}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-pink-500/20 text-sand-300 transition-colors hover:bg-pink-500/15 hover:text-sand-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                    className="flex h-6 w-6 items-center justify-center rounded-md border border-pink-500/20 text-sand-300 transition-colors hover:bg-pink-500/15 hover:text-sand-100 disabled:opacity-30 disabled:hover:bg-transparent"
                     aria-label={`Remove one ${item.label}`}
                   >
-                    <Minus className="h-3.5 w-3.5" />
+                    <Minus className="h-3 w-3" />
                   </button>
-                  <span className="w-6 text-center text-sm font-semibold tabular-nums text-sand-100">
+                  <span className="w-4 text-center text-sm font-semibold tabular-nums text-sand-100">
                     {count}
                   </span>
                   <button
                     type="button"
-                    onClick={() => updateQty(item.key, 1)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-pink-500/20 text-sand-300 transition-colors hover:bg-pink-500/15 hover:text-sand-100"
+                    onClick={() => changeQty(item.key, 1)}
+                    className="flex h-6 w-6 items-center justify-center rounded-md border border-pink-500/20 text-sand-300 transition-colors hover:bg-pink-500/15 hover:text-sand-100"
                     aria-label={`Add one ${item.label}`}
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-3 w-3" />
                   </button>
                 </div>
               </div>
@@ -194,24 +231,37 @@ export function StorageSurveyModal({
           })}
         </div>
 
-        {/* Read-only per-unit summary + total */}
+        {/* Per-unit labels (editable + required) + total */}
         {totalUnits > 0 && (
-          <div className="rounded-lg border border-blue-900/40 bg-blue-950/20 p-3">
-            <ul className="space-y-1.5">
-              {unitLines.map((u) => {
-                const Icon = u.icon;
-                return (
-                  <li key={u.id} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2 text-sand-200">
-                      <Icon className="h-3.5 w-3.5 text-sand-400" />
-                      {u.label}
-                    </span>
-                    <span className="text-sand-400">${u.priceCents / 100}</span>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2 text-sand-100">
+          <div className="space-y-2">
+            <p className="text-xs text-sand-400">
+              Label each item so we can find &amp; return it &mdash;{" "}
+              <span className="text-amber-300">required</span>.
+            </p>
+            {unitRows.map((r) => {
+              const Icon = r.icon;
+              return (
+                <div key={r.id} className="flex items-center gap-2">
+                  <Icon className="h-4 w-4 shrink-0 text-sand-400" />
+                  <span className="w-12 shrink-0 text-xs text-sand-300">
+                    {r.label}
+                    {r.showNum ? ` ${r.num}` : ""}
+                  </span>
+                  <Input
+                    value={r.value}
+                    onChange={(e) => setLabel(r.key, r.index, e.target.value)}
+                    placeholder="e.g. blue cruiser, bin of kitchen gear"
+                    className={`h-8 flex-1 text-sm ${
+                      r.value.trim() === "" ? "border-red-500/40" : ""
+                    }`}
+                  />
+                  <span className="w-10 shrink-0 text-right text-xs text-sand-400">
+                    ${r.priceCents / 100}
+                  </span>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between border-t border-white/5 pt-2 text-sand-100">
               <span className="text-sm font-medium text-sand-400">Total / year</span>
               <span className="text-lg font-semibold">
                 ${(totalCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}
