@@ -209,10 +209,10 @@ export function StorageSurveyModal({
                     type="button"
                     onClick={() => changeQty(item.key, -1)}
                     disabled={count === 0}
-                    className="flex h-6 w-6 items-center justify-center rounded-md border border-pink-500/20 text-sand-300 transition-colors hover:bg-pink-500/15 hover:text-sand-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                    className="flex h-5 w-5 items-center justify-center rounded-md border border-pink-500/20 text-sand-300 transition-colors hover:bg-pink-500/15 hover:text-sand-100 disabled:opacity-30 disabled:hover:bg-transparent"
                     aria-label={`Remove one ${item.label}`}
                   >
-                    <Minus className="h-3 w-3" />
+                    <Minus className="h-2.5 w-2.5" />
                   </button>
                   <span className="w-4 text-center text-sm font-semibold tabular-nums text-sand-100">
                     {count}
@@ -220,10 +220,10 @@ export function StorageSurveyModal({
                   <button
                     type="button"
                     onClick={() => changeQty(item.key, 1)}
-                    className="flex h-6 w-6 items-center justify-center rounded-md border border-pink-500/20 text-sand-300 transition-colors hover:bg-pink-500/15 hover:text-sand-100"
+                    className="flex h-5 w-5 items-center justify-center rounded-md border border-pink-500/20 text-sand-300 transition-colors hover:bg-pink-500/15 hover:text-sand-100"
                     aria-label={`Add one ${item.label}`}
                   >
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-2.5 w-2.5" />
                   </button>
                 </div>
               </div>
@@ -235,8 +235,8 @@ export function StorageSurveyModal({
         {totalUnits > 0 && (
           <div className="space-y-2">
             <p className="text-xs text-sand-400">
-              Label each item so we can find &amp; return it &mdash;{" "}
-              <span className="text-amber-300">required</span>.
+              Please describe / label each item so we can give it a permanent
+              label &mdash; <span className="text-amber-300">required</span>.
             </p>
             {unitRows.map((r) => {
               const Icon = r.icon;
