@@ -8,7 +8,9 @@ const prebuildSchema = z.enum(["yes", "no", "maybe"]);
 
 // Transport options for the Road to 2026 checklist. Legacy 'yes'/'need_ride'
 // are still accepted (migration 00045 keeps them in the CHECK) and mapped on read.
-export const carPassSchema = z.enum([
+// NOT exported — a "use server" file may only export async functions; the type
+// below (CarPassStatus) is what other modules import.
+const carPassSchema = z.enum([
   "car_pass_parking",
   "burner_express",
   "ride_sorted",
