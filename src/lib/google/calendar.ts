@@ -14,7 +14,9 @@ const SCOPES = [
   "openid",
   "email",
 ].join(" ");
-const EVENT_TIMEZONE = "America/Los_Angeles";
+// NODE event times are entered/displayed in Eastern time, so the Google event
+// must be created in the same zone (pinning to Pacific made invites 3h late).
+const EVENT_TIMEZONE = "America/New_York";
 const TOKEN_SKEW_SECONDS = 60;
 
 function oauthCreds(): { clientId: string; clientSecret: string } {
