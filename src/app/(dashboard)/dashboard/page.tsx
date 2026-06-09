@@ -25,6 +25,7 @@ import { createClient } from "@/lib/supabase/client";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import { StorageSurveyModal } from "@/components/dashboard/storage-survey-modal";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -556,6 +557,18 @@ export default function DashboardPage() {
     });
   }
 
+  async function handlePayStorage() {
+    const { createStoragePaymentCheckout } = await import(
+      "@/lib/actions/payments"
+    );
+    const res = await createStoragePaymentCheckout();
+    if ("error" in res) {
+      toast.error(res.error);
+      return;
+    }
+    window.location.href = res.url;
+  }
+
   function refreshBalance() {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user: authUser } }) => {
@@ -830,6 +843,60 @@ export default function DashboardPage() {
       {campStatus?.label === "Attending" && (
         <RoadTo2026 rows={checklistRows} />
       )}
+
+      {/* Storage — for previous campers NOT attending 2026 who still have gear
+          in NODE storage, so they can pay/edit without the 2026 checklist. */}
+      {campStatus &&
+        campStatus.label !== "Attending" &&
+        storageInfo &&
+        !("error" in storageInfo) &&
+        storageInfo.hasInvoice && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <Card className="glass-card border-0">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sand-200">
+                  <Package className="h-4 w-4 text-pink-400" />
+                  NODE Storage
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-sand-400">Storage balance</span>
+                  <span className="font-medium text-sand-100">
+                    {storageInfo.amountCents - storageInfo.amountPaidCents > 0
+                      ? `$${((storageInfo.amountCents - storageInfo.amountPaidCents) / 100).toLocaleString("en-US")} due`
+                      : "Paid"}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {storageInfo.amountCents - storageInfo.amountPaidCents > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={handlePayStorage}
+                      className="rounded-full bg-pink-500 text-white hover:bg-pink-600"
+                    >
+                      Pay storage
+                    </Button>
+                  )}
+                  {storageInfo.editable && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowStorageEdit(true)}
+                      className="text-sand-400 hover:text-sand-200"
+                    >
+                      Edit items
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

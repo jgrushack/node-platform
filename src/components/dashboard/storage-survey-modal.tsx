@@ -162,22 +162,23 @@ export function StorageSurveyModal({
             {isEdit ? "Edit your storage" : "Storage check-in"}
           </DialogTitle>
           <DialogDescription className="text-sand-400">
-            Let us know what you&apos;re keeping in NODE storage this year.
+            Let us know what you&apos;ve been keeping in NODE storage this past year
+            (2025&ndash;2026).
           </DialogDescription>
         </DialogHeader>
 
         {/* Context blurb */}
         <div className="rounded-lg border border-pink-500/15 bg-pink-500/5 p-3 text-xs leading-relaxed text-sand-300">
           Last year about <strong className="text-sand-100">1.7 containers</strong> of
-          NODE storage was personal camper gear &mdash; roughly a{" "}
-          <strong className="text-sand-100">$7,200</strong> bill for the camp. If we can
-          leave a container in Gerlach, we could cut about{" "}
-          <strong className="text-sand-100">$1,700</strong> off that starting next year,
-          so the per-item fees below help cover it.{" "}
-          <span className="text-amber-300">
-            &#9889; AC units draw a lot of power on playa, so they carry a higher fee
-            &mdash; consider it the power upcharge.
-          </span>
+          NODE storage was personal camper gear, roughly a{" "}
+          <strong className="text-sand-100">$7,000</strong> bill for the camp.
+        </div>
+
+        {/* Eligibility note */}
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <strong className="font-semibold">Please note:</strong> this is only for
+          previous campers who already have gear in NODE storage &mdash; it&apos;s{" "}
+          <strong className="font-semibold">not</strong> for rentals.
         </div>
 
         {/* 4 even icon buttons with steppers */}
