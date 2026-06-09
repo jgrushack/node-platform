@@ -27,10 +27,10 @@ import {
 import { STORAGE_PRICES_CENTS } from "@/lib/storage-prices";
 
 const ITEMS = [
-  { key: "bikes" as const, label: "Bike", priceCents: STORAGE_PRICES_CENTS.bike, icon: Bike, note: false },
-  { key: "bins" as const, label: "Bin", priceCents: STORAGE_PRICES_CENTS.bin, icon: Package, note: false },
-  { key: "acs" as const, label: "AC", priceCents: STORAGE_PRICES_CENTS.ac, icon: Snowflake, note: true },
-  { key: "shiftpods" as const, label: "Tent", priceCents: STORAGE_PRICES_CENTS.shiftpod, icon: Tent, note: false },
+  { key: "bikes" as const, label: "Bike", priceCents: STORAGE_PRICES_CENTS.bike, icon: Bike, note: false, placeholder: "Describe your bike" },
+  { key: "bins" as const, label: "Bin", priceCents: STORAGE_PRICES_CENTS.bin, icon: Package, note: false, placeholder: "Is it labeled with your name?" },
+  { key: "acs" as const, label: "AC", priceCents: STORAGE_PRICES_CENTS.ac, icon: Snowflake, note: true, placeholder: "Labeled?" },
+  { key: "shiftpods" as const, label: "Tent", priceCents: STORAGE_PRICES_CENTS.shiftpod, icon: Tent, note: false, placeholder: "e.g. Shiftpod 2, 3, X… labeled?" },
 ];
 
 type Labels = Record<string, string[]>;
@@ -111,6 +111,7 @@ export function StorageSurveyModal({
       num: i + 1,
       icon: it.icon,
       priceCents: it.priceCents,
+      placeholder: it.placeholder,
       value,
     }))
   );
@@ -251,7 +252,7 @@ export function StorageSurveyModal({
                   <Input
                     value={r.value}
                     onChange={(e) => setLabel(r.key, r.index, e.target.value)}
-                    placeholder="e.g. blue cruiser, bin of kitchen gear"
+                    placeholder={r.placeholder}
                     className={`h-8 flex-1 text-sm ${
                       r.value.trim() === "" ? "border-red-500/40" : ""
                     }`}
