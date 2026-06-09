@@ -172,7 +172,11 @@ export function StorageSurveyModal({
         <div className="rounded-lg border border-pink-500/15 bg-pink-500/5 p-3 text-xs leading-relaxed text-sand-300">
           Last year about <strong className="text-sand-100">1.7 containers</strong> of
           NODE storage was personal camper gear, roughly a{" "}
-          <strong className="text-sand-100">$7,000</strong> bill for the camp.
+          <strong className="text-sand-100">$7,000</strong> bill for the camp.{" "}
+          <span className="text-amber-300">
+            &#9889; AC units draw a lot of power on playa, so they carry a higher fee
+            &mdash; consider it the power upcharge.
+          </span>
         </div>
 
         {/* Eligibility note */}
