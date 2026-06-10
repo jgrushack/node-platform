@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Children, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,9 @@ import {
   Package,
   Wallet,
   Pencil,
+  Plus,
+  Minus,
+  Zap,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { StorageSurveyModal } from "@/components/dashboard/storage-survey-modal";
@@ -30,9 +33,17 @@ import {
 } from "@/lib/actions/storage-survey";
 import {
   createStoragePaymentCheckout,
+  createEquipmentPaymentCheckout,
   getDuesStatus,
   type DuesStatusResult,
 } from "@/lib/actions/payments";
+import {
+  getEquipmentCatalog,
+  reserveEquipment,
+  type GetEquipmentCatalogResult,
+  type CatalogItem,
+  type EquipmentSelection,
+} from "@/lib/actions/equipment";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -51,14 +62,6 @@ const PAYMENT_FREQUENCIES = [
   { value: "monthly", label: "Monthly" },
 ];
 
-const EQUIPMENT_ITEMS = [
-  { name: "Shiftpod", description: "Premium tent with AC hookup", price: "TBD" },
-  { name: "Kodiak Canvas Tent", description: "Heavy-duty canvas tent (10x14)", price: "TBD" },
-  { name: "Hexayurt", description: "Pre-built hexayurt panel kit", price: "TBD" },
-  { name: "Cot + Sleeping Pad", description: "Standard cot with foam pad", price: "TBD" },
-];
-
-
 // ── Types ──────────────────────────────────────────────────────────
 
 type View = "dashboard" | "dues" | "equipment";
@@ -67,6 +70,7 @@ type PaymentType = "full" | "plan";
 // Narrowed success arms of the status reads (drop the {error} variant).
 type DuesStatus = Extract<DuesStatusResult, { exists: boolean }>;
 type StorageStatus = Extract<GetStorageSurveyResult, { hasInvoice: boolean }>;
+type EquipmentStatus = Extract<GetEquipmentCatalogResult, { hasInvoice: boolean }>;
 
 // ── Main Component ─────────────────────────────────────────────────
 
@@ -78,6 +82,7 @@ export function PaymentsClient() {
   const [loading, setLoading] = useState(true);
   const [dues, setDues] = useState<DuesStatus | null>(null);
   const [storage, setStorage] = useState<StorageStatus | null>(null);
+  const [equipment, setEquipment] = useState<EquipmentStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [showStorageEdit, setShowStorageEdit] = useState(false);
 
@@ -117,9 +122,14 @@ export function PaymentsClient() {
   }
 
   async function refreshStatuses() {
-    const [d, s] = await Promise.all([getDuesStatus(), getStorageSurvey()]);
+    const [d, s, e] = await Promise.all([
+      getDuesStatus(),
+      getStorageSurvey(),
+      getEquipmentCatalog(),
+    ]);
     setDues("error" in d ? null : d);
     setStorage("error" in s ? null : s);
+    setEquipment("error" in e ? null : e);
     setStatusLoading(false);
   }
 
@@ -135,7 +145,11 @@ export function PaymentsClient() {
     const params = new URLSearchParams(window.location.search);
     const clean = () =>
       window.history.replaceState({}, "", "/dashboard/payments");
-    if (params.get("dues_cancel") || params.get("storage_cancel")) {
+    if (
+      params.get("dues_cancel") ||
+      params.get("storage_cancel") ||
+      params.get("equipment_cancel")
+    ) {
       toast.info("Checkout canceled — no charge made.");
       clean();
       return;
@@ -157,9 +171,30 @@ export function PaymentsClient() {
         await refreshStatuses();
       })();
     } else if (params.get("storage_session")) {
-      toast.success("Storage payment received — your balance will update shortly.");
       clean();
       void (async () => {
+        const s = await getStorageSurvey();
+        if (!("error" in s) && s.status === "processing") {
+          toast.success("Bank payment initiated — it clears in 3–5 business days.");
+        } else {
+          toast.success(
+            "Storage payment received — your balance will update shortly."
+          );
+        }
+        await refreshBalance();
+        await refreshStatuses();
+      })();
+    } else if (params.get("equipment_session")) {
+      clean();
+      void (async () => {
+        const e = await getEquipmentCatalog();
+        if (!("error" in e) && e.status === "processing") {
+          toast.success("Bank payment initiated — it clears in 3–5 business days.");
+        } else {
+          toast.success(
+            "Equipment payment received — your balance will update shortly."
+          );
+        }
         await refreshBalance();
         await refreshStatuses();
       })();
@@ -168,6 +203,15 @@ export function PaymentsClient() {
 
   async function handlePayStorage() {
     const res = await createStoragePaymentCheckout();
+    if ("error" in res) {
+      toast.error(res.error);
+      return;
+    }
+    window.location.href = res.url;
+  }
+
+  async function handlePayEquipment() {
+    const res = await createEquipmentPaymentCheckout();
     if ("error" in res) {
       toast.error(res.error);
       return;
@@ -188,8 +232,10 @@ export function PaymentsClient() {
             statusLoading={statusLoading}
             dues={dues}
             storage={storage}
+            equipment={equipment}
             onNavigate={setView}
             onPayStorage={handlePayStorage}
+            onPayEquipment={handlePayEquipment}
             onEditStorage={() => setShowStorageEdit(true)}
           />
         )}
@@ -201,7 +247,14 @@ export function PaymentsClient() {
           />
         )}
         {view === "equipment" && (
-          <EquipmentView key="equipment" onBack={() => setView("dashboard")} />
+          <EquipmentView
+            key="equipment"
+            onBack={() => {
+              setView("dashboard");
+              void refreshBalance();
+              void refreshStatuses();
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -281,8 +334,10 @@ function DashboardView({
   statusLoading,
   dues,
   storage,
+  equipment,
   onNavigate,
   onPayStorage,
+  onPayEquipment,
   onEditStorage,
 }: {
   balance: number | null;
@@ -292,8 +347,10 @@ function DashboardView({
   statusLoading: boolean;
   dues: DuesStatus | null;
   storage: StorageStatus | null;
+  equipment: EquipmentStatus | null;
   onNavigate: (view: View) => void;
   onPayStorage: () => void;
+  onPayEquipment: () => void;
   onEditStorage: () => void;
 }) {
   const fmt = (cents: number) =>
@@ -358,15 +415,37 @@ function DashboardView({
     storageStatusLine = `${fmt(storageOwedCents)} due`;
   }
 
+  // ── Equipment state ──
+  const hasEquipment = !!equipment && equipment.hasInvoice;
+  const equipmentProcessing = equipment?.status === "processing";
+  const equipmentOwedCents = hasEquipment
+    ? Math.max(0, (equipment?.amountCents ?? 0) - (equipment?.amountPaidCents ?? 0))
+    : 0;
+  const equipmentPaid = hasEquipment && equipmentOwedCents === 0;
+
+  let equipmentStatusLine: string;
+  if (!hasEquipment) {
+    equipmentStatusLine = "Nothing reserved";
+  } else if (equipmentProcessing) {
+    equipmentStatusLine = "Bank payment pending — clears in 3–5 business days";
+  } else if (equipmentPaid) {
+    equipmentStatusLine = "Paid in full";
+  } else {
+    equipmentStatusLine = `${fmt(equipmentOwedCents)} due`;
+  }
+
   // ── Smart "Make a payment" routing ──
   // A dues invoice with money already on it (paid in full OR mid-plan) can't be
   // re-paid through DuesFlow — the server guard rejects it — so it isn't payable.
   const duesPayable = duesOwedCents > 0 && !duesProcessing && !duesManaged;
   const storagePayable = storageOwedCents > 0 && !storageProcessing;
-  const canPay = !statusLoading && (duesPayable || storagePayable);
+  const equipmentPayable = equipmentOwedCents > 0 && !equipmentProcessing;
+  const canPay =
+    !statusLoading && (duesPayable || storagePayable || equipmentPayable);
   const makePayment = () => {
     if (duesPayable) onNavigate("dues");
     else if (storagePayable) onPayStorage();
+    else if (equipmentPayable) onPayEquipment();
   };
 
   return (
@@ -482,14 +561,29 @@ function DashboardView({
         icon={<Tent className="h-5 w-5 text-amber" />}
         iconBg="bg-amber/15"
         title="Rent Equipment"
-        statusLine="Tents & gear on playa — pricing coming soon"
+        statusLine={equipmentStatusLine}
+        paid={equipmentPaid}
+        loading={statusLoading}
       >
+        {equipmentPayable && (
+          <Button
+            className="rounded-full bg-amber text-blue-950 hover:bg-amber/90"
+            onClick={onPayEquipment}
+          >
+            <Wallet className="mr-2 h-4 w-4" />
+            Pay {fmt(equipmentOwedCents)}
+          </Button>
+        )}
         <Button
           variant="outline"
           className="rounded-full border-amber/30 text-amber hover:bg-amber/10"
           onClick={() => onNavigate("equipment")}
         >
-          Browse
+          {hasEquipment
+            ? equipment?.editable
+              ? "Edit rentals"
+              : "View rentals"
+            : "Browse"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </SectionCard>
@@ -1019,66 +1113,358 @@ function DuesFlow({
   );
 }
 
-// ── Equipment View (Placeholder) ───────────────────────────────────
+// ── Equipment View (live catalog) ──────────────────────────────────
 
 function EquipmentView({ onBack }: { onBack: () => void }) {
-  return (
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<CatalogItem[]>([]);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [customLabel, setCustomLabel] = useState("");
+  const [customPrice, setCustomPrice] = useState("");
+  const [editable, setEditable] = useState(true);
+  const [hasInvoice, setHasInvoice] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await getEquipmentCatalog();
+      if ("error" in res) {
+        toast.error(res.error);
+        setLoading(false);
+        return;
+      }
+      setItems(res.items);
+      const q: Record<string, number> = {};
+      res.items.forEach((i) => {
+        if (i.mine > 0) q[i.key] = i.mine;
+      });
+      setQty(q);
+      if (res.custom.length > 0) {
+        setCustomLabel(res.custom[0].label);
+        setCustomPrice(String(Math.round(res.custom[0].unitPriceCents / 100)));
+      }
+      setEditable(res.editable);
+      setHasInvoice(res.hasInvoice);
+      setStatus(res.status);
+      setLoading(false);
+    })();
+  }, []);
+
+  const money = (cents: number) =>
+    (cents / 100).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    });
+
+  function setItemQty(key: string, next: number, max: number | null) {
+    const clamped = Math.max(0, max === null ? next : Math.min(next, max));
+    setQty((prev) => ({ ...prev, [key]: clamped }));
+  }
+
+  // Whole dollars only — keeps the field, total, and reload round-trip lossless.
+  const customPriceCents = (parseInt(customPrice, 10) || 0) * 100;
+  const customValid = customLabel.trim().length > 0 && customPriceCents > 0;
+
+  const totalCents =
+    items.reduce((s, i) => s + (qty[i.key] ?? 0) * i.priceCents, 0) +
+    (customValid ? customPriceCents : 0);
+
+  function buildSelections(): EquipmentSelection[] {
+    const sel: EquipmentSelection[] = [];
+    for (const i of items) {
+      const q = qty[i.key] ?? 0;
+      if (q > 0) sel.push({ key: i.key, quantity: q });
+    }
+    if (customValid)
+      sel.push({
+        key: null,
+        quantity: 1,
+        customLabel: customLabel.trim(),
+        unitPriceCents: customPriceCents,
+      });
+    return sel;
+  }
+
+  async function handleReserve(thenPay: boolean) {
+    setSubmitting(true);
+    const res = await reserveEquipment(buildSelections());
+    if ("error" in res) {
+      toast.error(res.error);
+      setSubmitting(false);
+      return;
+    }
+    if (res.totalCents === 0) {
+      toast.success("Your equipment reservation was cleared.");
+      onBack();
+      return;
+    }
+    if (thenPay) {
+      const pay = await createEquipmentPaymentCheckout();
+      if ("error" in pay) {
+        toast.error(pay.error);
+        setSubmitting(false);
+        return;
+      }
+      window.location.assign(pay.url);
+      return;
+    }
+    toast.success("Reservation saved — pay anytime from Payments.");
+    onBack();
+  }
+
+  const tents = items.filter((i) => i.category === "tent");
+  const addons = items.filter((i) => i.category === "addon");
+
+  const header = (
+    <div className="flex items-center gap-3">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Back to payments"
+        className="text-sand-400 hover:text-sand-200"
+        onClick={onBack}
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </Button>
+      <div>
+        <h1 className="text-2xl font-bold text-sand-100">Rent Equipment</h1>
+        <p className="text-xs text-sand-400">Tents &amp; gear from NODE&apos;s pool</p>
+      </div>
+    </div>
+  );
+
+  const wrapper = (children: ReactNode) => (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="space-y-6"
+      className="space-y-5"
     >
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Back to payments"
-          className="text-sand-400 hover:text-sand-200"
-          onClick={onBack}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-sand-100">Rent Equipment</h1>
-          <p className="text-xs text-sand-400">On-playa gear from NODE</p>
-        </div>
-      </div>
+      {header}
+      {children}
+    </motion.div>
+  );
 
-      <Card className="glass-card border-0">
-        <CardHeader>
-          <CardTitle className="text-sand-200">
-            Available Equipment
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-sand-300">
-            NODE has tents and gear available for rent on playa. Reserve yours
-            to guarantee availability.
-          </p>
-          <Separator className="bg-pink-500/10" />
-          {EQUIPMENT_ITEMS.map((item) => (
-            <div
-              key={item.name}
-              className="flex items-center justify-between py-2"
-            >
-              <div>
-                <p className="text-sm font-medium text-sand-200">
-                  {item.name}
-                </p>
-                <p className="text-xs text-sand-400">{item.description}</p>
+  if (loading) {
+    return wrapper(
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-sand-500" />
+      </div>
+    );
+  }
+
+  // Read-only once a payment exists / is in flight — changes go through an admin.
+  if (!editable && hasInvoice) {
+    const mineItems = items.filter((i) => i.mine > 0);
+    return wrapper(
+      <>
+        <Card className="glass-card border-0">
+          <CardContent className="space-y-2 py-5">
+            {mineItems.map((i) => (
+              <div key={i.key} className="flex justify-between text-sm">
+                <span className="text-sand-300">
+                  {i.label}
+                  {i.mine > 1 ? ` ×${i.mine}` : ""}
+                </span>
+                <span className="text-sand-200">{money(i.mine * i.priceCents)}</span>
               </div>
-              <Badge className="bg-sand-800 text-sand-400 text-xs">
-                {item.price}
-              </Badge>
+            ))}
+            {customValid && (
+              <div className="flex justify-between text-sm">
+                <span className="text-sand-300">{customLabel.trim()}</span>
+                <span className="text-sand-200">{money(customPriceCents)}</span>
+              </div>
+            )}
+            <Separator className="bg-amber/10 !my-2" />
+            <div className="flex justify-between text-sm font-semibold">
+              <span className="text-sand-300">Total</span>
+              <span className="text-sand-100">{money(totalCents)}</span>
             </div>
-          ))}
-          <Separator className="bg-pink-500/10" />
-          <p className="text-xs text-sand-500 text-center">
-            Pricing and availability coming soon.
+          </CardContent>
+        </Card>
+        <p className="text-xs text-sand-400">
+          {status === "processing"
+            ? "Bank payment pending — clears in 3–5 business days."
+            : "Your rental is paid. Contact an admin to change it."}
+        </p>
+      </>
+    );
+  }
+
+  const renderRow = (i: CatalogItem) => {
+    const q = qty[i.key] ?? 0;
+    const atMax = i.available !== null && q >= i.available;
+    const disabledAll = i.soldOut && q === 0;
+    return (
+      <div key={i.key} className="flex items-center justify-between gap-3 py-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-sand-100">
+            {i.label}
+            <span className="ml-1.5 text-sand-400">{money(i.priceCents)}</span>
           </p>
+          {i.description && (
+            <p className="text-xs text-sand-400">{i.description}</p>
+          )}
+          <p className="mt-0.5 text-[11px] text-sand-500">
+            {i.available === null
+              ? "Available"
+              : i.available - q <= 0
+                ? q > 0
+                  ? "Max reached"
+                  : "Sold out"
+                : `${i.available - q} available`}
+          </p>
+        </div>
+        {disabledAll ? (
+          <Badge className="shrink-0 bg-red-500/15 text-red-300">Sold out</Badge>
+        ) : (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              aria-label={`Remove one ${i.label}`}
+              onClick={() => setItemQty(i.key, q - 1, i.available)}
+              disabled={q === 0}
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-amber/30 text-sand-300 transition-colors hover:bg-amber/10 disabled:opacity-30"
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+            <span className="w-5 text-center text-sm font-semibold tabular-nums text-sand-100">
+              {q}
+            </span>
+            <button
+              type="button"
+              aria-label={`Add one ${i.label}`}
+              onClick={() => setItemQty(i.key, q + 1, i.available)}
+              disabled={atMax}
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-amber/30 text-sand-300 transition-colors hover:bg-amber/10 disabled:opacity-30"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const reserveDisabled = submitting || (totalCents === 0 && !hasInvoice);
+
+  return wrapper(
+    <>
+      <p className="text-sm text-sand-300">
+        Reserve tents and gear from NODE&apos;s pool. Inventory is limited and
+        first-come — your pick is held as soon as you reserve.
+      </p>
+
+      {/* Tents */}
+      <Card className="glass-card border-0">
+        <CardContent className="py-2">
+          <p className="flex items-center gap-2 pt-3 text-xs font-semibold uppercase tracking-wider text-sand-400">
+            <Tent className="h-3.5 w-3.5 text-amber" /> Tents
+          </p>
+          <div className="divide-y divide-white/5">{tents.map(renderRow)}</div>
         </CardContent>
       </Card>
-    </motion.div>
+
+      {/* Add-ons */}
+      {addons.length > 0 && (
+        <Card className="glass-card border-0">
+          <CardContent className="py-2">
+            <p className="flex items-center gap-2 pt-3 text-xs font-semibold uppercase tracking-wider text-sand-400">
+              <Zap className="h-3.5 w-3.5 text-amber" /> Add-ons
+            </p>
+            <div className="divide-y divide-white/5">{addons.map(renderRow)}</div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Custom / Other */}
+      <Card className="glass-card border-0">
+        <CardContent className="space-y-3 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber/15">
+              <Plus className="h-4 w-4 text-amber" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-sand-100">Something else</p>
+              <p className="text-xs text-sand-400">
+                Renting an item that isn&apos;t listed? Add it with a price.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={customLabel}
+              onChange={(e) => setCustomLabel(e.target.value)}
+              placeholder="What is it?"
+              maxLength={120}
+              className="flex-1"
+            />
+            <div className="flex items-center gap-1">
+              <span className="text-sand-400">$</span>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={customPrice}
+                onChange={(e) => setCustomPrice(e.target.value)}
+                onBlur={() => {
+                  const n = parseInt(customPrice, 10) || 0;
+                  setCustomPrice(n > 0 ? String(n) : "");
+                }}
+                placeholder="Price"
+                className="max-w-[110px]"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Total + actions */}
+      <Card className="glass-card border-0">
+        <CardContent className="flex items-center justify-between py-4">
+          <span className="text-sm font-medium text-sand-400">Total</span>
+          <span className="text-lg font-semibold text-sand-100">
+            {money(totalCents)}
+          </span>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-2">
+        <Button
+          className="w-full rounded-full bg-amber text-blue-950 hover:bg-amber/90"
+          disabled={reserveDisabled}
+          onClick={() => handleReserve(true)}
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Working&hellip;
+            </>
+          ) : totalCents > 0 ? (
+            <>
+              <Wallet className="mr-2 h-4 w-4" />
+              Reserve &amp; pay {money(totalCents)}
+            </>
+          ) : hasInvoice ? (
+            "Remove my reservation"
+          ) : (
+            "Select items to reserve"
+          )}
+        </Button>
+        {totalCents > 0 && (
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => handleReserve(false)}
+            className="w-full text-center text-xs text-sand-500 underline hover:text-sand-300 disabled:opacity-50"
+          >
+            Reserve &amp; pay later
+          </button>
+        )}
+      </div>
+    </>
   );
 }

@@ -18,6 +18,7 @@ import {
   Shield,
   Mail,
   Wallet,
+  Tent,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -92,9 +93,10 @@ export default function DashboardLayout({
             { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
           );
 
-          // Admin/super_admin see Reports
+          // Admin/super_admin see Reports + Rentals (equipment inventory)
           if (["admin", "super_admin"].includes(effectiveRole)) {
             items.push({ href: "/dashboard/reports", label: "Reports", icon: BarChart3 });
+            items.push({ href: "/dashboard/rentals", label: "Rentals", icon: Tent });
           }
 
           // Super admin sees Users

@@ -8,6 +8,7 @@ import { getStripe } from "@/lib/stripe";
 
 const DUES_KIND = "dues_2026";
 const STORAGE_KIND = "storage_survey_2026";
+const EQUIPMENT_KIND = "equipment_2026";
 // Installments finish before build week.
 const PLAN_CUTOFF = new Date("2026-08-23T00:00:00-07:00");
 
@@ -325,6 +326,82 @@ export async function createStoragePaymentCheckout(): Promise<CreateDuesCheckout
     return { url: session.url };
   } catch (e) {
     console.error("[createStoragePaymentCheckout]", e);
+    return { error: "Payment setup failed. Please try again." };
+  }
+}
+
+/** Pay the outstanding balance on the member's equipment-rental invoice. The
+ *  invoice already exists (created by reserveEquipment); this just collects
+ *  payment for it. The generic webhook credits it by metadata.invoice_id. */
+export async function createEquipmentPaymentCheckout(): Promise<CreateDuesCheckoutResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const admin = createAdminClient();
+  const { data: campYear } = await admin
+    .from("camp_years")
+    .select("id")
+    .eq("year", 2026)
+    .single();
+  if (!campYear) return { error: "No 2026 camp year configured." };
+
+  const { data: inv } = await admin
+    .from("invoices")
+    .select("id, amount_cents, amount_paid_cents, status")
+    .eq("profile_id", user.id)
+    .eq("camp_year_id", campYear.id)
+    .eq("kind", EQUIPMENT_KIND)
+    .maybeSingle();
+
+  if (!inv || inv.status === "cancelled" || inv.status === "refunded") {
+    return {
+      error: "No equipment balance to pay — reserve items in Rent Equipment first.",
+    };
+  }
+  if (inv.status === "processing") {
+    return { error: "An equipment payment is already processing." };
+  }
+  const outstanding = inv.amount_cents - inv.amount_paid_cents;
+  if (outstanding <= 0) return { error: "Your equipment balance is already paid." };
+
+  const customerId = await ensureStripeCustomer(admin, user.id, user.email ?? undefined);
+
+  const hdrs = await headers();
+  const origin =
+    hdrs.get("origin") ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://node.family";
+  const meta = { invoice_id: inv.id, profile_id: user.id, kind: EQUIPMENT_KIND };
+
+  try {
+    const session = await getStripe().checkout.sessions.create(
+      {
+        mode: "payment",
+        customer: customerId,
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: outstanding,
+              product_data: { name: "NODE 2026 Equipment Rental" },
+            },
+            quantity: 1,
+          },
+        ],
+        payment_intent_data: { metadata: meta },
+        metadata: meta,
+        success_url: `${origin}/dashboard/payments?equipment_session={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/dashboard/payments?equipment_cancel=1`,
+      },
+      { idempotencyKey: `equipment-${inv.id}-${outstanding}` }
+    );
+    if (!session.url) return { error: "Failed to start checkout." };
+    return { url: session.url };
+  } catch (e) {
+    console.error("[createEquipmentPaymentCheckout]", e);
     return { error: "Payment setup failed. Please try again." };
   }
 }
