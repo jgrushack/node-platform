@@ -8,13 +8,12 @@ import { getStripe } from "@/lib/stripe";
 
 const DUES_KIND = "dues_2026";
 const STORAGE_KIND = "storage_survey_2026";
-const DEPOSIT_CENTS = 50000; // $500
 // Installments finish before build week.
 const PLAN_CUTOFF = new Date("2026-08-23T00:00:00-07:00");
 
 const checkoutSchema = z.object({
   tierDollars: z.number().int().positive().max(100000),
-  paymentType: z.enum(["full", "deposit", "plan"]),
+  paymentType: z.enum(["full", "plan"]),
   frequency: z.enum(["weekly", "biweekly", "monthly"]).optional(),
 });
 
@@ -100,7 +99,7 @@ export async function createDuesCheckout(
     .single();
   if (!campYear) return { error: "No 2026 camp year configured." };
 
-  // The invoice obligation is always the FULL tier (deposit/plan pay it down).
+  // The invoice obligation is always the FULL tier (a plan pays it down).
   const amountCents = tierDollars * 100;
   const n = paymentType === "plan" ? installmentCount(frequency!) : 1;
 
@@ -215,7 +214,6 @@ export async function createDuesCheckout(
       return { url: session.url };
     }
 
-    const chargeCents = paymentType === "deposit" ? DEPOSIT_CENTS : amountCents;
     const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
@@ -224,10 +222,8 @@ export async function createDuesCheckout(
           {
             price_data: {
               currency: "usd",
-              unit_amount: chargeCents,
-              product_data: {
-                name: `NODE 2026 Dues${paymentType === "deposit" ? " — deposit" : ""}`,
-              },
+              unit_amount: amountCents,
+              product_data: { name: "NODE 2026 Dues" },
             },
             quantity: 1,
           },
@@ -237,7 +233,7 @@ export async function createDuesCheckout(
         success_url: successUrl,
         cancel_url: cancelUrl,
       },
-      { idempotencyKey: `dues-${paymentType}-${invoiceId}-${chargeCents}` }
+      { idempotencyKey: `dues-${paymentType}-${invoiceId}-${amountCents}` }
     );
     if (!session.url) return { error: "Failed to start checkout." };
     return { url: session.url };

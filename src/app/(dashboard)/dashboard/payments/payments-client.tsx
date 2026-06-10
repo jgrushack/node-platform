@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -32,12 +33,12 @@ import { STORAGE_PRICES_CENTS } from "@/lib/storage-prices";
 // ── Constants ──────────────────────────────────────────────────────
 
 const DUES_TIERS = [
+  { amount: 500, label: "$500", description: "" },
   { amount: 1200, label: "$1,200", description: "Reduced" },
-  { amount: 1650, label: "$1,650", description: "Standard" },
-  { amount: 2000, label: "$2,000", description: "Full" },
-  { amount: 2500, label: "$2,500", description: "Supporter" },
-  { amount: 5000, label: "$5,000", description: "Patron" },
-  { amount: 10000, label: "$10,000", description: "Benefactor" },
+  { amount: 1500, label: "$1,500", description: "Reduced" },
+  { amount: 1900, label: "$1,900", description: "Full dues" },
+  { amount: 2400, label: "$2,400", description: "Donor" },
+  { amount: 8000, label: "$8,000", description: "Benefactor" },
 ];
 
 const PAYMENT_FREQUENCIES = [
@@ -45,8 +46,6 @@ const PAYMENT_FREQUENCIES = [
   { value: "biweekly", label: "Bi-weekly" },
   { value: "monthly", label: "Monthly" },
 ];
-
-const DEPOSIT_AMOUNT = 500; // TBD — placeholder
 
 // Prices mirror the canonical storage survey constant so both surfaces match.
 const STORAGE_ITEMS = [
@@ -67,7 +66,7 @@ const EQUIPMENT_ITEMS = [
 // ── Types ──────────────────────────────────────────────────────────
 
 type View = "dashboard" | "dues" | "equipment" | "storage";
-type PaymentType = "full" | "plan" | "deposit";
+type PaymentType = "full" | "plan";
 type PaymentMethod = "cc" | "bank" | "crypto";
 
 interface StorageQuantities {
@@ -321,6 +320,8 @@ function DashboardView({
 function DuesFlow({ onBack }: { onBack: () => void }) {
   const [step, setStep] = useState(1);
   const [selectedTier, setSelectedTier] = useState<number | null>(null);
+  const [customMode, setCustomMode] = useState(false);
+  const [customAmount, setCustomAmount] = useState("");
   const [paymentType, setPaymentType] = useState<PaymentType | null>(null);
   const [frequency, setFrequency] = useState<string>("monthly");
   const [processing, setProcessing] = useState(false);
@@ -415,45 +416,119 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
             exit={{ opacity: 0, x: -20 }}
             className="space-y-4"
           >
+            {/* Pay-what-you-can philosophy */}
+            <div className="rounded-lg border border-pink-500/15 bg-pink-500/5 p-3 text-xs leading-relaxed text-sand-300">
+              Everyone is expected to pay{" "}
+              <strong className="text-sand-100">something</strong>. If you can&apos;t
+              afford full dues, you&apos;re welcome to pay at a lower tier &mdash; but{" "}
+              <strong className="text-sand-100">
+                anything under $1,200 should be cleared with Jesse beforehand
+              </strong>
+              . This isn&apos;t an invitation to pay less because you feel like it. NODE
+              wants everyone to experience Black Rock City, and whether you pay more or
+              less, <strong className="text-sand-100">we&apos;re all equal</strong>.
+            </div>
+
             <p className="text-sm text-sand-300">
-              Choose your 2026 dues contribution level.
+              Choose your 2026 dues contribution.
             </p>
             <div className="grid gap-3">
-              {DUES_TIERS.map((tier) => (
-                <Card
-                  key={tier.amount}
-                  className={`glass-card border-0 cursor-pointer transition-all ${
-                    selectedTier === tier.amount
-                      ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
-                      : "hover:ring-1 hover:ring-pink-500/20"
-                  }`}
-                  onClick={() => setSelectedTier(tier.amount)}
-                >
-                  <CardContent className="flex items-center justify-between py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`h-4 w-4 rounded-full border-2 transition-colors ${
-                          selectedTier === tier.amount
-                            ? "border-pink-500 bg-pink-500"
-                            : "border-sand-600"
-                        }`}
-                      />
-                      <div>
-                        <span className="font-semibold text-sand-100">
-                          {tier.label}
-                        </span>
-                        <span className="ml-2 text-xs text-sand-400">
-                          {tier.description}
-                        </span>
+              {DUES_TIERS.map((tier) => {
+                const active = !customMode && selectedTier === tier.amount;
+                return (
+                  <Card
+                    key={tier.amount}
+                    className={`glass-card border-0 cursor-pointer transition-all ${
+                      active
+                        ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
+                        : "hover:ring-1 hover:ring-pink-500/20"
+                    }`}
+                    onClick={() => {
+                      setCustomMode(false);
+                      setSelectedTier(tier.amount);
+                    }}
+                  >
+                    <CardContent className="flex items-center justify-between py-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`h-4 w-4 rounded-full border-2 transition-colors ${
+                            active ? "border-pink-500 bg-pink-500" : "border-sand-600"
+                          }`}
+                        />
+                        <div>
+                          <span className="font-semibold text-sand-100">
+                            {tier.label}
+                          </span>
+                          {tier.description && (
+                            <span className="ml-2 text-xs text-sand-400">
+                              {tier.description}
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {/* Pay what you can — custom amount */}
+              <Card
+                className={`glass-card border-0 cursor-pointer transition-all ${
+                  customMode
+                    ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
+                    : "hover:ring-1 hover:ring-pink-500/20"
+                }`}
+                onClick={() => {
+                  setCustomMode(true);
+                  const n = parseInt(customAmount, 10) || 0;
+                  setSelectedTier(n > 0 ? n : null);
+                }}
+              >
+                <CardContent className="py-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`h-4 w-4 rounded-full border-2 transition-colors ${
+                        customMode ? "border-pink-500 bg-pink-500" : "border-sand-600"
+                      }`}
+                    />
+                    <div>
+                      <p className="font-semibold text-sand-100">Pay what you can</p>
+                      <p className="text-xs text-sand-400">Enter your own amount</p>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                  {customMode && (
+                    <div className="ml-7 flex items-center gap-2">
+                      <span className="text-sand-400">$</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        value={customAmount}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCustomAmount(v);
+                          const n = parseInt(v, 10) || 0;
+                          setSelectedTier(n > 0 ? n : null);
+                        }}
+                        placeholder="Amount"
+                        className="max-w-[140px]"
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
+
+            {selectedTier !== null && selectedTier < 1200 && (
+              <p className="text-xs text-amber-300">
+                Amounts under $1,200 should be cleared with Jesse before paying.
+              </p>
+            )}
+
             <Button
               className="w-full rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
-              disabled={!selectedTier}
+              disabled={!selectedTier || selectedTier <= 0}
               onClick={() => setStep(2)}
             >
               Next
@@ -577,35 +652,6 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
                   )}
                 </CardContent>
               </Card>
-
-              {/* Deposit */}
-              <Card
-                className={`glass-card border-0 cursor-pointer transition-all ${
-                  paymentType === "deposit"
-                    ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
-                    : "hover:ring-1 hover:ring-pink-500/20"
-                }`}
-                onClick={() => setPaymentType("deposit")}
-              >
-                <CardContent className="py-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`h-4 w-4 rounded-full border-2 transition-colors ${
-                        paymentType === "deposit"
-                          ? "border-pink-500 bg-pink-500"
-                          : "border-sand-600"
-                      }`}
-                    />
-                    <div>
-                      <p className="font-semibold text-sand-100">Deposit</p>
-                      <p className="text-xs text-sand-400">
-                        ${DEPOSIT_AMOUNT.toLocaleString()} deposit today,
-                        remainder later
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
 
             <Button
@@ -644,18 +690,15 @@ function DuesFlow({ onBack }: { onBack: () => void }) {
                   <span className="text-sand-200">
                     {paymentType === "full" && "Pay in full"}
                     {paymentType === "plan" && `Payment plan (${frequency})`}
-                    {paymentType === "deposit" && "Deposit"}
                   </span>
                 </div>
                 <Separator className="bg-pink-500/10 !my-2" />
                 <div className="flex justify-between text-sm font-semibold">
                   <span className="text-sand-300">Due today</span>
                   <span className="text-sand-100">
-                    ${(paymentType === "deposit"
-                      ? DEPOSIT_AMOUNT
-                      : paymentType === "plan"
-                        ? getInstallmentAmount() ?? 0
-                        : selectedTier ?? 0
+                    ${(paymentType === "plan"
+                      ? getInstallmentAmount() ?? 0
+                      : selectedTier ?? 0
                     ).toLocaleString()}
                   </span>
                 </div>
