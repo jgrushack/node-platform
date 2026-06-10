@@ -186,6 +186,8 @@ function storageRow(info: GetStorageSurveyResult | null): {
   if (!info || "error" in info || !info.completed)
     return { state: "todo", detail: "Tell us what you're storing" };
   if (!info.hasInvoice) return { state: "done", detail: "Nothing in storage" };
+  if (info.status === "processing")
+    return { state: "attention", detail: "Bank payment pending" };
   const due = Math.max(0, info.amountCents - info.amountPaidCents);
   if (due <= 0) return { state: "done", detail: "Paid" };
   return {
@@ -867,21 +869,24 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-sand-400">Storage balance</span>
                   <span className="font-medium text-sand-100">
-                    {storageInfo.amountCents - storageInfo.amountPaidCents > 0
-                      ? `$${((storageInfo.amountCents - storageInfo.amountPaidCents) / 100).toLocaleString("en-US")} due`
-                      : "Paid"}
+                    {storageInfo.status === "processing"
+                      ? "Bank payment pending"
+                      : storageInfo.amountCents - storageInfo.amountPaidCents > 0
+                        ? `$${((storageInfo.amountCents - storageInfo.amountPaidCents) / 100).toLocaleString("en-US")} due`
+                        : "Paid"}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {storageInfo.amountCents - storageInfo.amountPaidCents > 0 && (
-                    <Button
-                      size="sm"
-                      onClick={handlePayStorage}
-                      className="rounded-full bg-pink-500 text-white hover:bg-pink-600"
-                    >
-                      Pay storage
-                    </Button>
-                  )}
+                  {storageInfo.status !== "processing" &&
+                    storageInfo.amountCents - storageInfo.amountPaidCents > 0 && (
+                      <Button
+                        size="sm"
+                        onClick={handlePayStorage}
+                        className="rounded-full bg-pink-500 text-white hover:bg-pink-600"
+                      >
+                        Pay storage
+                      </Button>
+                    )}
                   {storageInfo.editable && (
                     <Button
                       size="sm"

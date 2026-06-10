@@ -227,6 +227,8 @@ export type GetStorageSurveyResult =
       amountCents: number;
       amountPaidCents: number;
       editable: boolean;
+      /** Raw invoice status (e.g. "processing" during an ACH hold), or null. */
+      status: string | null;
     };
 
 /** Read the member's current storage answers to pre-fill the edit form.
@@ -259,6 +261,7 @@ export async function getStorageSurvey(): Promise<GetStorageSurveyResult> {
       amountCents: 0,
       amountPaidCents: 0,
       editable: completed,
+      status: null,
     };
   }
 
@@ -274,8 +277,12 @@ export async function getStorageSurvey(): Promise<GetStorageSurveyResult> {
   const amountPaidCents = invoice?.amount_paid_cents ?? 0;
   const isActive = !!invoice && invoice.status !== "cancelled";
   // Edit is allowed based on money state only (not `completed`), so a member who
-  // answered "No" can still add items later. Block once any payment exists.
-  const editable = amountPaidCents === 0 && invoice?.status !== "refunded";
+  // answered "No" can still add items later. Block once any payment exists, has
+  // been refunded, or is mid-flight (an in-progress ACH charge).
+  const editable =
+    amountPaidCents === 0 &&
+    invoice?.status !== "refunded" &&
+    invoice?.status !== "processing";
 
   return {
     completed,
@@ -284,6 +291,7 @@ export async function getStorageSurvey(): Promise<GetStorageSurveyResult> {
     amountCents: isActive ? amountCents : 0,
     amountPaidCents,
     editable,
+    status: invoice?.status ?? null,
   };
 }
 
@@ -346,6 +354,12 @@ export async function updateStorageSurvey(
   }
   if (existing && existing.status === "refunded") {
     return { error: "This storage charge was refunded. Contact an admin to change it." };
+  }
+  if (existing && existing.status === "processing") {
+    return {
+      error:
+        "A storage payment is processing. You can change your items once it clears.",
+    };
   }
 
   // Ensure completion stays recorded (covers re-open of a never-completed

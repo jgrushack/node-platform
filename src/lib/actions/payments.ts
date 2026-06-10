@@ -105,10 +105,12 @@ export async function createDuesCheckout(
 
   const customerId = await ensureStripeCustomer(admin, user.id, user.email ?? undefined);
 
-  // Money guard: refuse to replace a dues invoice that already has a payment.
+  // Money guard: refuse to replace a dues invoice that already has a payment OR
+  // a live Stripe subscription (a payment plan whose first installment may not
+  // have settled yet) — re-running checkout would spawn a duplicate subscription.
   const { data: existing } = await admin
     .from("invoices")
-    .select("id, amount_paid_cents")
+    .select("id, amount_paid_cents, stripe_subscription_id")
     .eq("profile_id", user.id)
     .eq("camp_year_id", campYear.id)
     .eq("kind", DUES_KIND)
@@ -117,6 +119,12 @@ export async function createDuesCheckout(
     return {
       error:
         "You've already made a dues payment. Contact an admin to change your plan.",
+    };
+  }
+  if (existing && existing.stripe_subscription_id) {
+    return {
+      error:
+        "You already have a dues payment plan set up. Contact an admin to change it.",
     };
   }
 
@@ -155,7 +163,7 @@ export async function createDuesCheckout(
       // Unique-index race — re-read and reuse.
       const { data: raced } = await admin
         .from("invoices")
-        .select("id, amount_paid_cents")
+        .select("id, amount_paid_cents, stripe_subscription_id")
         .eq("profile_id", user.id)
         .eq("camp_year_id", campYear.id)
         .eq("kind", DUES_KIND)
@@ -163,6 +171,8 @@ export async function createDuesCheckout(
       if (!raced) return { error: "Failed to prepare dues invoice." };
       if ((raced.amount_paid_cents ?? 0) > 0)
         return { error: "You've already made a dues payment. Contact an admin." };
+      if (raced.stripe_subscription_id)
+        return { error: "You already have a dues payment plan set up. Contact an admin." };
       invoiceId = raced.id;
     } else {
       invoiceId = data.id;
@@ -328,6 +338,8 @@ export type DuesStatusResult =
       amountPaidCents: number;
       totalInstallments: number;
       installmentNumber: number;
+      /** True once a Stripe subscription (payment plan) is attached. */
+      hasSubscription: boolean;
     };
 
 /** Read the member's dues invoice for the success/pending screen. */
@@ -350,13 +362,14 @@ export async function getDuesStatus(): Promise<DuesStatusResult> {
     amountPaidCents: 0,
     totalInstallments: 0,
     installmentNumber: 0,
+    hasSubscription: false,
   };
   if (!campYear) return empty;
 
   const { data: inv } = await supabase
     .from("invoices")
     .select(
-      "status, amount_cents, amount_paid_cents, total_installments, installment_number"
+      "status, amount_cents, amount_paid_cents, total_installments, installment_number, stripe_subscription_id"
     )
     .eq("profile_id", user.id)
     .eq("camp_year_id", campYear.id)
@@ -371,5 +384,6 @@ export async function getDuesStatus(): Promise<DuesStatusResult> {
     amountPaidCents: inv.amount_paid_cents,
     totalInstallments: inv.total_installments,
     installmentNumber: inv.installment_number,
+    hasSubscription: !!inv.stripe_subscription_id,
   };
 }
