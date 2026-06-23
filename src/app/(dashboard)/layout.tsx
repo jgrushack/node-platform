@@ -19,6 +19,7 @@ import {
   Mail,
   Wallet,
   Tent,
+  Briefcase,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -90,6 +91,7 @@ export default function DashboardLayout({
             { href: "/dashboard/members", label: "Members", icon: UsersRound },
             { href: "/dashboard/messages", label: "Messages", icon: Mail },
             { href: "/dashboard/payments", label: "Payments", icon: Wallet },
+            { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
             { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
           );
 

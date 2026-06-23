@@ -20,6 +20,7 @@ import {
   Clock,
   CalendarPlus,
   Video,
+  Briefcase,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { bmCalendarEvents } from "@/lib/data/bm-calendar";
@@ -55,6 +56,8 @@ import {
   getStorageSurvey,
   type GetStorageSurveyResult,
 } from "@/lib/actions/storage-survey";
+import { getMyJobProgress } from "@/lib/actions/jobs";
+import type { MyJobProgress } from "@/lib/types/job";
 import type { CarPassStatus } from "@/lib/actions/registrations";
 import { useRouter } from "next/navigation";
 
@@ -248,6 +251,7 @@ export default function DashboardPage() {
   const [showTicketTravelModal, setShowTicketTravelModal] = useState(false);
   const [showStorageEdit, setShowStorageEdit] = useState(false);
   const [showArrivalModal, setShowArrivalModal] = useState(false);
+  const [jobProgress, setJobProgress] = useState<MyJobProgress | null>(null);
   const router = useRouter();
 
   const userTz = useMemo(
@@ -255,6 +259,12 @@ export default function DashboardPage() {
     []
   );
   const upcomingBmEvents = useMemo(() => getUpcomingBmEvents(userTz), [userTz]);
+
+  useEffect(() => {
+    getMyJobProgress().then((res) => {
+      if (!("error" in res)) setJobProgress(res);
+    });
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -713,6 +723,22 @@ export default function DashboardPage() {
         ? `Arriving ${formatDateShort(arrivalDate)}${departureDate ? ` – ${formatDateShort(departureDate)}` : ""}`
         : "Set your playa dates",
       onClick: () => setShowArrivalModal(true),
+    },
+    {
+      key: "jobs",
+      label: "Camp Jobs",
+      icon: Briefcase,
+      state: jobProgress?.onTrack ? "done" : "todo",
+      detail: jobProgress
+        ? jobProgress.pointsTarget > 0
+          ? jobProgress.onTrack
+            ? `${jobProgress.totalPoints} pts — target met`
+            : `${jobProgress.totalPoints} / ${jobProgress.pointsTarget} pts signed up`
+          : jobProgress.shiftCount > 0
+            ? `${jobProgress.shiftCount} shift${jobProgress.shiftCount === 1 ? "" : "s"} signed up`
+            : "Sign up for shifts"
+        : "Sign up for shifts",
+      onClick: () => router.push("/dashboard/jobs"),
     },
   ];
 

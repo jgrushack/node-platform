@@ -107,16 +107,21 @@ Stored in `invoices.status`:
 
 ---
 
-## Job Signup Status
+## Jobs Board
 
-Stored in `job_signups.status`:
+The weekly jobs board (migration `00052`) uses three tables:
 
-| Status | Meaning |
-|--------|---------|
-| **signed_up** | Signed up for a shift |
-| **completed** | Completed the shift |
-| **no_show** | Did not show up |
-| **cancelled** | Cancelled signup |
+- **`job_definitions`** — catalog of jobs (title, difficulty 0–10, duration);
+  `point_value` is generated as `difficulty × ceil(duration_min / 30)`.
+- **`job_shifts`** — dated instances of a job during burn week, each with a
+  `capacity` (floating playa-local `shift_date` + `start_time`).
+- **`job_signups`** — one row per `(shift_id, profile_id)`. A signup is simply
+  presence; dropping a shift deletes the row (there is no status column).
+
+Signups are gated by `job_board_settings` (signup window + senior early-access
+threshold) and enforced atomically by the `signup_for_shift()` RPC (confirmed
+camper + window + capacity). Points accrue per signed-up shift toward an
+admin-set per-camper target, with a camp-wide leaderboard.
 
 ---
 
