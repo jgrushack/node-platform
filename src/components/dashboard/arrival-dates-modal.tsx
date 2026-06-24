@@ -39,8 +39,10 @@ const EVENT_DAYS: DayOption[] = [
 ];
 
 // No one arrives during strike (Sep 5–7), so arrival options stop at Sep 4.
-// Departures still span the full range.
 const ARRIVAL_EVENT_DAYS = EVENT_DAYS.slice(0, 6);
+
+// Nobody departs before Sep 2 — the earliest sensible leave day.
+const DEPARTURE_DAYS = EVENT_DAYS.filter((d) => d.value >= "2026-09-02");
 
 interface Props {
   open: boolean;
@@ -115,7 +117,6 @@ export function ArrivalDatesModal({
 
   const isArrivalStep = step === "arrival";
   const selected = isArrivalStep ? arrival : departure;
-  const eventDays = isArrivalStep ? ARRIVAL_EVENT_DAYS : EVENT_DAYS;
 
   function pick(value: string) {
     setError(null);
@@ -145,42 +146,62 @@ export function ArrivalDatesModal({
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Build week — top row */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-sand-400">
-              <Hammer className="h-3.5 w-3.5 text-amber-400" />
-              Build week
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {BUILD_DAYS.map((d) => (
-                <DayButton
-                  key={d.value}
-                  option={d}
-                  selected={selected === d.value}
-                  disabled={!isArrivalStep && !!arrival && d.value < arrival}
-                  onClick={() => pick(d.value)}
-                />
-              ))}
-            </div>
-          </div>
+          {isArrivalStep ? (
+            <>
+              {/* Build week — top row */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-sand-400">
+                  <Hammer className="h-3.5 w-3.5 text-amber-400" />
+                  Build week
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {BUILD_DAYS.map((d) => (
+                    <DayButton
+                      key={d.value}
+                      option={d}
+                      selected={selected === d.value}
+                      onClick={() => pick(d.value)}
+                    />
+                  ))}
+                </div>
+              </div>
 
-          {/* Event dates */}
-          <div className="space-y-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-sand-400">
-              During the event
+              {/* Event dates */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-sand-400">
+                  During the event
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {ARRIVAL_EVENT_DAYS.map((d) => (
+                    <DayButton
+                      key={d.value}
+                      option={d}
+                      selected={selected === d.value}
+                      onClick={() => pick(d.value)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Departure day — Sep 2 onward, and never before the chosen arrival. */
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-sand-400">
+                Departure day
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {DEPARTURE_DAYS.map((d) => (
+                  <DayButton
+                    key={d.value}
+                    option={d}
+                    selected={selected === d.value}
+                    disabled={!!arrival && d.value < arrival}
+                    onClick={() => pick(d.value)}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {eventDays.map((d) => (
-                <DayButton
-                  key={d.value}
-                  option={d}
-                  selected={selected === d.value}
-                  disabled={!isArrivalStep && !!arrival && d.value < arrival}
-                  onClick={() => pick(d.value)}
-                />
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Step-specific guidance */}
           {isArrivalStep ? (
