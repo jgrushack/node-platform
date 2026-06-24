@@ -9,36 +9,21 @@ import { getStripe } from "@/lib/stripe";
 const DUES_KIND = "dues_2026";
 const STORAGE_KIND = "storage_survey_2026";
 const EQUIPMENT_KIND = "equipment_2026";
-// Installments finish before build week.
-const PLAN_CUTOFF = new Date("2026-08-23T00:00:00-07:00");
+// Dues are due before build week.
+const DUES_DUE_DATE = "2026-08-23";
 
 const checkoutSchema = z.object({
+  // The member's total dues commitment — sets the obligation on first payment.
   tierDollars: z.number().int().positive().max(100000),
-  paymentType: z.enum(["full", "plan"]),
-  frequency: z.enum(["weekly", "biweekly", "monthly"]).optional(),
+  // One-time amount to charge today, paid down toward the balance. We never
+  // store a card or auto-charge; members make as many payments as they like.
+  payTodayDollars: z.number().int().positive().max(100000),
 });
 
 export type CreateDuesCheckoutInput = z.infer<typeof checkoutSchema>;
 export type CreateDuesCheckoutResult =
   | { error: string }
   | { url: string };
-
-/** Number of installments from now until the Aug 23 2026 cutoff. */
-function installmentCount(frequency: "weekly" | "biweekly" | "monthly"): number {
-  const ms = PLAN_CUTOFF.getTime() - Date.now();
-  const weeks = Math.max(1, Math.floor(ms / (7 * 24 * 60 * 60 * 1000)));
-  if (frequency === "weekly") return weeks;
-  if (frequency === "biweekly") return Math.max(1, Math.floor(weeks / 2));
-  return Math.max(1, Math.floor(weeks / 4.33)); // monthly
-}
-
-function stripeRecurring(
-  frequency: "weekly" | "biweekly" | "monthly"
-): { interval: "week" | "month"; interval_count: number } {
-  if (frequency === "weekly") return { interval: "week", interval_count: 1 };
-  if (frequency === "biweekly") return { interval: "week", interval_count: 2 };
-  return { interval: "month", interval_count: 1 };
-}
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -82,9 +67,7 @@ export async function createDuesCheckout(
 ): Promise<CreateDuesCheckoutResult> {
   const parsed = checkoutSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const { tierDollars, paymentType, frequency } = parsed.data;
-  if (paymentType === "plan" && !frequency)
-    return { error: "Pick a payment frequency." };
+  const { tierDollars, payTodayDollars } = parsed.data;
 
   const supabase = await createClient();
   const {
@@ -100,80 +83,90 @@ export async function createDuesCheckout(
     .single();
   if (!campYear) return { error: "No 2026 camp year configured." };
 
-  // The invoice obligation is always the FULL tier (a plan pays it down).
-  const amountCents = tierDollars * 100;
-  const n = paymentType === "plan" ? installmentCount(frequency!) : 1;
-
-  const customerId = await ensureStripeCustomer(admin, user.id, user.email ?? undefined);
-
-  // Money guard: refuse to replace a dues invoice that already has a payment OR
-  // a live Stripe subscription (a payment plan whose first installment may not
-  // have settled yet) — re-running checkout would spawn a duplicate subscription.
+  // Existing dues invoice, if any. Members pay the balance down over as many
+  // one-time payments as they like — we never store a card or auto-charge.
   const { data: existing } = await admin
     .from("invoices")
-    .select("id, amount_paid_cents, stripe_subscription_id")
+    .select("id, amount_cents, amount_paid_cents, status")
     .eq("profile_id", user.id)
     .eq("camp_year_id", campYear.id)
     .eq("kind", DUES_KIND)
     .maybeSingle();
-  if (existing && (existing.amount_paid_cents ?? 0) > 0) {
+
+  if (existing && existing.status === "processing") {
     return {
-      error:
-        "You've already made a dues payment. Contact an admin to change your plan.",
-    };
-  }
-  if (existing && existing.stripe_subscription_id) {
-    return {
-      error:
-        "You already have a dues payment plan set up. Contact an admin to change it.",
+      error: "A dues payment is already processing — hang tight until it clears.",
     };
   }
 
-  const invoiceFields = {
-    profile_id: user.id,
-    camp_year_id: campYear.id,
-    kind: DUES_KIND,
-    currency: "usd",
-    amount_cents: amountCents,
-    amount_paid_cents: 0,
-    status: "sent",
-    stripe_customer_id: customerId,
-    total_installments: n,
-    installment_number: 0,
-    description: `NODE 2026 Dues — $${tierDollars.toLocaleString("en-US")} (${paymentType})`,
-    due_date: "2026-08-23",
-  };
+  const paidCents = existing?.amount_paid_cents ?? 0;
+  // Once any money is down the tier (total obligation) is locked; before that the
+  // member is choosing/changing it now.
+  const obligationCents =
+    existing && paidCents > 0 ? existing.amount_cents : tierDollars * 100;
+  const remainingCents = obligationCents - paidCents;
+  if (remainingCents <= 0) {
+    return { error: "Your dues are already paid in full." };
+  }
 
+  const payTodayCents = payTodayDollars * 100;
+  if (payTodayCents > remainingCents) {
+    return {
+      error: `That's more than your $${(remainingCents / 100).toLocaleString("en-US")} remaining balance.`,
+    };
+  }
+
+  const customerId = await ensureStripeCustomer(admin, user.id, user.email ?? undefined);
+
+  // Prepare the invoice. On a new (or not-yet-paid) invoice we set the obligation
+  // from the chosen tier; once partially paid we leave the amounts untouched so a
+  // repeat payment only moves amount_paid_cents (via the webhook RPC).
   let invoiceId: string;
   if (existing) {
-    const { data, error } = await admin
-      .from("invoices")
-      .update(invoiceFields)
-      .eq("id", existing.id)
-      .select("id")
-      .single();
-    if (error || !data) return { error: "Failed to prepare dues invoice." };
-    invoiceId = data.id;
+    if (paidCents === 0) {
+      const { error } = await admin
+        .from("invoices")
+        .update({
+          amount_cents: obligationCents,
+          total_installments: 1,
+          status: "sent",
+          stripe_customer_id: customerId,
+          description: `NODE 2026 Dues — $${tierDollars.toLocaleString("en-US")}`,
+          due_date: DUES_DUE_DATE,
+        })
+        .eq("id", existing.id);
+      if (error) return { error: "Failed to prepare dues invoice." };
+    }
+    invoiceId = existing.id;
   } else {
     const { data, error } = await admin
       .from("invoices")
-      .insert(invoiceFields)
+      .insert({
+        profile_id: user.id,
+        camp_year_id: campYear.id,
+        kind: DUES_KIND,
+        currency: "usd",
+        amount_cents: obligationCents,
+        amount_paid_cents: 0,
+        status: "sent",
+        stripe_customer_id: customerId,
+        total_installments: 1,
+        installment_number: 0,
+        description: `NODE 2026 Dues — $${tierDollars.toLocaleString("en-US")}`,
+        due_date: DUES_DUE_DATE,
+      })
       .select("id")
       .single();
     if (error || !data) {
       // Unique-index race — re-read and reuse.
       const { data: raced } = await admin
         .from("invoices")
-        .select("id, amount_paid_cents, stripe_subscription_id")
+        .select("id")
         .eq("profile_id", user.id)
         .eq("camp_year_id", campYear.id)
         .eq("kind", DUES_KIND)
         .maybeSingle();
       if (!raced) return { error: "Failed to prepare dues invoice." };
-      if ((raced.amount_paid_cents ?? 0) > 0)
-        return { error: "You've already made a dues payment. Contact an admin." };
-      if (raced.stripe_subscription_id)
-        return { error: "You already have a dues payment plan set up. Contact an admin." };
       invoiceId = raced.id;
     } else {
       invoiceId = data.id;
@@ -185,47 +178,12 @@ export async function createDuesCheckout(
     hdrs.get("origin") ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     "https://node.family";
-  const successUrl = `${origin}/dashboard/payments?dues_session={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${origin}/dashboard/payments?dues_cancel=1`;
   // No payment_method_types — Stripe's dynamic payment methods show whatever is
   // enabled in the Dashboard (card, ACH, stablecoins/crypto, …).
-  const sharedMeta = {
-    invoice_id: invoiceId,
-    profile_id: user.id,
-    kind: DUES_KIND,
-  };
+  const meta = { invoice_id: invoiceId, profile_id: user.id, kind: DUES_KIND };
 
   try {
-    const stripe = getStripe();
-    if (paymentType === "plan") {
-      const perInstallment = Math.ceil(amountCents / n);
-      const session = await stripe.checkout.sessions.create(
-        {
-          mode: "subscription",
-          customer: customerId,
-          line_items: [
-            {
-              price_data: {
-                currency: "usd",
-                unit_amount: perInstallment,
-                recurring: stripeRecurring(frequency!),
-                product_data: { name: `NODE 2026 Dues (1 of ${n})` },
-              },
-              quantity: 1,
-            },
-          ],
-          subscription_data: { metadata: { ...sharedMeta, n: String(n) } },
-          metadata: sharedMeta,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-        },
-        { idempotencyKey: `dues-sub-${invoiceId}` }
-      );
-      if (!session.url) return { error: "Failed to start checkout." };
-      return { url: session.url };
-    }
-
-    const session = await stripe.checkout.sessions.create(
+    const session = await getStripe().checkout.sessions.create(
       {
         mode: "payment",
         customer: customerId,
@@ -233,18 +191,20 @@ export async function createDuesCheckout(
           {
             price_data: {
               currency: "usd",
-              unit_amount: amountCents,
+              unit_amount: payTodayCents,
               product_data: { name: "NODE 2026 Dues" },
             },
             quantity: 1,
           },
         ],
-        payment_intent_data: { metadata: sharedMeta },
-        metadata: sharedMeta,
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+        payment_intent_data: { metadata: meta },
+        metadata: meta,
+        success_url: `${origin}/dashboard/payments?dues_session={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/dashboard/payments?dues_cancel=1`,
       },
-      { idempotencyKey: `dues-${paymentType}-${invoiceId}-${amountCents}` }
+      // Unique per attempt — repeat payments of the same amount must each open a
+      // fresh session rather than collide on a reused idempotency key.
+      { idempotencyKey: `dues-${invoiceId}-${payTodayCents}-${Date.now()}` }
     );
     if (!session.url) return { error: "Failed to start checkout." };
     return { url: session.url };

@@ -6,9 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import {
   CreditCard,
@@ -56,21 +54,19 @@ const DUES_TIERS = [
   { amount: 8000, label: "$8,000", description: "Benefactor" },
 ];
 
-const PAYMENT_FREQUENCIES = [
-  { value: "weekly", label: "Weekly" },
-  { value: "biweekly", label: "Bi-weekly" },
-  { value: "monthly", label: "Monthly" },
-];
-
 // ── Types ──────────────────────────────────────────────────────────
 
 type View = "dashboard" | "dues" | "equipment";
-type PaymentType = "full" | "plan";
 
 // Narrowed success arms of the status reads (drop the {error} variant).
 type DuesStatus = Extract<DuesStatusResult, { exists: boolean }>;
 type StorageStatus = Extract<GetStorageSurveyResult, { hasInvoice: boolean }>;
 type EquipmentStatus = Extract<GetEquipmentCatalogResult, { hasInvoice: boolean }>;
+type Statuses = {
+  dues: DuesStatus | null;
+  storage: StorageStatus | null;
+  equipment: EquipmentStatus | null;
+};
 
 // ── Main Component ─────────────────────────────────────────────────
 
@@ -79,6 +75,7 @@ export function PaymentsClient() {
   const [balance, setBalance] = useState<number | null>(null);
   const [hasTicketInvoice, setHasTicketInvoice] = useState(false);
   const [hasProcessing, setHasProcessing] = useState(false);
+  const [settling, setSettling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dues, setDues] = useState<DuesStatus | null>(null);
   const [storage, setStorage] = useState<StorageStatus | null>(null);
@@ -121,16 +118,41 @@ export function PaymentsClient() {
     setLoading(false);
   }
 
-  async function refreshStatuses() {
+  async function refreshStatuses(): Promise<Statuses> {
     const [d, s, e] = await Promise.all([
       getDuesStatus(),
       getStorageSurvey(),
       getEquipmentCatalog(),
     ]);
-    setDues("error" in d ? null : d);
-    setStorage("error" in s ? null : s);
-    setEquipment("error" in e ? null : e);
+    const next: Statuses = {
+      dues: "error" in d ? null : d,
+      storage: "error" in s ? null : s,
+      equipment: "error" in e ? null : e,
+    };
+    setDues(next.dues);
+    setStorage(next.storage);
+    setEquipment(next.equipment);
     setStatusLoading(false);
+    return next;
+  }
+
+  // Stripe redirects the member back before its webhook has necessarily credited
+  // the invoice, so a single read can show a stale balance. Poll a short window
+  // (refreshing the UI each pass) until the payment lands or we give up.
+  async function pollSettle(settled: (s: Statuses) => boolean) {
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, ms));
+    setSettling(true);
+    try {
+      for (let i = 0; i < 8; i++) {
+        await refreshBalance();
+        const s = await refreshStatuses();
+        if (settled(s)) return;
+        await sleep(2000);
+      }
+    } finally {
+      setSettling(false);
+    }
   }
 
   useEffect(() => {
@@ -154,51 +176,72 @@ export function PaymentsClient() {
       clean();
       return;
     }
-    if (params.get("dues_session")) {
-      (async () => {
-        const s = await getDuesStatus();
-        if (!("error" in s) && s.status === "processing") {
-          toast.success(
-            "Bank payment initiated — it clears in 3–5 business days."
-          );
-        } else {
-          toast.success("Payment received — your balance will update shortly.");
-        }
-        clean();
-        // Webhook has usually credited the invoice by the time we land here;
-        // re-read so the balance + section cards reflect the new state.
-        await refreshBalance();
-        await refreshStatuses();
-      })();
-    } else if (params.get("storage_session")) {
-      clean();
-      void (async () => {
-        const s = await getStorageSurvey();
-        if (!("error" in s) && s.status === "processing") {
+    const duesReturn = params.get("dues_session");
+    const storageReturn = params.get("storage_session");
+    const equipmentReturn = params.get("equipment_session");
+    if (!duesReturn && !storageReturn && !equipmentReturn) return;
+    clean();
+
+    void (async () => {
+      if (duesReturn) {
+        const before = await getDuesStatus();
+        const basePaid = "error" in before ? 0 : before.amountPaidCents;
+        if (!("error" in before) && before.status === "processing") {
           toast.success("Bank payment initiated — it clears in 3–5 business days.");
-        } else {
-          toast.success(
-            "Storage payment received — your balance will update shortly."
-          );
+          await refreshBalance();
+          await refreshStatuses();
+          return;
         }
-        await refreshBalance();
-        await refreshStatuses();
-      })();
-    } else if (params.get("equipment_session")) {
-      clean();
-      void (async () => {
-        const e = await getEquipmentCatalog();
-        if (!("error" in e) && e.status === "processing") {
+        toast.success("Payment received — updating your balance…");
+        await pollSettle((s) => {
+          const d = s.dues;
+          if (!d) return false;
+          return (
+            d.amountPaidCents > basePaid ||
+            d.status === "processing" ||
+            d.amountCents - d.amountPaidCents <= 0
+          );
+        });
+      } else if (storageReturn) {
+        const before = await getStorageSurvey();
+        const basePaid = "error" in before ? 0 : before.amountPaidCents ?? 0;
+        if (!("error" in before) && before.status === "processing") {
           toast.success("Bank payment initiated — it clears in 3–5 business days.");
-        } else {
-          toast.success(
-            "Equipment payment received — your balance will update shortly."
-          );
+          await refreshBalance();
+          await refreshStatuses();
+          return;
         }
-        await refreshBalance();
-        await refreshStatuses();
-      })();
-    }
+        toast.success("Storage payment received — updating your balance…");
+        await pollSettle((s) => {
+          const v = s.storage;
+          if (!v) return false;
+          return (
+            (v.amountPaidCents ?? 0) > basePaid ||
+            v.status === "processing" ||
+            (v.amountCents ?? 0) - (v.amountPaidCents ?? 0) <= 0
+          );
+        });
+      } else if (equipmentReturn) {
+        const before = await getEquipmentCatalog();
+        const basePaid = "error" in before ? 0 : before.amountPaidCents ?? 0;
+        if (!("error" in before) && before.status === "processing") {
+          toast.success("Bank payment initiated — it clears in 3–5 business days.");
+          await refreshBalance();
+          await refreshStatuses();
+          return;
+        }
+        toast.success("Equipment payment received — updating your balance…");
+        await pollSettle((s) => {
+          const v = s.equipment;
+          if (!v) return false;
+          return (
+            (v.amountPaidCents ?? 0) > basePaid ||
+            v.status === "processing" ||
+            (v.amountCents ?? 0) - (v.amountPaidCents ?? 0) <= 0
+          );
+        });
+      }
+    })();
   }, []);
 
   async function handlePayStorage() {
@@ -228,6 +271,7 @@ export function PaymentsClient() {
             balance={balance}
             hasTicketInvoice={hasTicketInvoice}
             pending={hasProcessing}
+            settling={settling}
             loading={loading}
             statusLoading={statusLoading}
             dues={dues}
@@ -330,6 +374,7 @@ function DashboardView({
   balance,
   hasTicketInvoice,
   pending,
+  settling,
   loading,
   statusLoading,
   dues,
@@ -343,6 +388,7 @@ function DashboardView({
   balance: number | null;
   hasTicketInvoice: boolean;
   pending: boolean;
+  settling: boolean;
   loading: boolean;
   statusLoading: boolean;
   dues: DuesStatus | null;
@@ -375,12 +421,9 @@ function DashboardView({
     ? Math.max(0, (dues?.amountCents ?? 0) - (dues?.amountPaidCents ?? 0))
     : 0;
   const duesProcessing = dues?.status === "processing";
-  // "Managed" = the dues invoice already has money OR a live payment plan on it.
-  // Either way it can't be re-run through DuesFlow (the server guard rejects it),
-  // so we show it read-only rather than dead-ending at Stripe.
-  const duesManaged = (dues?.amountPaidCents ?? 0) > 0 || !!dues?.hasSubscription;
   const duesPaid = duesExists && duesOwedCents === 0 && !duesProcessing;
-  const onPlan = !!dues && dues.totalInstallments > 1;
+  const duesPartiallyPaid =
+    duesExists && (dues?.amountPaidCents ?? 0) > 0 && duesOwedCents > 0;
 
   let duesStatusLine: string;
   if (!duesExists) {
@@ -389,8 +432,8 @@ function DashboardView({
     duesStatusLine = "Bank payment pending — clears in 3–5 business days";
   } else if (duesPaid) {
     duesStatusLine = "Paid in full";
-  } else if (onPlan) {
-    duesStatusLine = `Payment plan · ${dues?.installmentNumber ?? 0} of ${dues?.totalInstallments ?? 0} paid · ${fmt(duesOwedCents)} left`;
+  } else if (duesPartiallyPaid) {
+    duesStatusLine = `${fmt(dues?.amountPaidCents ?? 0)} paid · ${fmt(duesOwedCents)} left`;
   } else {
     duesStatusLine = `${fmt(duesOwedCents)} due`;
   }
@@ -435,13 +478,16 @@ function DashboardView({
   }
 
   // ── Smart "Make a payment" routing ──
-  // A dues invoice with money already on it (paid in full OR mid-plan) can't be
-  // re-paid through DuesFlow — the server guard rejects it — so it isn't payable.
-  const duesPayable = duesOwedCents > 0 && !duesProcessing && !duesManaged;
+  // Dues are payable whenever there's a balance and nothing is mid-clearing —
+  // members pay it down over as many one-time payments as they like.
+  const duesPayable = duesOwedCents > 0 && !duesProcessing;
   const storagePayable = storageOwedCents > 0 && !storageProcessing;
   const equipmentPayable = equipmentOwedCents > 0 && !equipmentProcessing;
   const canPay =
     !statusLoading && (duesPayable || storagePayable || equipmentPayable);
+  // Nothing owed, and at least one thing was actually paid (not just "no invoices").
+  const fullyPaidAll =
+    balance === 0 && (duesPaid || storagePaid || equipmentPaid);
   const makePayment = () => {
     if (duesPayable) onNavigate("dues");
     else if (storagePayable) onPayStorage();
@@ -481,11 +527,21 @@ function DashboardView({
               Includes 1 main sale ticket at $675 + taxes &amp; fees.
             </p>
           )}
-          {pending && (
+          {settling ? (
+            <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-xs text-sky-300">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Updating your balance…
+            </p>
+          ) : pending ? (
             <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
               Bank payment pending — clears in 3–5 business days
             </p>
-          )}
+          ) : fullyPaidAll ? (
+            <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Paid in full
+            </p>
+          ) : null}
           {canPay && (
             <Button
               className="mt-4 w-full rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
@@ -512,7 +568,7 @@ function DashboardView({
           className="rounded-full border-pink-500/30 text-pink-200 hover:bg-pink-500/10"
           onClick={() => onNavigate("dues")}
         >
-          {duesManaged ? "View dues" : duesExists ? "Manage dues" : "Pay dues"}
+          {!duesExists ? "Pay dues" : duesPayable ? "Make a payment" : "View dues"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </SectionCard>
@@ -604,30 +660,61 @@ function DuesFlow({
   onBack: () => void;
   existing: DuesStatus | null;
 }) {
-  const [step, setStep] = useState(1);
-  const [selectedTier, setSelectedTier] = useState<number | null>(null);
+  const tierCents = existing?.amountCents ?? 0;
+  const paidCents = existing?.amountPaidCents ?? 0;
+  const remainingCents = Math.max(0, tierCents - paidCents);
+  // Once any money is down the tier (total obligation) is locked, so we jump
+  // straight to "how much to pay today"; a fully-paid invoice is read-only.
+  const tierLocked = paidCents > 0;
+  const fullyPaid = tierLocked && remainingCents === 0;
+
+  const [step, setStep] = useState(tierLocked ? 2 : 1);
+  const [selectedTier, setSelectedTier] = useState<number | null>(
+    tierLocked ? Math.round(tierCents / 100) : null
+  );
   const [customMode, setCustomMode] = useState(false);
   const [customAmount, setCustomAmount] = useState("");
-  const [paymentType, setPaymentType] = useState<PaymentType | null>(null);
-  const [frequency, setFrequency] = useState<string>("monthly");
+  const [payMode, setPayMode] = useState<"full" | "custom">("full");
+  const [payAmount, setPayAmount] = useState("");
   const [processing, setProcessing] = useState(false);
 
-  const totalSteps = 3;
+  const firstStep = tierLocked ? 2 : 1;
+  const totalSteps = tierLocked ? 2 : 3;
+  const displayStep = step - (firstStep - 1);
+
+  const money = (c: number) =>
+    (c / 100).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    });
+
+  // The cap on today's payment: remaining balance (locked) or the chosen tier.
+  const capDollars = tierLocked
+    ? Math.round(remainingCents / 100)
+    : selectedTier ?? 0;
+  const payTodayDollars =
+    payMode === "full" ? capDollars : parseInt(payAmount, 10) || 0;
+  const payOverCap = payTodayDollars > capDollars;
 
   async function handlePaymentSubmit() {
-    if (!selectedTier || !paymentType) {
-      toast.error("Pick a tier and payment type first.");
+    if (!selectedTier) {
+      toast.error("Pick a tier first.");
+      return;
+    }
+    if (payTodayDollars <= 0) {
+      toast.error("Enter an amount to pay today.");
+      return;
+    }
+    if (payTodayDollars > capDollars) {
+      toast.error(`That's more than your ${money(capDollars * 100)} balance.`);
       return;
     }
     setProcessing(true);
     const { createDuesCheckout } = await import("@/lib/actions/payments");
     const res = await createDuesCheckout({
       tierDollars: selectedTier,
-      paymentType,
-      frequency:
-        paymentType === "plan"
-          ? (frequency as "weekly" | "biweekly" | "monthly")
-          : undefined,
+      payTodayDollars,
     });
     if ("error" in res) {
       toast.error(res.error);
@@ -638,40 +725,9 @@ function DuesFlow({
     window.location.href = res.url;
   }
 
-  function getInstallmentAmount(): number | null {
-    if (paymentType !== "plan" || !selectedTier) return null;
-    const freq = frequency;
-    // Rough installment calculation based on frequency until burn (late Aug)
-    const now = new Date();
-    const burnDate = new Date(2026, 7, 23); // Aug 23, 2026
-    const msRemaining = burnDate.getTime() - now.getTime();
-    const weeksRemaining = Math.max(1, Math.floor(msRemaining / (7 * 24 * 60 * 60 * 1000)));
-
-    let numPayments: number;
-    if (freq === "weekly") numPayments = weeksRemaining;
-    else if (freq === "biweekly") numPayments = Math.max(1, Math.floor(weeksRemaining / 2));
-    else numPayments = Math.max(1, Math.floor(weeksRemaining / 4.33));
-
-    return Math.ceil(selectedTier / numPayments);
-  }
-
-  // A dues invoice that already has money on it (paid in full or mid-plan) can't
-  // be re-paid through this wizard — createDuesCheckout's money guard rejects it.
-  // Show a read-only summary instead of dead-ending the member at Stripe.
-  const locked =
-    !!existing && (existing.amountPaidCents > 0 || existing.hasSubscription);
-  if (locked) {
-    const money = (c: number) =>
-      (c / 100).toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 0,
-      });
-    const tierCents = existing?.amountCents ?? 0;
-    const paidCents = existing?.amountPaidCents ?? 0;
-    const remainingCents = Math.max(0, tierCents - paidCents);
-    const planned = (existing?.totalInstallments ?? 0) > 1;
-    const fullyPaid = remainingCents === 0;
+  // A fully-paid invoice is read-only. A partially-paid one falls through to the
+  // wizard, which starts at the "how much today" step with the tier locked.
+  if (fullyPaid) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -702,38 +758,19 @@ function DuesFlow({
               <span className="text-sand-200">{money(tierCents)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-sand-400">Paid so far</span>
+              <span className="text-sand-400">Paid</span>
               <span className="text-sand-200">{money(paidCents)}</span>
             </div>
-            {planned && (
-              <div className="flex justify-between text-sm">
-                <span className="text-sand-400">Plan progress</span>
-                <span className="text-sand-200">
-                  {existing?.installmentNumber ?? 0} of{" "}
-                  {existing?.totalInstallments ?? 0} installments
-                </span>
-              </div>
-            )}
             <Separator className="bg-pink-500/10 !my-2" />
             <div className="flex justify-between text-sm font-semibold">
-              <span className="text-sand-300">
-                {fullyPaid ? "Status" : "Remaining"}
-              </span>
-              <span className={fullyPaid ? "text-emerald-300" : "text-sand-100"}>
-                {fullyPaid ? "Paid in full" : money(remainingCents)}
-              </span>
+              <span className="text-sand-300">Status</span>
+              <span className="text-emerald-300">Paid in full</span>
             </div>
           </CardContent>
         </Card>
 
-        {planned && !fullyPaid && (
-          <p className="text-xs text-sand-400">
-            Your remaining installments are collected automatically on your saved
-            payment method.
-          </p>
-        )}
         <p className="text-xs text-sand-500">
-          Need to change your tier or plan? Contact an admin.
+          Need to change your tier? Contact an admin.
         </p>
       </motion.div>
     );
@@ -751,16 +788,16 @@ function DuesFlow({
         <Button
           variant="ghost"
           size="icon"
-          aria-label={step === 1 ? "Back to payments" : "Previous step"}
+          aria-label={step === firstStep ? "Back to payments" : "Previous step"}
           className="text-sand-400 hover:text-sand-200"
-          onClick={step === 1 ? onBack : () => setStep(step - 1)}
+          onClick={step === firstStep ? onBack : () => setStep(step - 1)}
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-sand-100">Pay Dues</h1>
           <p className="text-xs text-sand-400">
-            Step {step} of {totalSteps}
+            Step {displayStep} of {totalSteps}
           </p>
         </div>
       </div>
@@ -771,7 +808,7 @@ function DuesFlow({
           <div
             key={i}
             className={`h-1 flex-1 rounded-full transition-colors ${
-              i < step ? "bg-pink-500" : "bg-sand-800"
+              i < displayStep ? "bg-pink-500" : "bg-sand-800"
             }`}
           />
         ))}
@@ -916,126 +953,130 @@ function DuesFlow({
           </motion.div>
         )}
 
-        {/* Step 2: Payment Type */}
+        {/* Step 2: How much to pay today */}
         {step === 2 && (
           <motion.div
-            key="type"
+            key="amount"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             className="space-y-4"
           >
             <p className="text-sm text-sand-300">
-              How would you like to pay your{" "}
-              <span className="text-sand-100 font-medium">
-                ${selectedTier?.toLocaleString()}
-              </span>{" "}
-              dues?
+              {tierLocked ? (
+                <>
+                  You have{" "}
+                  <span className="text-sand-100 font-medium">
+                    {money(remainingCents)}
+                  </span>{" "}
+                  left on your dues. How much would you like to pay today?
+                </>
+              ) : (
+                <>
+                  How much of your{" "}
+                  <span className="text-sand-100 font-medium">
+                    ${selectedTier?.toLocaleString()}
+                  </span>{" "}
+                  dues would you like to pay today?
+                </>
+              )}
             </p>
             <div className="grid gap-3">
-              {/* Full Balance */}
+              {/* Pay it all */}
               <Card
                 className={`glass-card border-0 cursor-pointer transition-all ${
-                  paymentType === "full"
+                  payMode === "full"
                     ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
                     : "hover:ring-1 hover:ring-pink-500/20"
                 }`}
-                onClick={() => setPaymentType("full")}
+                onClick={() => setPayMode("full")}
               >
                 <CardContent className="py-4">
                   <div className="flex items-center gap-3">
                     <div
                       className={`h-4 w-4 rounded-full border-2 transition-colors ${
-                        paymentType === "full"
+                        payMode === "full"
                           ? "border-pink-500 bg-pink-500"
                           : "border-sand-600"
                       }`}
                     />
                     <div>
                       <p className="font-semibold text-sand-100">
-                        Pay in Full
+                        {tierLocked ? "Pay it off" : "Pay in full"}
                       </p>
                       <p className="text-xs text-sand-400">
-                        ${selectedTier?.toLocaleString()} today
+                        ${capDollars.toLocaleString()} today
                       </p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Payment Plan */}
+              {/* Pay part of it */}
               <Card
                 className={`glass-card border-0 cursor-pointer transition-all ${
-                  paymentType === "plan"
+                  payMode === "custom"
                     ? "ring-2 ring-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.15)]"
                     : "hover:ring-1 hover:ring-pink-500/20"
                 }`}
-                onClick={() => setPaymentType("plan")}
+                onClick={() => setPayMode("custom")}
               >
                 <CardContent className="py-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <div
                       className={`h-4 w-4 rounded-full border-2 transition-colors ${
-                        paymentType === "plan"
+                        payMode === "custom"
                           ? "border-pink-500 bg-pink-500"
                           : "border-sand-600"
                       }`}
                     />
                     <div>
-                      <p className="font-semibold text-sand-100">
-                        Payment Plan
-                      </p>
+                      <p className="font-semibold text-sand-100">Pay part of it</p>
                       <p className="text-xs text-sand-400">
-                        Split into recurring payments
+                        Choose an amount now, pay the rest whenever
                       </p>
                     </div>
                   </div>
-                  {paymentType === "plan" && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      className="ml-7 space-y-3"
-                    >
-                      <Label className="text-sand-300 text-xs">Frequency</Label>
-                      <RadioGroup
-                        value={frequency}
-                        onValueChange={setFrequency}
-                        className="flex gap-3"
-                      >
-                        {PAYMENT_FREQUENCIES.map((f) => (
-                          <div key={f.value} className="flex items-center gap-1.5">
-                            <RadioGroupItem
-                              value={f.value}
-                              id={`freq-${f.value}`}
-                              className="border-sand-600 text-pink-500"
-                            />
-                            <Label
-                              htmlFor={`freq-${f.value}`}
-                              className="text-xs text-sand-300 cursor-pointer"
-                            >
-                              {f.label}
-                            </Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                      {getInstallmentAmount() && (
-                        <p className="text-xs text-sand-400">
-                          ≈{" "}
-                          <span className="text-sand-200 font-medium">
-                            ${getInstallmentAmount()?.toLocaleString()}
-                          </span>{" "}
-                          per payment
-                        </p>
-                      )}
-                    </motion.div>
+                  {payMode === "custom" && (
+                    <div className="ml-7 flex items-center gap-2">
+                      <span className="text-sand-400">$</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={capDollars}
+                        step={1}
+                        inputMode="numeric"
+                        value={payAmount}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                        onBlur={() => {
+                          const n = parseInt(payAmount, 10) || 0;
+                          setPayAmount(n > 0 ? String(n) : "");
+                        }}
+                        placeholder="Amount"
+                        className="max-w-[140px]"
+                      />
+                    </div>
                   )}
                 </CardContent>
               </Card>
             </div>
 
+            {payOverCap && (
+              <p className="text-xs text-amber-300">
+                That&apos;s more than your balance — max is $
+                {capDollars.toLocaleString()}.
+              </p>
+            )}
+
+            <p className="text-xs text-sand-400">
+              We don&apos;t store your card or auto-charge. Come back and pay more
+              anytime with &ldquo;Make a payment.&rdquo;
+            </p>
+
             <Button
               className="w-full rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
-              disabled={!paymentType}
+              disabled={payTodayDollars <= 0 || payOverCap}
               onClick={() => setStep(3)}
             >
               Next
@@ -1064,21 +1105,31 @@ function DuesFlow({
                   <span className="text-sand-400">Dues tier</span>
                   <span className="text-sand-200">${selectedTier?.toLocaleString()}</span>
                 </div>
+                {tierLocked && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-sand-400">Already paid</span>
+                    <span className="text-sand-200">{money(paidCents)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
-                  <span className="text-sand-400">Payment</span>
+                  <span className="text-sand-400">Paying today</span>
                   <span className="text-sand-200">
-                    {paymentType === "full" && "Pay in full"}
-                    {paymentType === "plan" && `Payment plan (${frequency})`}
+                    ${payTodayDollars.toLocaleString()}
                   </span>
                 </div>
                 <Separator className="bg-pink-500/10 !my-2" />
                 <div className="flex justify-between text-sm font-semibold">
-                  <span className="text-sand-300">Due today</span>
-                  <span className="text-sand-100">
-                    ${(paymentType === "plan"
-                      ? getInstallmentAmount() ?? 0
-                      : selectedTier ?? 0
-                    ).toLocaleString()}
+                  <span className="text-sand-300">Remaining after</span>
+                  <span
+                    className={
+                      payTodayDollars >= capDollars
+                        ? "text-emerald-300"
+                        : "text-sand-100"
+                    }
+                  >
+                    {payTodayDollars >= capDollars
+                      ? "Paid in full"
+                      : money((capDollars - payTodayDollars) * 100)}
                   </span>
                 </div>
               </CardContent>
