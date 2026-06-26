@@ -826,10 +826,8 @@ function DuesFlow({
             {/* Pay-what-you-can philosophy */}
             <div className="rounded-lg border border-pink-500/15 bg-pink-500/5 p-3 text-xs leading-relaxed text-sand-300">
               Everyone is expected to pay{" "}
-              <strong className="text-sand-100">something</strong>. If you can&apos;t
-              afford full dues, you&apos;re welcome to pay what you can. NODE
-              wants everyone to experience Black Rock City, and whether you pay more or
-              less, <strong className="text-sand-100">we&apos;re all equal</strong>.
+              <strong className="text-sand-100">something</strong> &mdash; NODE
+              already tries to keep dues as low as possible.
             </div>
 
             <p className="text-sm text-sand-300">
