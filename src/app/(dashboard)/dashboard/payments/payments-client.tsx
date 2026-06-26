@@ -46,7 +46,6 @@ import {
 // ── Constants ──────────────────────────────────────────────────────
 
 const DUES_TIERS = [
-  { amount: 500, label: "$500", description: "" },
   { amount: 1200, label: "$1,200", description: "Reduced" },
   { amount: 1500, label: "$1,500", description: "Reduced" },
   { amount: 1900, label: "$1,900", description: "Full dues" },
