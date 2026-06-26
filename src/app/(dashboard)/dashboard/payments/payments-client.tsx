@@ -827,11 +827,7 @@ function DuesFlow({
             <div className="rounded-lg border border-pink-500/15 bg-pink-500/5 p-3 text-xs leading-relaxed text-sand-300">
               Everyone is expected to pay{" "}
               <strong className="text-sand-100">something</strong>. If you can&apos;t
-              afford full dues, you&apos;re welcome to pay at a lower tier &mdash; but{" "}
-              <strong className="text-sand-100">
-                anything under $1,200 should be cleared with Jesse beforehand
-              </strong>
-              . This isn&apos;t an invitation to pay less because you feel like it. NODE
+              afford full dues, you&apos;re welcome to pay what you can. NODE
               wants everyone to experience Black Rock City, and whether you pay more or
               less, <strong className="text-sand-100">we&apos;re all equal</strong>.
             </div>
@@ -934,12 +930,6 @@ function DuesFlow({
                 </CardContent>
               </Card>
             </div>
-
-            {selectedTier !== null && selectedTier < 1200 && (
-              <p className="text-xs text-amber-300">
-                Amounts under $1,200 should be cleared with Jesse before paying.
-              </p>
-            )}
 
             <Button
               className="w-full rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink"
