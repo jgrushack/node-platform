@@ -29,7 +29,7 @@ export function campMessageEmail({
   <style>
     @font-face {
       font-family: 'SciFied';
-      src: url('https://nodev0.vercel.app/fonts/SciFied.ttf') format('truetype');
+      src: url('https://www.node.family/fonts/SciFied.ttf') format('truetype');
       font-weight: 400;
       font-style: normal;
     }

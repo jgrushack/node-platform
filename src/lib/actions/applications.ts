@@ -546,7 +546,7 @@ export async function approveApplication(
 
   // Generate magic link and send branded "You're In!" email
   const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
+    process.env.NEXT_PUBLIC_SITE_URL || "https://www.node.family";
   const { data: linkData, error: linkError } =
     await adminClient.auth.admin.generateLink({
       type: "magiclink",

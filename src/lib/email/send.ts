@@ -120,7 +120,7 @@ export async function sendCampMessageBatch({
   subject: string;
   bodyHtml: string;
 }): Promise<{ sent: number; failed: number; sentProfileIds: string[] }> {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.node.family";
   let sent = 0;
   let failed = 0;
   // Track which recipients actually went out so callers only mark those as

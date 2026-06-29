@@ -262,7 +262,7 @@ export async function generateInviteLinks(
   }
 
   const adminClient = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.node.family";
 
   const results: InviteResult[] = [];
 

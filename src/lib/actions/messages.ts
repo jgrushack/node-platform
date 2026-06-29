@@ -459,7 +459,7 @@ export async function getEmailPreview(
   const { error } = await requireAdmin();
   if (error) return { error };
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://nodev0.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.node.family";
   const html = campMessageEmail({
     subject,
     bodyHtml,
