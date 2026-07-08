@@ -22,6 +22,7 @@ import {
   Plus,
   Minus,
   Zap,
+  Info,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { StorageSurveyModal } from "@/components/dashboard/storage-survey-modal";
@@ -52,6 +53,25 @@ const DUES_TIERS = [
   { amount: 2400, label: "$2,400", description: "Donor" },
   { amount: 8000, label: "$8,000", description: "Benefactor" },
 ];
+
+// Tent specifications, keyed by equipment_items.key. Drafted from product data
+// — verify/adjust against the actual units before relying on them.
+const TENT_SPECS: Record<string, string> = {
+  shiftpod1_good:
+    "ShiftPod 1 — insulated pop-up shelter. ~64 sq ft floor (8'×8'), ~6.5' peak. Sleeps 2–3. Reflective blackout walls, AC-ready port.",
+  shiftpod1_asis:
+    "ShiftPod 1 (as-is) — same as the ShiftPod 1 but with cosmetic wear. ~64 sq ft (8'×8'), sleeps 2–3, blackout walls, AC-ready port.",
+  shiftpod2:
+    "ShiftPod 2 — upgraded insulated pop-up. ~64 sq ft (8'×8'), ~6.8' peak. Sleeps 2–4. Improved zippers & venting, blackout, AC port.",
+  shiftpod3:
+    "ShiftPod 3 — latest ShiftPod. ~64 sq ft (8'×8'), better insulation & airflow, blackout, AC port. Sleeps 2–4.",
+  shiftpod_mini:
+    "ShiftPod Mini — compact insulated pop-up. ~40 sq ft (~6.5'×6.5'), lower peak. Sleeps 1–2. Same blackout / AC-port design.",
+  kodiak:
+    "Kodiak Canvas — heavy-duty canvas cabin tent. ~100 sq ft (10'×10'), ~6.5' center height. Sleeps 4–6. Breathable, very durable (not insulated like a ShiftPod).",
+  fsr:
+    "FSR — roof-top tent that mounts on a vehicle rack. Sleeps 2–3 on a built-in mattress. Requires a compatible vehicle + rack.",
+};
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -1156,6 +1176,7 @@ function DuesFlow({
 function EquipmentView({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [openSpec, setOpenSpec] = useState<string | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [customLabel, setCustomLabel] = useState("");
   const [customPrice, setCustomPrice] = useState("");
@@ -1338,12 +1359,30 @@ function EquipmentView({ onBack }: { onBack: () => void }) {
     return (
       <div key={i.key} className="flex items-center justify-between gap-3 py-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-sand-100">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-sand-100">
             {i.label}
+            {TENT_SPECS[i.key] && (
+              <button
+                type="button"
+                aria-label={`${i.label} specs`}
+                title="View specs"
+                onClick={() =>
+                  setOpenSpec((k) => (k === i.key ? null : i.key))
+                }
+                className="text-sand-500 transition-colors hover:text-pink-400"
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            )}
             <span className="ml-1.5 text-sand-400">{money(i.priceCents)}</span>
           </p>
           {i.description && (
             <p className="text-xs text-sand-400">{i.description}</p>
+          )}
+          {openSpec === i.key && TENT_SPECS[i.key] && (
+            <p className="mt-1 rounded-md border border-pink-500/15 bg-pink-500/5 px-2 py-1.5 text-xs leading-relaxed text-sand-300">
+              {TENT_SPECS[i.key]}
+            </p>
           )}
           <p className="mt-0.5 text-[11px] text-sand-500">
             {i.available === null
