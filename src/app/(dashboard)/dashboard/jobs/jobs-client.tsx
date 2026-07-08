@@ -17,6 +17,7 @@ import {
   Circle,
   Lock,
   Star,
+  BookOpen,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,7 @@ function pointValue(difficulty: number, durationMin: number): number {
 export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
   const [board, setBoard] = useState<GetJobsBoardResult>(initial);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   async function refresh() {
     const next = await getJobsBoard();
@@ -102,18 +104,31 @@ export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <header className="space-y-1">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-sand-100">
-          <Briefcase className="h-6 w-6 text-pink-400" />
-          Camp Jobs
-        </h1>
-        <p className="text-sm text-sand-400">
-          Sign up for shifts during burn week. Every job earns points — pitch in
-          and keep NODE running.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-sand-100">
+            <Briefcase className="h-6 w-6 text-pink-400" />
+            Camp Jobs
+          </h1>
+          <p className="text-sm text-sand-400">
+            Sign up for shifts during burn week. Every job earns points — pitch
+            in and keep NODE running.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 border-amber/20 text-sand-300 hover:bg-amber/10"
+          onClick={() => setShowGuide((v) => !v)}
+        >
+          <BookOpen className="mr-1.5 h-4 w-4" />
+          {showGuide ? "Back to board" : "Job guide"}
+        </Button>
       </header>
 
-      {board.isAdmin ? (
+      {showGuide ? (
+        <JobGuide definitions={board.definitions} />
+      ) : board.isAdmin ? (
         <Tabs defaultValue="board" className="space-y-6">
           <TabsList className="glass">
             <TabsTrigger value="board">Board</TabsTrigger>
@@ -147,6 +162,60 @@ export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
           refresh={refresh}
         />
       )}
+    </div>
+  );
+}
+
+// ── Job guide ────────────────────────────────────────────────────────
+
+function JobGuide({ definitions }: { definitions: JobDefinitionRow[] }) {
+  const byCategory = useMemo(() => {
+    const map = new Map<string, JobDefinitionRow[]>();
+    for (const d of definitions) {
+      const cat = d.category || "Other";
+      const list = map.get(cat) ?? [];
+      list.push(d);
+      map.set(cat, list);
+    }
+    return Array.from(map.entries());
+  }, [definitions]);
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-sand-400">
+        What each job involves — review before you sign up. These become
+        per-job checklists soon.
+      </p>
+      {byCategory.map(([cat, defs]) => (
+        <div key={cat} className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-amber">
+            {cat}
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {defs.map((d) => (
+              <Card key={d.id} className="glass-card border-0">
+                <CardContent className="space-y-2 py-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-sand-100">{d.title}</h3>
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 border-amber/20 text-amber"
+                    >
+                      {d.point_value} pts
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-sand-300">
+                    {d.description || "Responsibilities coming soon."}
+                  </p>
+                  <p className="text-xs text-sand-500">
+                    Crew of {d.people_required} · ~{d.duration_min} min
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
