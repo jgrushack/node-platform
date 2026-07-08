@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import {
   Users,
   Car,
+  Bus,
   Ticket,
   CheckCircle2,
   Clock,
@@ -78,6 +79,55 @@ function BalanceCell({ owed, paid }: { owed: number; paid: number }) {
   if (owed > 0) return <span className="text-red-400">{money(owed)}</span>;
   if (paid > 0) return <span className="text-emerald-400">Paid</span>;
   return <span className="text-sand-600">—</span>;
+}
+
+const TRAVEL_LABEL: Record<string, string> = {
+  car_pass_parking: "Car pass (+ parking)",
+  ride_sorted: "Car ride — sorted",
+  ride_unsorted: "Needs a ride",
+  burner_express: "Burner Express",
+  no: "Not answered",
+};
+
+/** Travel icon: car+ticket = car pass, car = ride, bus = Burner Express. */
+function TravelCell({ value }: { value: string }) {
+  const title = TRAVEL_LABEL[value] ?? "Not answered";
+  switch (value) {
+    case "car_pass_parking":
+      return (
+        <span
+          title={title}
+          className="inline-flex items-center text-emerald-400"
+        >
+          <Car className="h-4 w-4" />
+          <Ticket className="-ml-0.5 h-3 w-3" />
+        </span>
+      );
+    case "ride_sorted":
+      return (
+        <span title={title} className="inline-flex text-sky-400">
+          <Car className="h-4 w-4" />
+        </span>
+      );
+    case "ride_unsorted":
+      return (
+        <span title={title} className="inline-flex text-amber-400">
+          <Car className="h-4 w-4" />
+        </span>
+      );
+    case "burner_express":
+      return (
+        <span title={title} className="inline-flex text-purple-400">
+          <Bus className="h-4 w-4" />
+        </span>
+      );
+    default:
+      return (
+        <span title={title} className="text-sand-600">
+          —
+        </span>
+      );
+  }
 }
 
 export default function ReportsClient() {
@@ -349,6 +399,12 @@ export default function ReportsClient() {
                         <TableHead className="text-sand-400 w-8"></TableHead>
                         <TableHead className="text-sand-400">Name</TableHead>
                         <TableHead className="text-sand-400">Status</TableHead>
+                        <TableHead className="text-sand-400 text-center">
+                          Ticket
+                        </TableHead>
+                        <TableHead className="text-sand-400 text-center">
+                          Travel
+                        </TableHead>
                         <TableHead className="text-sand-400 hidden md:table-cell">
                           Dates
                         </TableHead>
@@ -374,7 +430,7 @@ export default function ReportsClient() {
                       {filteredRows.length === 0 ? (
                         <TableRow className="border-amber/10">
                           <TableCell
-                            colSpan={10}
+                            colSpan={12}
                             className="py-8 text-center text-sand-500"
                           >
                             {rows.length === 0
@@ -415,6 +471,22 @@ export default function ReportsClient() {
                                   ) : null}
                                 </TableCell>
                                 <TableCell>{statusBadge(r.status)}</TableCell>
+                                <TableCell className="text-center">
+                                  {r.hasTicket ? (
+                                    <CheckCircle2
+                                      className="inline h-4 w-4 text-emerald-400"
+                                      aria-label="Has ticket"
+                                    />
+                                  ) : (
+                                    <XCircle
+                                      className="inline h-4 w-4 text-sand-600"
+                                      aria-label="No ticket"
+                                    />
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <TravelCell value={r.carPass} />
+                                </TableCell>
                                 <TableCell className="text-sand-300 text-sm hidden md:table-cell whitespace-nowrap">
                                   {fmtDate(r.arrivalDate)} → {fmtDate(r.departureDate)}
                                 </TableCell>
@@ -463,12 +535,13 @@ export default function ReportsClient() {
                                   {!cancelled && (
                                     <Button
                                       variant="ghost"
-                                      size="sm"
-                                      className="text-red-400/80 hover:bg-red-500/10 hover:text-red-300"
+                                      size="icon"
+                                      title="Cancel registration"
+                                      aria-label="Cancel registration"
+                                      className="h-8 w-8 text-red-400/80 hover:bg-red-500/10 hover:text-red-300"
                                       onClick={() => setCancelTarget(r)}
                                     >
-                                      <Ban className="mr-1 h-3.5 w-3.5" />
-                                      Cancel
+                                      <Ban className="h-4 w-4" />
                                     </Button>
                                   )}
                                 </TableCell>
@@ -476,7 +549,7 @@ export default function ReportsClient() {
 
                               {isOpen && (
                                 <TableRow className="border-amber/10 bg-blue-950/20 hover:bg-blue-950/20">
-                                  <TableCell colSpan={10} className="py-4">
+                                  <TableCell colSpan={12} className="py-4">
                                     <div className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                                       <div>
                                         <p className="text-xs uppercase tracking-wide text-sand-500">
@@ -491,10 +564,8 @@ export default function ReportsClient() {
                                             {r.hasTicket ? "Ticket" : "No ticket"}
                                           </span>
                                           <span className="inline-flex items-center gap-1">
-                                            <Car className="h-3.5 w-3.5" />
-                                            {r.hasCarPass
-                                              ? "Car pass"
-                                              : "No car pass"}
+                                            <TravelCell value={r.carPass} />
+                                            {TRAVEL_LABEL[r.carPass] ?? "Not answered"}
                                           </span>
                                         </p>
                                       </div>

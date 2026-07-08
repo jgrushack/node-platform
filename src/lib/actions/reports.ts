@@ -45,7 +45,8 @@ export type ReportRow = {
   email: string | null;
   status: string;
   hasTicket: boolean;
-  hasCarPass: boolean;
+  /** registrations.has_car_pass enum: no | car_pass_parking | burner_express | ride_sorted | ride_unsorted */
+  carPass: string;
   arrivalDate: string | null;
   departureDate: string | null;
   dues: { owedCents: number; paidCents: number };
@@ -92,7 +93,7 @@ export async function getCampReport(): Promise<CampReportResult> {
     profile_id: string;
     status: string;
     has_ticket: boolean;
-    has_car_pass: boolean;
+    has_car_pass: string | null;
     arrival_date: string | null;
     departure_date: string | null;
   };
@@ -231,7 +232,7 @@ export async function getCampReport(): Promise<CampReportResult> {
       email: prof.email,
       status: r.status,
       hasTicket: !!r.has_ticket,
-      hasCarPass: !!r.has_car_pass,
+      carPass: r.has_car_pass ?? "no",
       arrivalDate: r.arrival_date,
       departureDate: r.departure_date,
       dues: { owedCents: dues.owed, paidCents: dues.paid },
