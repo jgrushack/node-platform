@@ -249,12 +249,15 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
 
   const myAgg = pointsByProfile.get(user.id) ?? { points: 0, count: 0 };
   const pointsTarget = settings?.pointsTarget ?? 0;
+  const myShifts = shiftViews.filter((s) => s.mine);
   const progress: MyJobProgress = {
     totalPoints: myAgg.points,
     shiftCount: myAgg.count,
     pointsTarget,
     onTrack:
       pointsTarget > 0 ? myAgg.points >= pointsTarget : myAgg.count > 0,
+    hasStrikeShift: myShifts.some((s) => s.category === "Strike"),
+    hasBbqShift: myShifts.some((s) => s.category === "BBQ"),
   };
 
   return {

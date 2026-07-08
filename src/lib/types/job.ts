@@ -116,4 +116,7 @@ export interface MyJobProgress {
   pointsTarget: number; // 0 = no target
   /** True when the soft target is met (or there is no target but ≥1 shift). */
   onTrack: boolean;
+  /** Every camper must take ≥1 Strike + ≥1 BBQ shift. Set by getJobsBoard. */
+  hasStrikeShift?: boolean;
+  hasBbqShift?: boolean;
 }

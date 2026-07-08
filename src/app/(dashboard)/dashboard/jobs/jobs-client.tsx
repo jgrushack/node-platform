@@ -14,6 +14,7 @@ import {
   Settings,
   CalendarDays,
   CheckCircle2,
+  Circle,
   Lock,
   Star,
 } from "lucide-react";
@@ -249,6 +250,59 @@ function MemberBoard({
                 </p>
               </>
             )}
+
+            {/* Required of everyone: 1 strike + 1 BBQ */}
+            <div className="space-y-1.5 rounded-lg border border-amber/10 bg-blue-950/20 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-sand-400">
+                Required of every camper
+              </p>
+              <div className="flex items-center gap-2 text-sm">
+                {progress.hasStrikeShift ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                ) : (
+                  <Circle className="h-4 w-4 shrink-0 text-sand-600" />
+                )}
+                <span
+                  className={
+                    progress.hasStrikeShift ? "text-sand-200" : "text-sand-400"
+                  }
+                >
+                  1 Strike shift
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                {progress.hasBbqShift ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                ) : (
+                  <Circle className="h-4 w-4 shrink-0 text-sand-600" />
+                )}
+                <span
+                  className={
+                    progress.hasBbqShift ? "text-sand-200" : "text-sand-400"
+                  }
+                >
+                  1 BBQ (hip hop) shift
+                </span>
+              </div>
+            </div>
+
+            {/* How points work */}
+            <p className="text-xs leading-relaxed text-sand-500">
+              Points scale with effort — difficulty × 30-minute blocks — so
+              longer, harder shifts are worth more (a strike shift = 36, a
+              dinner = 16, a quick tidy = 2).
+              {progress.pointsTarget > 0 && (
+                <>
+                  {" "}
+                  Aim for{" "}
+                  <span className="font-semibold text-sand-300">
+                    {progress.pointsTarget} points
+                  </span>{" "}
+                  (about 6 shifts) so every shift gets covered. The Strike and
+                  BBQ shifts above are required on top of that.
+                </>
+              )}
+            </p>
           </CardContent>
         </Card>
 
