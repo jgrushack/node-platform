@@ -631,7 +631,10 @@ export default function ProfilePage() {
 
             {/* Summary Badges */}
             <div className="flex flex-wrap gap-2">
-              <NodeYearsBadge count={readOnly.yearsAttended.length} />
+              <NodeYearsBadge
+                count={readOnly.yearsAttended.length}
+                years={readOnly.yearsAttended}
+              />
               <BurnsBadge count={readOnly.yearsAttended.length + (profile?.other_burns ?? []).length} />
               <BuildBadge count={readOnly.nodeEventsAttended.filter((e) => e.startsWith("Build")).length} />
             </div>

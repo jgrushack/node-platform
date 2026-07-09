@@ -75,53 +75,52 @@ const shimmerOverlay = (
 // <5 years: {count} [node logo] in orange
 // 0 years: hidden
 
+// NODE launched in 2018 — attending that year makes you a founding "NR1" member.
+const FOUNDING_YEAR = "2018";
+
 interface NodeYearsBadgeProps {
   count: number;
+  /** Years attended (numbers or strings). If given, NR1 is granted for the
+   *  founding year (2018); otherwise it falls back to the legacy 7+ rule. */
+  years?: (string | number)[];
 }
 
-export function NodeYearsBadge({ count }: NodeYearsBadgeProps) {
+export function NodeYearsBadge({ count, years }: NodeYearsBadgeProps) {
   if (count <= 0) return null;
 
-  const isOG = count >= 7;
+  const isFounding = years
+    ? years.some((y) => String(y).includes(FOUNDING_YEAR))
+    : count >= 7;
   const isVeteran = count >= 5;
 
-  // OG NODE member (7+ years): 👑 NR1 + 🏅{count} [node logo] in shimmering gold
-  if (isOG) {
-    return (
-      <>
+  const medal = isVeteran ? (
+    // Veteran (5+ years): 🏅{count} [node logo] in shimmering gold
+    <span className="relative inline-flex items-center gap-0.5 overflow-hidden rounded-full border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] px-2.5 py-1 text-xs font-bold">
+      <Medal className="mr-0.5 h-3.5 w-3.5" />
+      {count}
+      <NodeMark className="h-3.5 w-4" />
+      {shimmerOverlay}
+    </span>
+  ) : (
+    // Under 5 years: {count} [node logo] in orange
+    <span className="inline-flex items-center gap-0.5 rounded-full bg-amber/15 border border-amber/20 px-2.5 py-1 text-xs font-bold text-amber">
+      {count}
+      <NodeMark className="h-3.5 w-4" />
+    </span>
+  );
+
+  return (
+    <>
+      {/* Founding member (attended 2018): 👑 NR1 */}
+      {isFounding && (
         <span className="relative inline-flex items-center gap-1 overflow-hidden rounded-full border border-purple-500/40 bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.3)] px-2.5 py-1 text-xs font-bold">
           <Crown className="h-3.5 w-3.5" />
           NR1
           {shimmerOverlay}
         </span>
-        <span className="relative inline-flex items-center gap-0.5 overflow-hidden rounded-full border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] px-2.5 py-1 text-xs font-bold">
-          <Medal className="mr-0.5 h-3.5 w-3.5" />
-          {count}
-          <NodeMark className="h-3.5 w-4" />
-          {shimmerOverlay}
-        </span>
-      </>
-    );
-  }
-
-  // Veteran (5-6 years): 🏅{count} [node logo] in shimmering gold
-  if (isVeteran) {
-    return (
-      <span className="relative inline-flex items-center gap-0.5 overflow-hidden rounded-full border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] px-2.5 py-1 text-xs font-bold">
-        <Medal className="mr-0.5 h-3.5 w-3.5" />
-        {count}
-        <NodeMark className="h-3.5 w-4" />
-        {shimmerOverlay}
-      </span>
-    );
-  }
-
-  // Under 5 years: {count} [node logo] in orange
-  return (
-    <span className="inline-flex items-center gap-0.5 rounded-full bg-amber/15 border border-amber/20 px-2.5 py-1 text-xs font-bold text-amber">
-      {count}
-      <NodeMark className="h-3.5 w-4" />
-    </span>
+      )}
+      {medal}
+    </>
   );
 }
 

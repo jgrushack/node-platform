@@ -87,6 +87,7 @@ interface Member {
   is_active: boolean;
   avatar_url: string | null;
   node_events_attended: string[];
+  years: number[];
   yearsCount: number;
   other_burns: string[];
 }
@@ -183,14 +184,12 @@ export default function MembersPage() {
             .select("profile_id, camp_years(year)")
             .eq("status", "confirmed");
 
-          const yearsByProfile: Record<string, number> = {};
+          const yearsByProfile: Record<string, number[]> = {};
           if (regs) {
             for (const r of regs) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              if ((r as any).camp_years?.year) {
-                yearsByProfile[r.profile_id] =
-                  (yearsByProfile[r.profile_id] || 0) + 1;
-              }
+              const y = (r as any).camp_years?.year as number | undefined;
+              if (y) (yearsByProfile[r.profile_id] ??= []).push(y);
             }
           }
 
@@ -198,7 +197,8 @@ export default function MembersPage() {
             data.map((m) => ({
               ...m,
               node_events_attended: m.node_events_attended || [],
-              yearsCount: yearsByProfile[m.id] || 0,
+              years: yearsByProfile[m.id] || [],
+              yearsCount: (yearsByProfile[m.id] || []).length,
               other_burns: (m as Record<string, unknown>).other_burns as string[] || [],
             }))
           );
@@ -421,7 +421,7 @@ export default function MembersPage() {
                 </div>
               </div>
               <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-                <NodeYearsBadge count={member.yearsCount} />
+                <NodeYearsBadge count={member.yearsCount} years={member.years} />
                 <BurnsBadge count={member.yearsCount + (member.other_burns.length)} />
                 <BuildBadge count={member.node_events_attended.filter((e) => e.startsWith("Build")).length} />
               </div>
@@ -477,7 +477,7 @@ export default function MembersPage() {
                         </p>
                       )}
                       <div className="mt-auto pt-2 flex flex-wrap gap-1.5">
-                        <NodeYearsBadge count={member.yearsCount} />
+                        <NodeYearsBadge count={member.yearsCount} years={member.years} />
                         <BurnsBadge count={totalBurns} />
                         <BuildBadge count={buildCount} />
                       </div>
@@ -650,7 +650,10 @@ export default function MembersPage() {
 
                     {/* Summary badges */}
                     <div className="flex flex-wrap gap-2">
-                      <NodeYearsBadge count={memberDetail?.yearsAttended?.length ?? 0} />
+                      <NodeYearsBadge
+                        count={memberDetail?.yearsAttended?.length ?? 0}
+                        years={memberDetail?.yearsAttended}
+                      />
                       <BurnsBadge count={(memberDetail?.yearsAttended?.length ?? 0) + ((memberDetail?.other_burns?.length ?? 0))} />
                       <BuildBadge count={memberDetail?.node_events_attended?.filter((e) => e.startsWith("Build")).length ?? 0} />
                     </div>
