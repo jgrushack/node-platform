@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Minus,
   Plus,
+  CheckCircle2,
 } from "lucide-react";
 import {
   submitStorageSurvey,
@@ -146,13 +147,15 @@ export function StorageSurveyModal({
     onSubmitted(res.chargeCents);
   }
 
+  // First-timer with zero items → a clear green "nothing in storage" confirm.
+  const isNothing = !isEdit && totalUnits === 0;
   const primaryLabel = isEdit
     ? totalUnits > 0
       ? "Save changes"
       : "Remove my storage items"
     : totalUnits > 0
       ? `Add $${(totalCents / 100).toFixed(2)} to balance`
-      : "I'm not storing anything";
+      : "I have nothing in storage";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onDismiss?.(); }}>
@@ -288,11 +291,22 @@ export function StorageSurveyModal({
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         <Button
-          className="w-full bg-pink-500 text-white hover:bg-pink-600"
+          className={`w-full text-white ${
+            isNothing
+              ? "bg-emerald-500 hover:bg-emerald-600"
+              : "bg-pink-500 hover:bg-pink-600"
+          }`}
           disabled={submitting}
           onClick={handleSubmit}
         >
-          {submitting ? "Saving…" : primaryLabel}
+          {submitting ? (
+            "Saving…"
+          ) : (
+            <>
+              {isNothing && <CheckCircle2 className="mr-2 h-4 w-4" />}
+              {primaryLabel}
+            </>
+          )}
         </Button>
 
         {onDismiss && (
