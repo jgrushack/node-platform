@@ -384,13 +384,21 @@ function MemberBoard({
         )}
         {isConfirmedCamper && !signupWindow.open && signupWindow.opensAt && (
           <NoticeCard icon={Clock}>
-            Signups open{" "}
-            <span className="font-semibold text-sand-200">
-              {new Date(signupWindow.opensAt).toLocaleString()}
-            </span>
-            {signupWindow.earlyAccess &&
-              " (early access — thanks for your years!)"}
-            .
+            {/* A far-future opens-at is a "locked until we announce a date"
+                sentinel, not a real launch date — don't show the bogus date. */}
+            {new Date(signupWindow.opensAt).getFullYear() < 2090 ? (
+              <>
+                Signups open{" "}
+                <span className="font-semibold text-sand-200">
+                  {new Date(signupWindow.opensAt).toLocaleString()}
+                </span>
+                {signupWindow.earlyAccess &&
+                  " (early access — thanks for your years!)"}
+                .
+              </>
+            ) : (
+              "Signups aren’t open yet — we’ll announce the launch date soon."
+            )}
           </NoticeCard>
         )}
 
