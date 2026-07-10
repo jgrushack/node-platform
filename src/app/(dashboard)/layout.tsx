@@ -20,6 +20,7 @@ import {
   Wallet,
   Tent,
   Briefcase,
+  BookOpen,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -49,6 +50,7 @@ export default function DashboardLayout({
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/members", label: "Members", icon: UsersRound },
     { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
+    { href: "/dashboard/wiki", label: "Wiki", icon: BookOpen },
     { href: "/dashboard/profile", label: "Profile", icon: User },
   ]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -93,6 +95,7 @@ export default function DashboardLayout({
             { href: "/dashboard/payments", label: "Payments", icon: Wallet },
             { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
             { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
+            { href: "/dashboard/wiki", label: "Wiki", icon: BookOpen },
           );
 
           // Admin/super_admin see Reports + Rentals (equipment inventory)
