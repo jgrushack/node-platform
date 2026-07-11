@@ -132,6 +132,7 @@ function TravelCell({ value }: { value: string }) {
 
 export default function ReportsClient() {
   const [rows, setRows] = useState<ReportRow[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +152,7 @@ export default function ReportsClient() {
     } else {
       setRosterError(null);
       setRows(res.rows);
+      setIsSuperAdmin(res.isSuperAdmin);
     }
   }, []);
 
@@ -289,13 +291,21 @@ export default function ReportsClient() {
             icon: CheckCircle2,
             color: "text-emerald-400",
           },
-          {
-            label: "Outstanding",
-            value: money(outstanding),
-            detail: "across dues, storage, gear",
-            icon: Wallet,
-            color: "text-coral",
-          },
+          isSuperAdmin
+            ? {
+                label: "Outstanding",
+                value: money(outstanding),
+                detail: "across dues, storage, gear",
+                icon: Wallet,
+                color: "text-coral",
+              }
+            : {
+                label: "With Ticket",
+                value: withTicket,
+                detail: `of ${confirmed} campers`,
+                icon: Ticket,
+                color: "text-coral",
+              },
           {
             label: "Applications",
             value: applications.length,
@@ -408,19 +418,25 @@ export default function ReportsClient() {
                         <TableHead className="text-sand-400 hidden md:table-cell">
                           Dates
                         </TableHead>
-                        <TableHead className="text-sand-400 hidden lg:table-cell">
-                          Dues
-                        </TableHead>
-                        <TableHead className="text-sand-400 hidden lg:table-cell">
-                          Storage
-                        </TableHead>
+                        {isSuperAdmin && (
+                          <>
+                            <TableHead className="text-sand-400 hidden lg:table-cell">
+                              Dues
+                            </TableHead>
+                            <TableHead className="text-sand-400 hidden lg:table-cell">
+                              Storage
+                            </TableHead>
+                          </>
+                        )}
                         <TableHead className="text-sand-400 hidden lg:table-cell">
                           Gear
                         </TableHead>
                         <TableHead className="text-sand-400 hidden xl:table-cell">
                           Jobs
                         </TableHead>
-                        <TableHead className="text-sand-400">Balance</TableHead>
+                        {isSuperAdmin && (
+                          <TableHead className="text-sand-400">Balance</TableHead>
+                        )}
                         <TableHead className="text-sand-400 text-right">
                           Actions
                         </TableHead>
@@ -430,7 +446,7 @@ export default function ReportsClient() {
                       {filteredRows.length === 0 ? (
                         <TableRow className="border-amber/10">
                           <TableCell
-                            colSpan={12}
+                            colSpan={isSuperAdmin ? 12 : 9}
                             className="py-8 text-center text-sand-500"
                           >
                             {rows.length === 0
@@ -490,18 +506,23 @@ export default function ReportsClient() {
                                 <TableCell className="text-sand-300 text-sm hidden md:table-cell whitespace-nowrap">
                                   {fmtDate(r.arrivalDate)} → {fmtDate(r.departureDate)}
                                 </TableCell>
-                                <TableCell className="text-sm hidden lg:table-cell">
-                                  <BalanceCell
-                                    owed={r.dues.owedCents}
-                                    paid={r.dues.paidCents}
-                                  />
-                                </TableCell>
-                                <TableCell className="text-sm hidden lg:table-cell">
-                                  <BalanceCell
-                                    owed={r.storage.owedCents}
-                                    paid={r.storage.paidCents}
-                                  />
-                                </TableCell>
+                                {isSuperAdmin && (
+                                  <>
+                                    <TableCell className="text-sm hidden lg:table-cell text-sand-300">
+                                      {r.dues.totalCents > 0 ? (
+                                        money(r.dues.totalCents)
+                                      ) : (
+                                        <span className="text-sand-600">—</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-sm hidden lg:table-cell">
+                                      <BalanceCell
+                                        owed={r.storage.owedCents}
+                                        paid={r.storage.paidCents}
+                                      />
+                                    </TableCell>
+                                  </>
+                                )}
                                 <TableCell className="text-sm hidden lg:table-cell text-sand-300">
                                   {r.equipment.items.length > 0
                                     ? `${r.equipment.items.reduce(
@@ -522,15 +543,19 @@ export default function ReportsClient() {
                                     ? `${r.jobs.points} pts`
                                     : "—"}
                                 </TableCell>
-                                <TableCell className="text-sm font-semibold">
-                                  {r.balanceCents > 0 ? (
-                                    <span className="text-red-400">
-                                      {money(r.balanceCents)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-emerald-400">$0</span>
-                                  )}
-                                </TableCell>
+                                {isSuperAdmin && (
+                                  <TableCell className="text-sm font-semibold">
+                                    {r.balanceCents > 0 ? (
+                                      <span className="text-red-400">
+                                        {money(r.balanceCents)}
+                                      </span>
+                                    ) : r.formsStarted ? (
+                                      <span className="text-emerald-400">$0</span>
+                                    ) : (
+                                      <span className="text-sand-600">—</span>
+                                    )}
+                                  </TableCell>
+                                )}
                                 <TableCell className="text-right">
                                   {!cancelled && (
                                     <Button
@@ -549,7 +574,7 @@ export default function ReportsClient() {
 
                               {isOpen && (
                                 <TableRow className="border-amber/10 bg-blue-950/20 hover:bg-blue-950/20">
-                                  <TableCell colSpan={12} className="py-4">
+                                  <TableCell colSpan={isSuperAdmin ? 12 : 9} className="py-4">
                                     <div className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                                       <div>
                                         <p className="text-xs uppercase tracking-wide text-sand-500">
@@ -576,7 +601,7 @@ export default function ReportsClient() {
                                         <p className="mt-1 text-sand-300">
                                           {r.storage.summary ?? "No items stored"}
                                         </p>
-                                        {r.storage.owedCents > 0 && (
+                                        {isSuperAdmin && r.storage.owedCents > 0 && (
                                           <p className="mt-1 text-xs text-red-400">
                                             {money(r.storage.owedCents)} owed
                                           </p>
@@ -597,7 +622,7 @@ export default function ReportsClient() {
                                         ) : (
                                           <p className="mt-1 text-sand-500">—</p>
                                         )}
-                                        {r.equipment.owedCents > 0 && (
+                                        {isSuperAdmin && r.equipment.owedCents > 0 && (
                                           <p className="mt-1 text-xs text-red-400">
                                             {money(r.equipment.owedCents)} owed
                                           </p>
@@ -607,14 +632,18 @@ export default function ReportsClient() {
                                         <p className="text-xs uppercase tracking-wide text-sand-500">
                                           Dues &amp; jobs
                                         </p>
-                                        <p className="mt-1 text-sand-300">
-                                          Dues:{" "}
-                                          {r.dues.owedCents > 0
-                                            ? `${money(r.dues.owedCents)} owed`
-                                            : r.dues.paidCents > 0
-                                              ? `${money(r.dues.paidCents)} paid`
+                                        {isSuperAdmin && (
+                                          <p className="mt-1 text-sand-300">
+                                            Dues:{" "}
+                                            {r.dues.totalCents > 0
+                                              ? `${money(r.dues.totalCents)}${
+                                                  r.dues.owedCents > 0
+                                                    ? ` · ${money(r.dues.owedCents)} left`
+                                                    : " · paid"
+                                                }`
                                               : "not started"}
-                                        </p>
+                                          </p>
+                                        )}
                                         <p className="mt-1 text-sand-300">
                                           {r.jobs.shiftCount > 0
                                             ? `${r.jobs.shiftCount} shift${

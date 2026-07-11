@@ -11,9 +11,9 @@ const EQUIPMENT_KIND = "equipment_2026";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-/** Admin/super-admin gate; returns the service-role client + 2026 camp year id. */
+/** Admin/super-admin gate; returns the service-role client, camp year, and role. */
 async function requireAdmin(): Promise<
-  { admin: Admin; campYearId: string } | { error: string }
+  { admin: Admin; campYearId: string; role: string } | { error: string }
 > {
   const supabase = await createClient();
   const {
@@ -34,7 +34,7 @@ async function requireAdmin(): Promise<
     .eq("year", YEAR)
     .single();
   if (!campYear) return { error: "No 2026 camp year configured." };
-  return { admin, campYearId: campYear.id };
+  return { admin, campYearId: campYear.id, role: me.role };
 }
 
 export type ReportRow = {
@@ -49,7 +49,8 @@ export type ReportRow = {
   carPass: string;
   arrivalDate: string | null;
   departureDate: string | null;
-  dues: { owedCents: number; paidCents: number };
+  /** Full dues obligation (the tier), owed = remaining. */
+  dues: { totalCents: number; owedCents: number; paidCents: number };
   storage: { owedCents: number; paidCents: number; summary: string | null };
   equipment: {
     owedCents: number;
@@ -58,16 +59,22 @@ export type ReportRow = {
   };
   jobs: { shiftCount: number; points: number };
   balanceCents: number;
+  /** Has the camper engaged at all (any invoice or completed storage survey)?
+   *  Used so a $0 balance reads "—" for people who haven't started their forms. */
+  formsStarted: boolean;
 };
 
-export type CampReportResult = { error: string } | { rows: ReportRow[] };
+export type CampReportResult =
+  | { error: string }
+  | { rows: ReportRow[]; isSuperAdmin: boolean };
 
 /** Full per-camper picture: status, tickets, dates, dues/storage/equipment
  *  balances, reserved gear, and job points. Admin + super_admin only. */
 export async function getCampReport(): Promise<CampReportResult> {
   const ctx = await requireAdmin();
   if ("error" in ctx) return ctx;
-  const { admin, campYearId } = ctx;
+  const { admin, campYearId, role } = ctx;
+  const isSuperAdmin = role === "super_admin";
 
   const [regsRes, invRes, resvRes, itemsRes, signupsRes] = await Promise.all([
     admin
@@ -100,15 +107,15 @@ export async function getCampReport(): Promise<CampReportResult> {
   const registrations = (regsRes.data ?? []) as RegRow[];
   const profileIds = Array.from(new Set(registrations.map((r) => r.profile_id)));
 
-  // Names / emails.
+  // Names / emails / storage-survey completion.
   const profById = new Map<
     string,
-    { name: string; playa: string | null; email: string | null }
+    { name: string; playa: string | null; email: string | null; storageDone: boolean }
   >();
   if (profileIds.length > 0) {
     const { data: profs } = await admin
       .from("profiles")
-      .select("id, first_name, last_name, playa_name, email")
+      .select("id, first_name, last_name, playa_name, email, storage_survey_completed_at")
       .in("id", profileIds);
     (
       (profs ?? []) as {
@@ -117,6 +124,7 @@ export async function getCampReport(): Promise<CampReportResult> {
         last_name: string | null;
         playa_name: string | null;
         email: string | null;
+        storage_survey_completed_at: string | null;
       }[]
     ).forEach((p) => {
       const full = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
@@ -124,6 +132,7 @@ export async function getCampReport(): Promise<CampReportResult> {
         name: full || p.playa_name || "Unknown",
         playa: p.playa_name,
         email: p.email,
+        storageDone: !!p.storage_survey_completed_at,
       });
     });
   }
@@ -219,11 +228,13 @@ export async function getCampReport(): Promise<CampReportResult> {
       name: "Unknown",
       playa: null,
       email: null,
+      storageDone: false,
     };
     const inv = invByProfile.get(r.profile_id) ?? {};
     const dues = inv.dues ?? { owed: 0, paid: 0, desc: null };
     const storage = inv.storage ?? { owed: 0, paid: 0, desc: null };
     const equip = inv.equipment ?? { owed: 0, paid: 0, desc: null };
+    const hasAnyInvoice = !!(inv.dues || inv.storage || inv.equipment);
     return {
       registrationId: r.id,
       profileId: r.profile_id,
@@ -235,7 +246,8 @@ export async function getCampReport(): Promise<CampReportResult> {
       carPass: r.has_car_pass ?? "no",
       arrivalDate: r.arrival_date,
       departureDate: r.departure_date,
-      dues: { owedCents: dues.owed, paidCents: dues.paid },
+      formsStarted: hasAnyInvoice || prof.storageDone,
+      dues: { totalCents: dues.owed + dues.paid, owedCents: dues.owed, paidCents: dues.paid },
       storage: {
         owedCents: storage.owed,
         paidCents: storage.paid,
@@ -252,7 +264,19 @@ export async function getCampReport(): Promise<CampReportResult> {
   });
 
   rows.sort((a, b) => a.name.localeCompare(b.name));
-  return { rows };
+
+  // Balances are super-admin-only. Regular admins still see the roster + gear
+  // logistics, but no money is sent to the client at all.
+  if (!isSuperAdmin) {
+    for (const r of rows) {
+      r.dues = { totalCents: 0, owedCents: 0, paidCents: 0 };
+      r.storage = { owedCents: 0, paidCents: 0, summary: r.storage.summary };
+      r.equipment = { owedCents: 0, paidCents: 0, items: r.equipment.items };
+      r.balanceCents = 0;
+    }
+  }
+
+  return { rows, isSuperAdmin };
 }
 
 export type CancelRegistrationResult =
