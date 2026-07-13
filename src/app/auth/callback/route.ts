@@ -26,9 +26,9 @@ export async function GET(request: Request) {
           .single();
 
         if (!profile) {
-          // No profile yet — check for an approved application with this email
+          const adminClient = createAdminClient();
+          // Seed from an approved application (carries name / skills) if present.
           try {
-            const adminClient = createAdminClient();
             const { data: application } = await adminClient
               .from("applications")
               .select("id, email, first_name, last_name, playa_name, phone, skills")
@@ -56,6 +56,19 @@ export async function GET(request: Request) {
           } catch (e) {
             console.error("[auth/callback] Profile creation error:", e);
           }
+
+          // Always guarantee a profile row exists — the auto-profile trigger was
+          // removed (00028), so a login with no approved application would leave
+          // the user profile-less, which FK-fails invoice inserts (dues/storage).
+          // ON CONFLICT DO NOTHING, so it won't clobber a just-seeded profile.
+          const { error: ensureErr } = await adminClient
+            .from("profiles")
+            .upsert(
+              { id: user.id, email: user.email },
+              { onConflict: "id", ignoreDuplicates: true }
+            );
+          if (ensureErr)
+            console.error("[auth/callback] ensure profile error:", ensureErr);
         }
       }
 

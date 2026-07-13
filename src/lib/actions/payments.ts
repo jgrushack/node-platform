@@ -83,6 +83,17 @@ export async function createDuesCheckout(
     .single();
   if (!campYear) return { error: "No 2026 camp year configured." };
 
+  // Guarantee a profile row exists — invoice.profile_id FKs to profiles, and a
+  // login with no approved application can be profile-less (auto-profile trigger
+  // was removed in 00028). Without this the invoice insert FK-fails with
+  // "Failed to prepare dues invoice." ON CONFLICT DO NOTHING keeps existing data.
+  await admin
+    .from("profiles")
+    .upsert(
+      { id: user.id, email: user.email },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+
   // Existing dues invoice, if any. Members pay the balance down over as many
   // one-time payments as they like — we never store a card or auto-charge.
   const { data: existing } = await admin
