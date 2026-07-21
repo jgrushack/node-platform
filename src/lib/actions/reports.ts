@@ -37,6 +37,8 @@ async function requireAdmin(): Promise<
   return { admin, campYearId: campYear.id, role: me.role };
 }
 
+export type StorageItemLine = { type: string; quantity: number; labels: string[] };
+
 export type ReportRow = {
   registrationId: string;
   profileId: string;
@@ -49,27 +51,88 @@ export type ReportRow = {
   carPass: string;
   arrivalDate: string | null;
   departureDate: string | null;
-  /** Full dues obligation (the tier), owed = remaining. */
+  /** Full dues obligation (the tier), owed = remaining. Super-admin only (else 0). */
   dues: { totalCents: number; owedCents: number; paidCents: number };
-  storage: { owedCents: number; paidCents: number; summary: string | null };
+  storage: {
+    owedCents: number;
+    paidCents: number;
+    summary: string | null;
+    items: StorageItemLine[];
+  };
   equipment: {
     owedCents: number;
     paidCents: number;
     items: { label: string; quantity: number }[];
   };
-  jobs: { shiftCount: number; points: number };
+  jobs: {
+    shiftCount: number;
+    points: number;
+    shifts: { title: string; date: string; time: string }[];
+  };
   balanceCents: number;
-  /** Has the camper engaged at all (any invoice or completed storage survey)?
-   *  Used so a $0 balance reads "—" for people who haven't started their forms. */
+  /** Has the camper engaged at all (any invoice or completed storage survey)? */
   formsStarted: boolean;
+  profile: {
+    phone: string | null;
+    dietary: string | null;
+    emergencyContact: string | null;
+    instagram: string | null;
+    bio: string | null;
+    skills: string[];
+    nodeYears: string[];
+    otherBurns: string[];
+  };
+  application: {
+    yearsAttended: string | null;
+    previousCamps: string | null;
+    favoritePrinciple: string | null;
+    principleReason: string | null;
+    referredBy: string | null;
+    skills: string | null;
+    videoUrl: string | null;
+  } | null;
 };
 
 export type CampReportResult =
   | { error: string }
   | { rows: ReportRow[]; isSuperAdmin: boolean };
 
-/** Full per-camper picture: status, tickets, dates, dues/storage/equipment
- *  balances, reserved gear, and job points. Admin + super_admin only. */
+const STORAGE_ITEM_LABEL: Record<string, string> = {
+  bike: "Bike",
+  bin: "Bin",
+  ac: "AC unit",
+  shiftpod: "Tent",
+};
+
+/** Parse the storage invoice `notes` JSON into itemized lines with per-unit labels. */
+function parseStorageItems(notes: string | null): StorageItemLine[] {
+  if (!notes) return [];
+  try {
+    const j = JSON.parse(notes) as {
+      items?: Record<string, { quantity?: number; description?: string }>;
+    };
+    const out: StorageItemLine[] = [];
+    for (const [k, v] of Object.entries(j.items ?? {})) {
+      const quantity = v?.quantity ?? 0;
+      if (quantity <= 0) continue;
+      out.push({
+        type: STORAGE_ITEM_LABEL[k] ?? k,
+        quantity,
+        labels: (v?.description ?? "")
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Full per-camper record: registration, travel, dues/storage/equipment, gear,
+ *  jobs, and every profile + application answer. Admin + super_admin only;
+ *  money (dues/balances) is stripped for non-super-admins. */
 export async function getCampReport(): Promise<CampReportResult> {
   const ctx = await requireAdmin();
   if ("error" in ctx) return ctx;
@@ -85,7 +148,9 @@ export async function getCampReport(): Promise<CampReportResult> {
       .eq("camp_year_id", campYearId),
     admin
       .from("invoices")
-      .select("profile_id, kind, amount_cents, amount_paid_cents, description")
+      .select(
+        "profile_id, kind, amount_cents, amount_paid_cents, description, notes"
+      )
       .eq("camp_year_id", campYearId),
     admin
       .from("equipment_reservations")
@@ -107,38 +172,86 @@ export async function getCampReport(): Promise<CampReportResult> {
   const registrations = (regsRes.data ?? []) as RegRow[];
   const profileIds = Array.from(new Set(registrations.map((r) => r.profile_id)));
 
-  // Names / emails / storage-survey completion.
-  const profById = new Map<
-    string,
-    { name: string; playa: string | null; email: string | null; storageDone: boolean }
-  >();
+  // Profiles: names, contact, and the free-form answers they've given us.
+  type ProfInfo = {
+    name: string;
+    playa: string | null;
+    email: string | null;
+    storageDone: boolean;
+    phone: string | null;
+    dietary: string | null;
+    emergencyContact: string | null;
+    instagram: string | null;
+    bio: string | null;
+    skills: string[];
+    nodeYears: string[];
+    otherBurns: string[];
+  };
+  const profById = new Map<string, ProfInfo>();
+  const emails: string[] = [];
   if (profileIds.length > 0) {
     const { data: profs } = await admin
       .from("profiles")
-      .select("id, first_name, last_name, playa_name, email, storage_survey_completed_at")
+      .select(
+        "id, first_name, last_name, playa_name, email, storage_survey_completed_at, phone, dietary_restrictions, emergency_contact, instagram, bio, skills, node_events_attended, other_burns"
+      )
       .in("id", profileIds);
-    (
-      (profs ?? []) as {
-        id: string;
-        first_name: string | null;
-        last_name: string | null;
-        playa_name: string | null;
-        email: string | null;
-        storage_survey_completed_at: string | null;
-      }[]
-    ).forEach((p) => {
-      const full = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
-      profById.set(p.id, {
-        name: full || p.playa_name || "Unknown",
-        playa: p.playa_name,
-        email: p.email,
+    ((profs ?? []) as Record<string, unknown>[]).forEach((p) => {
+      const first = (p.first_name as string | null) ?? null;
+      const last = (p.last_name as string | null) ?? null;
+      const playa = (p.playa_name as string | null) ?? null;
+      const email = (p.email as string | null) ?? null;
+      const full = [first, last].filter(Boolean).join(" ").trim();
+      if (email) emails.push(email);
+      profById.set(p.id as string, {
+        name: full || playa || "Unknown",
+        playa,
+        email,
         storageDone: !!p.storage_survey_completed_at,
+        phone: (p.phone as string | null) ?? null,
+        dietary: (p.dietary_restrictions as string | null) ?? null,
+        emergencyContact: (p.emergency_contact as string | null) ?? null,
+        instagram: (p.instagram as string | null) ?? null,
+        bio: (p.bio as string | null) ?? null,
+        skills: (p.skills as string[] | null) ?? [],
+        nodeYears: (p.node_events_attended as string[] | null) ?? [],
+        otherBurns: (p.other_burns as string[] | null) ?? [],
       });
     });
   }
 
-  // Invoices by profile + kind.
-  type Inv = { owed: number; paid: number; desc: string | null };
+  // Application answers, keyed by (lowercased) email — keep the most recent.
+  const appByEmail = new Map<string, NonNullable<ReportRow["application"]>>();
+  if (emails.length > 0) {
+    const { data: apps } = await admin
+      .from("applications")
+      .select(
+        "email, years_attended, previous_camps, favorite_principle, principle_reason, referred_by, skills, video_url, created_at"
+      )
+      .in("email", emails)
+      .order("created_at", { ascending: false });
+    ((apps ?? []) as Record<string, unknown>[]).forEach((a) => {
+      const key = ((a.email as string) ?? "").toLowerCase();
+      if (!key || appByEmail.has(key)) return;
+      appByEmail.set(key, {
+        yearsAttended: (a.years_attended as string | null) ?? null,
+        previousCamps: (a.previous_camps as string | null) ?? null,
+        favoritePrinciple: (a.favorite_principle as string | null) ?? null,
+        principleReason: (a.principle_reason as string | null) ?? null,
+        referredBy: (a.referred_by as string | null) ?? null,
+        skills: (a.skills as string | null) ?? null,
+        videoUrl: (a.video_url as string | null) ?? null,
+      });
+    });
+  }
+
+  // Invoices by profile + kind (storage keeps its notes for item parsing).
+  type Inv = {
+    owed: number;
+    paid: number;
+    desc: string | null;
+    notes: string | null;
+  };
   const invByProfile = new Map<
     string,
     { dues?: Inv; storage?: Inv; equipment?: Inv }
@@ -150,6 +263,7 @@ export async function getCampReport(): Promise<CampReportResult> {
       amount_cents: number;
       amount_paid_cents: number;
       description: string | null;
+      notes: string | null;
     }[]
   ).forEach((i) => {
     const owed = Math.max(0, (i.amount_cents ?? 0) - (i.amount_paid_cents ?? 0));
@@ -157,6 +271,7 @@ export async function getCampReport(): Promise<CampReportResult> {
       owed,
       paid: i.amount_paid_cents ?? 0,
       desc: i.description ?? null,
+      notes: i.notes ?? null,
     };
     const rec = invByProfile.get(i.profile_id) ?? {};
     if (i.kind === DUES_KIND) rec.dues = entry;
@@ -187,8 +302,13 @@ export async function getCampReport(): Promise<CampReportResult> {
     equipByProfile.set(r.profile_id, list);
   });
 
-  // Job points by profile (signup → shift → definition.point_value).
-  const jobsByProfile = new Map<string, { shiftCount: number; points: number }>();
+  // Jobs by profile: shift list (title/date/time) + points.
+  type JobAgg = {
+    shiftCount: number;
+    points: number;
+    shifts: { title: string; date: string; time: string }[];
+  };
+  const jobsByProfile = new Map<string, JobAgg>();
   const signups = (signupsRes.data ?? []) as {
     profile_id: string;
     shift_id: string;
@@ -197,80 +317,123 @@ export async function getCampReport(): Promise<CampReportResult> {
     const shiftIds = Array.from(new Set(signups.map((s) => s.shift_id)));
     const { data: shifts } = await admin
       .from("job_shifts")
-      .select("id, definition_id")
+      .select("id, definition_id, shift_date, start_time")
       .in("id", shiftIds);
-    const shiftRows = (shifts ?? []) as { id: string; definition_id: string }[];
+    const shiftRows = (shifts ?? []) as {
+      id: string;
+      definition_id: string;
+      shift_date: string;
+      start_time: string;
+    }[];
     const defIds = Array.from(new Set(shiftRows.map((s) => s.definition_id)));
-    const ptsByDef = new Map<string, number>();
+    const defById = new Map<string, { title: string; points: number }>();
     if (defIds.length > 0) {
       const { data: defs } = await admin
         .from("job_definitions")
-        .select("id, point_value")
+        .select("id, title, point_value")
         .in("id", defIds);
-      ((defs ?? []) as { id: string; point_value: number }[]).forEach((d) =>
-        ptsByDef.set(d.id, d.point_value)
-      );
+      (
+        (defs ?? []) as { id: string; title: string; point_value: number }[]
+      ).forEach((d) => defById.set(d.id, { title: d.title, points: d.point_value }));
     }
-    const ptsByShift = new Map<string, number>();
-    shiftRows.forEach((s) =>
-      ptsByShift.set(s.id, ptsByDef.get(s.definition_id) ?? 0)
-    );
+    const shiftInfo = new Map<
+      string,
+      { title: string; points: number; date: string; time: string }
+    >();
+    shiftRows.forEach((s) => {
+      const def = defById.get(s.definition_id);
+      shiftInfo.set(s.id, {
+        title: def?.title ?? "Shift",
+        points: def?.points ?? 0,
+        date: s.shift_date,
+        time: (s.start_time ?? "").slice(0, 5),
+      });
+    });
     signups.forEach((s) => {
-      const agg = jobsByProfile.get(s.profile_id) ?? { shiftCount: 0, points: 0 };
+      const info = shiftInfo.get(s.shift_id);
+      if (!info) return;
+      const agg = jobsByProfile.get(s.profile_id) ?? {
+        shiftCount: 0,
+        points: 0,
+        shifts: [],
+      };
       agg.shiftCount += 1;
-      agg.points += ptsByShift.get(s.shift_id) ?? 0;
+      agg.points += info.points;
+      agg.shifts.push({ title: info.title, date: info.date, time: info.time });
       jobsByProfile.set(s.profile_id, agg);
     });
   }
 
   const rows: ReportRow[] = registrations.map((r) => {
-    const prof = profById.get(r.profile_id) ?? {
-      name: "Unknown",
-      playa: null,
-      email: null,
-      storageDone: false,
-    };
+    const prof = profById.get(r.profile_id);
     const inv = invByProfile.get(r.profile_id) ?? {};
-    const dues = inv.dues ?? { owed: 0, paid: 0, desc: null };
-    const storage = inv.storage ?? { owed: 0, paid: 0, desc: null };
-    const equip = inv.equipment ?? { owed: 0, paid: 0, desc: null };
+    const dues = inv.dues ?? { owed: 0, paid: 0, desc: null, notes: null };
+    const storage = inv.storage ?? { owed: 0, paid: 0, desc: null, notes: null };
+    const equip = inv.equipment ?? { owed: 0, paid: 0, desc: null, notes: null };
     const hasAnyInvoice = !!(inv.dues || inv.storage || inv.equipment);
     return {
       registrationId: r.id,
       profileId: r.profile_id,
-      name: prof.name,
-      playaName: prof.playa,
-      email: prof.email,
+      name: prof?.name ?? "Unknown",
+      playaName: prof?.playa ?? null,
+      email: prof?.email ?? null,
       status: r.status,
       hasTicket: !!r.has_ticket,
       carPass: r.has_car_pass ?? "no",
       arrivalDate: r.arrival_date,
       departureDate: r.departure_date,
-      formsStarted: hasAnyInvoice || prof.storageDone,
-      dues: { totalCents: dues.owed + dues.paid, owedCents: dues.owed, paidCents: dues.paid },
+      formsStarted: hasAnyInvoice || !!prof?.storageDone,
+      dues: {
+        totalCents: dues.owed + dues.paid,
+        owedCents: dues.owed,
+        paidCents: dues.paid,
+      },
       storage: {
         owedCents: storage.owed,
         paidCents: storage.paid,
         summary: storage.desc,
+        items: parseStorageItems(storage.notes),
       },
       equipment: {
         owedCents: equip.owed,
         paidCents: equip.paid,
         items: equipByProfile.get(r.profile_id) ?? [],
       },
-      jobs: jobsByProfile.get(r.profile_id) ?? { shiftCount: 0, points: 0 },
+      jobs:
+        jobsByProfile.get(r.profile_id) ?? {
+          shiftCount: 0,
+          points: 0,
+          shifts: [],
+        },
       balanceCents: dues.owed + storage.owed + equip.owed,
+      profile: {
+        phone: prof?.phone ?? null,
+        dietary: prof?.dietary ?? null,
+        emergencyContact: prof?.emergencyContact ?? null,
+        instagram: prof?.instagram ?? null,
+        bio: prof?.bio ?? null,
+        skills: prof?.skills ?? [],
+        nodeYears: prof?.nodeYears ?? [],
+        otherBurns: prof?.otherBurns ?? [],
+      },
+      application: prof?.email
+        ? appByEmail.get(prof.email.toLowerCase()) ?? null
+        : null,
     };
   });
 
   rows.sort((a, b) => a.name.localeCompare(b.name));
 
-  // Balances are super-admin-only. Regular admins still see the roster + gear
-  // logistics, but no money is sent to the client at all.
+  // Balances are super-admin-only; strip all money for regular admins.
   if (!isSuperAdmin) {
     for (const r of rows) {
       r.dues = { totalCents: 0, owedCents: 0, paidCents: 0 };
-      r.storage = { owedCents: 0, paidCents: 0, summary: r.storage.summary };
+      r.storage = {
+        owedCents: 0,
+        paidCents: 0,
+        summary: r.storage.summary,
+        items: r.storage.items,
+      };
       r.equipment = { owedCents: 0, paidCents: 0, items: r.equipment.items };
       r.balanceCents = 0;
     }

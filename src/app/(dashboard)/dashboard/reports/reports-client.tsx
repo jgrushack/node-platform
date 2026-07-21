@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
   Users,
@@ -12,11 +12,13 @@ import {
   XCircle,
   ListFilter,
   Search,
-  ChevronDown,
   ChevronRight,
   Ban,
   Loader2,
   Wallet,
+  Phone,
+  Instagram,
+  Video,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -74,12 +76,13 @@ const fmtDate = (d: string | null) =>
       })
     : "—";
 
-/** Owed (red) / paid (green) / nothing (dash) cell. */
-function BalanceCell({ owed, paid }: { owed: number; paid: number }) {
-  if (owed > 0) return <span className="text-red-400">{money(owed)}</span>;
-  if (paid > 0) return <span className="text-emerald-400">Paid</span>;
-  return <span className="text-sand-600">—</span>;
-}
+const fmtTime = (t: string) => {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  const ap = h >= 12 ? "pm" : "am";
+  const hr = ((h + 11) % 12) + 1;
+  return m ? `${hr}:${String(m).padStart(2, "0")}${ap}` : `${hr}${ap}`;
+};
 
 const TRAVEL_LABEL: Record<string, string> = {
   car_pass_parking: "Car pass (+ parking)",
@@ -95,10 +98,7 @@ function TravelCell({ value }: { value: string }) {
   switch (value) {
     case "car_pass_parking":
       return (
-        <span
-          title={title}
-          className="inline-flex items-center text-emerald-400"
-        >
+        <span title={title} className="inline-flex items-center text-emerald-400">
           <Car className="h-4 w-4" />
           <Ticket className="-ml-0.5 h-3 w-3" />
         </span>
@@ -130,6 +130,331 @@ function TravelCell({ value }: { value: string }) {
   }
 }
 
+function statusBadge(status: string) {
+  const styles: Record<string, string> = {
+    confirmed: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    pending: "bg-amber/15 text-amber border-amber/20",
+    waitlisted: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+    waitlist: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+    cancelled: "bg-red-500/15 text-red-400 border-red-500/20",
+    approved: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    rejected: "bg-red-500/15 text-red-400 border-red-500/20",
+  };
+  return (
+    <Badge
+      variant="outline"
+      className={styles[status] || "bg-sand-500/15 text-sand-400"}
+    >
+      {status}
+    </Badge>
+  );
+}
+
+function TicketIcon({ has }: { has: boolean }) {
+  return has ? (
+    <CheckCircle2 className="inline h-4 w-4 text-emerald-400" aria-label="Has ticket" />
+  ) : (
+    <XCircle className="inline h-4 w-4 text-sand-600" aria-label="No ticket" />
+  );
+}
+
+// ── Detail modal ─────────────────────────────────────────────────────
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-amber">
+        {title}
+      </p>
+      <div className="space-y-1 text-sm text-sand-300">{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="shrink-0 text-sand-500">{label}</span>
+      <span className="text-right text-sand-200">{value || "—"}</span>
+    </div>
+  );
+}
+
+function DetailModal({
+  row,
+  isSuperAdmin,
+  onClose,
+  onCancelRegistration,
+}: {
+  row: ReportRow | null;
+  isSuperAdmin: boolean;
+  onClose: () => void;
+  onCancelRegistration: (row: ReportRow) => void;
+}) {
+  if (!row) return null;
+  const gearCount = row.equipment.items.reduce((n, it) => n + it.quantity, 0);
+
+  return (
+    <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="glass border-pink-500/10 max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex flex-wrap items-center gap-2 text-sand-100">
+            {row.name}
+            {row.playaName ? (
+              <span className="text-sm font-normal text-sand-500">
+                “{row.playaName}”
+              </span>
+            ) : null}
+            {statusBadge(row.status)}
+          </DialogTitle>
+          <DialogDescription className="text-sand-400">
+            {row.email ?? "no email on file"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          {/* Registration & travel */}
+          <Section title="Registration & travel">
+            <Field
+              label="Ticket"
+              value={
+                <span className="inline-flex items-center gap-1">
+                  <TicketIcon has={row.hasTicket} />
+                  {row.hasTicket ? "Has ticket" : "No ticket"}
+                </span>
+              }
+            />
+            <Field
+              label="Travel"
+              value={
+                <span className="inline-flex items-center gap-1.5">
+                  <TravelCell value={row.carPass} />
+                  {TRAVEL_LABEL[row.carPass] ?? "Not answered"}
+                </span>
+              }
+            />
+            <Field
+              label="Dates"
+              value={`${fmtDate(row.arrivalDate)} → ${fmtDate(row.departureDate)}`}
+            />
+            {row.profile.phone && (
+              <Field
+                label="Phone"
+                value={
+                  <span className="inline-flex items-center gap-1">
+                    <Phone className="h-3.5 w-3.5" />
+                    {row.profile.phone}
+                  </span>
+                }
+              />
+            )}
+          </Section>
+
+          {/* Dues — super-admin only */}
+          {isSuperAdmin && (
+            <Section title="Dues">
+              {row.dues.totalCents > 0 ? (
+                <>
+                  <Field label="Tier" value={money(row.dues.totalCents)} />
+                  <Field label="Paid" value={money(row.dues.paidCents)} />
+                  <Field
+                    label="Owed"
+                    value={
+                      row.dues.owedCents > 0 ? (
+                        <span className="text-red-400">
+                          {money(row.dues.owedCents)}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400">Paid in full</span>
+                      )
+                    }
+                  />
+                </>
+              ) : (
+                <p className="text-sand-500">Not started</p>
+              )}
+            </Section>
+          )}
+
+          {/* Storage */}
+          <Section title="Storage">
+            {row.storage.items.length > 0 ? (
+              <ul className="space-y-1">
+                {row.storage.items.map((it, idx) => (
+                  <li key={idx}>
+                    <span className="text-sand-200">
+                      {it.quantity}× {it.type}
+                    </span>
+                    {it.labels.length > 0 && (
+                      <span className="text-sand-500">
+                        {" "}
+                        — {it.labels.join(", ")}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sand-500">
+                {row.storage.summary ?? "Nothing in storage"}
+              </p>
+            )}
+            {isSuperAdmin && row.storage.owedCents > 0 && (
+              <p className="text-xs text-red-400">
+                {money(row.storage.owedCents)} owed
+              </p>
+            )}
+          </Section>
+
+          {/* Equipment */}
+          <Section title="Equipment rented">
+            {gearCount > 0 ? (
+              <ul className="space-y-0.5">
+                {row.equipment.items.map((it, idx) => (
+                  <li key={idx} className="text-sand-200">
+                    {it.quantity}× {it.label}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sand-500">Nothing rented</p>
+            )}
+            {isSuperAdmin && row.equipment.owedCents > 0 && (
+              <p className="text-xs text-red-400">
+                {money(row.equipment.owedCents)} owed
+              </p>
+            )}
+          </Section>
+
+          {/* Jobs */}
+          <Section title="Jobs">
+            {row.jobs.shiftCount > 0 ? (
+              <>
+                <p className="text-sand-400">
+                  {row.jobs.shiftCount} shift
+                  {row.jobs.shiftCount === 1 ? "" : "s"} · {row.jobs.points} pts
+                </p>
+                <ul className="space-y-0.5">
+                  {row.jobs.shifts.map((s, idx) => (
+                    <li key={idx} className="text-sand-200">
+                      {s.title}
+                      <span className="text-sand-500">
+                        {" "}
+                        · {fmtDate(s.date)} {fmtTime(s.time)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-sand-500">No shifts signed up</p>
+            )}
+          </Section>
+
+          {/* Profile answers */}
+          <Section title="Profile">
+            {row.profile.skills.length > 0 && (
+              <Field label="Skills" value={row.profile.skills.join(", ")} />
+            )}
+            <Field label="Dietary" value={row.profile.dietary} />
+            <Field
+              label="Emergency contact"
+              value={row.profile.emergencyContact}
+            />
+            {row.profile.instagram && (
+              <Field
+                label="Instagram"
+                value={
+                  <span className="inline-flex items-center gap-1">
+                    <Instagram className="h-3.5 w-3.5" />
+                    {row.profile.instagram}
+                  </span>
+                }
+              />
+            )}
+            {row.profile.nodeYears.length > 0 && (
+              <Field label="NODE years" value={row.profile.nodeYears.join(", ")} />
+            )}
+            {row.profile.otherBurns.length > 0 && (
+              <Field
+                label="Other burns"
+                value={row.profile.otherBurns.join(", ")}
+              />
+            )}
+            {row.profile.bio && (
+              <p className="pt-1 text-sand-300">{row.profile.bio}</p>
+            )}
+          </Section>
+
+          {/* Application answers */}
+          {row.application && (
+            <Section title="Application answers">
+              <Field
+                label="Years attended"
+                value={row.application.yearsAttended}
+              />
+              <Field
+                label="Previous camps"
+                value={row.application.previousCamps}
+              />
+              <Field
+                label="Favorite principle"
+                value={row.application.favoritePrinciple}
+              />
+              {row.application.principleReason && (
+                <p className="pt-1 text-sand-300">
+                  “{row.application.principleReason}”
+                </p>
+              )}
+              <Field label="Referred by" value={row.application.referredBy} />
+              {row.application.skills && (
+                <Field label="Skills (app)" value={row.application.skills} />
+              )}
+              {row.application.videoUrl && (
+                <Field
+                  label="Video"
+                  value={
+                    <a
+                      href={row.application.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-pink-400 hover:underline"
+                    >
+                      <Video className="h-3.5 w-3.5" />
+                      Watch
+                    </a>
+                  }
+                />
+              )}
+            </Section>
+          )}
+
+          {row.status !== "cancelled" && (
+            <div className="border-t border-white/10 pt-3">
+              <Button
+                variant="ghost"
+                className="text-red-400/80 hover:bg-red-500/10 hover:text-red-300"
+                onClick={() => onCancelRegistration(row)}
+              >
+                <Ban className="mr-2 h-4 w-4" />
+                Cancel registration
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Main ─────────────────────────────────────────────────────────────
+
 export default function ReportsClient() {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -140,7 +465,7 @@ export default function ReportsClient() {
   const [statusFilter, setStatusFilter] = useState<RosterFilter>("all");
   const [appSearch, setAppSearch] = useState("");
   const [appStatusFilter, setAppStatusFilter] = useState<string>("all");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [detailRow, setDetailRow] = useState<ReportRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<ReportRow | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
@@ -188,6 +513,7 @@ export default function ReportsClient() {
       }.`
     );
     setCancelTarget(null);
+    setDetailRow(null);
     await loadRoster();
   }
 
@@ -224,26 +550,6 @@ export default function ReportsClient() {
     (a) => a.status === "waitlist"
   ).length;
 
-  const statusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      confirmed: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-      pending: "bg-amber/15 text-amber border-amber/20",
-      waitlisted: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-      waitlist: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-      cancelled: "bg-red-500/15 text-red-400 border-red-500/20",
-      approved: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-      rejected: "bg-red-500/15 text-red-400 border-red-500/20",
-    };
-    return (
-      <Badge
-        variant="outline"
-        className={styles[status] || "bg-sand-500/15 text-sand-400"}
-      >
-        {status}
-      </Badge>
-    );
-  };
-
   if (loading) {
     return (
       <div className="space-y-8">
@@ -269,8 +575,7 @@ export default function ReportsClient() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-3xl font-bold text-sand-100">Reports</h1>
         <p className="mt-1 text-sand-400">
-          NODE 2026 roster — who&apos;s in, what they&apos;ve reserved, and what
-          they owe.
+          NODE 2026 roster — tap anyone to see everything they&apos;ve told us.
         </p>
       </motion.div>
 
@@ -401,84 +706,99 @@ export default function ReportsClient() {
                 </div>
               </div>
 
-              <Card className="glass-card border-0 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-amber/10 hover:bg-transparent">
-                        <TableHead className="text-sand-400 w-8"></TableHead>
-                        <TableHead className="text-sand-400">Name</TableHead>
-                        <TableHead className="text-sand-400">Status</TableHead>
-                        <TableHead className="text-sand-400 text-center">
-                          Ticket
-                        </TableHead>
-                        <TableHead className="text-sand-400 text-center">
-                          Travel
-                        </TableHead>
-                        <TableHead className="text-sand-400 hidden md:table-cell">
-                          Dates
-                        </TableHead>
-                        {isSuperAdmin && (
-                          <>
-                            <TableHead className="text-sand-400 hidden lg:table-cell">
-                              Dues
+              {filteredRows.length === 0 ? (
+                <Card className="glass-card border-0">
+                  <CardContent className="py-10 text-center text-sand-500">
+                    {rows.length === 0
+                      ? "No registrations for 2026 yet."
+                      : "No results match your filters."}
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  {/* Mobile: stacked cards */}
+                  <div className="space-y-2 md:hidden">
+                    {filteredRows.map((r) => (
+                      <button
+                        key={r.registrationId}
+                        onClick={() => setDetailRow(r)}
+                        className="flex w-full items-center gap-3 rounded-xl border border-amber/10 bg-blue-950/30 px-4 py-3 text-left transition-colors hover:bg-amber/5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-sand-100">
+                            {r.name}
+                            {r.playaName ? (
+                              <span className="ml-1 text-xs text-sand-500">
+                                “{r.playaName}”
+                              </span>
+                            ) : null}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-sand-400">
+                            {statusBadge(r.status)}
+                            <span className="inline-flex items-center gap-1">
+                              <TicketIcon has={r.hasTicket} />
+                              <TravelCell value={r.carPass} />
+                            </span>
+                            <span className="whitespace-nowrap">
+                              {fmtDate(r.arrivalDate)} → {fmtDate(r.departureDate)}
+                            </span>
+                            {isSuperAdmin && r.balanceCents > 0 && (
+                              <span className="text-red-400">
+                                {money(r.balanceCents)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-sand-500" />
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <Card className="glass-card border-0 overflow-hidden hidden md:block">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-amber/10 hover:bg-transparent">
+                            <TableHead className="text-sand-400">Name</TableHead>
+                            <TableHead className="text-sand-400">Status</TableHead>
+                            <TableHead className="text-sand-400 text-center">
+                              Ticket
                             </TableHead>
+                            <TableHead className="text-sand-400 text-center">
+                              Travel
+                            </TableHead>
+                            <TableHead className="text-sand-400">Dates</TableHead>
                             <TableHead className="text-sand-400 hidden lg:table-cell">
                               Storage
                             </TableHead>
-                          </>
-                        )}
-                        <TableHead className="text-sand-400 hidden lg:table-cell">
-                          Gear
-                        </TableHead>
-                        <TableHead className="text-sand-400 hidden xl:table-cell">
-                          Jobs
-                        </TableHead>
-                        {isSuperAdmin && (
-                          <TableHead className="text-sand-400">Balance</TableHead>
-                        )}
-                        <TableHead className="text-sand-400 text-right">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredRows.length === 0 ? (
-                        <TableRow className="border-amber/10">
-                          <TableCell
-                            colSpan={isSuperAdmin ? 12 : 9}
-                            className="py-8 text-center text-sand-500"
-                          >
-                            {rows.length === 0
-                              ? "No registrations for 2026 yet."
-                              : "No results match your filters."}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredRows.map((r) => {
-                          const isOpen = expanded === r.registrationId;
-                          const cancelled = r.status === "cancelled";
-                          return (
-                            <Fragment key={r.registrationId}>
-                              <TableRow className="border-amber/10 hover:bg-amber/5">
-                                <TableCell className="align-top">
-                                  <button
-                                    onClick={() =>
-                                      setExpanded(
-                                        isOpen ? null : r.registrationId
-                                      )
-                                    }
-                                    className="text-sand-500 hover:text-sand-200"
-                                    aria-label={isOpen ? "Collapse" : "Expand"}
-                                  >
-                                    {isOpen ? (
-                                      <ChevronDown className="h-4 w-4" />
-                                    ) : (
-                                      <ChevronRight className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                </TableCell>
-                                <TableCell className="text-sand-200 font-medium">
+                            <TableHead className="text-sand-400 hidden lg:table-cell">
+                              Gear
+                            </TableHead>
+                            <TableHead className="text-sand-400 hidden lg:table-cell">
+                              Jobs
+                            </TableHead>
+                            {isSuperAdmin && (
+                              <TableHead className="text-sand-400">Balance</TableHead>
+                            )}
+                            <TableHead className="text-sand-400 text-right">
+                              Details
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredRows.map((r) => {
+                            const gear = r.equipment.items.reduce(
+                              (n, it) => n + it.quantity,
+                              0
+                            );
+                            return (
+                              <TableRow
+                                key={r.registrationId}
+                                className="cursor-pointer border-amber/10 hover:bg-amber/5"
+                                onClick={() => setDetailRow(r)}
+                              >
+                                <TableCell className="font-medium text-sand-200">
                                   {r.name}
                                   {r.playaName ? (
                                     <span className="ml-1 text-xs text-sand-500">
@@ -488,57 +808,26 @@ export default function ReportsClient() {
                                 </TableCell>
                                 <TableCell>{statusBadge(r.status)}</TableCell>
                                 <TableCell className="text-center">
-                                  {r.hasTicket ? (
-                                    <CheckCircle2
-                                      className="inline h-4 w-4 text-emerald-400"
-                                      aria-label="Has ticket"
-                                    />
-                                  ) : (
-                                    <XCircle
-                                      className="inline h-4 w-4 text-sand-600"
-                                      aria-label="No ticket"
-                                    />
-                                  )}
+                                  <TicketIcon has={r.hasTicket} />
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <TravelCell value={r.carPass} />
                                 </TableCell>
-                                <TableCell className="text-sand-300 text-sm hidden md:table-cell whitespace-nowrap">
+                                <TableCell className="whitespace-nowrap text-sm text-sand-300">
                                   {fmtDate(r.arrivalDate)} → {fmtDate(r.departureDate)}
                                 </TableCell>
-                                {isSuperAdmin && (
-                                  <>
-                                    <TableCell className="text-sm hidden lg:table-cell text-sand-300">
-                                      {r.dues.totalCents > 0 ? (
-                                        money(r.dues.totalCents)
-                                      ) : (
-                                        <span className="text-sand-600">—</span>
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="text-sm hidden lg:table-cell">
-                                      <BalanceCell
-                                        owed={r.storage.owedCents}
-                                        paid={r.storage.paidCents}
-                                      />
-                                    </TableCell>
-                                  </>
-                                )}
-                                <TableCell className="text-sm hidden lg:table-cell text-sand-300">
-                                  {r.equipment.items.length > 0
-                                    ? `${r.equipment.items.reduce(
+                                <TableCell className="hidden text-sm text-sand-300 lg:table-cell">
+                                  {r.storage.items.length > 0
+                                    ? `${r.storage.items.reduce(
                                         (n, it) => n + it.quantity,
                                         0
-                                      )} item${
-                                        r.equipment.items.reduce(
-                                          (n, it) => n + it.quantity,
-                                          0
-                                        ) === 1
-                                          ? ""
-                                          : "s"
-                                      }`
+                                      )} item(s)`
                                     : "—"}
                                 </TableCell>
-                                <TableCell className="text-sm hidden xl:table-cell text-sand-300">
+                                <TableCell className="hidden text-sm text-sand-300 lg:table-cell">
+                                  {gear > 0 ? `${gear} item(s)` : "—"}
+                                </TableCell>
+                                <TableCell className="hidden text-sm text-sand-300 lg:table-cell">
                                   {r.jobs.shiftCount > 0
                                     ? `${r.jobs.points} pts`
                                     : "—"}
@@ -557,113 +846,17 @@ export default function ReportsClient() {
                                   </TableCell>
                                 )}
                                 <TableCell className="text-right">
-                                  {!cancelled && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      title="Cancel registration"
-                                      aria-label="Cancel registration"
-                                      className="h-8 w-8 text-red-400/80 hover:bg-red-500/10 hover:text-red-300"
-                                      onClick={() => setCancelTarget(r)}
-                                    >
-                                      <Ban className="h-4 w-4" />
-                                    </Button>
-                                  )}
+                                  <ChevronRight className="inline h-4 w-4 text-sand-500" />
                                 </TableCell>
                               </TableRow>
-
-                              {isOpen && (
-                                <TableRow className="border-amber/10 bg-blue-950/20 hover:bg-blue-950/20">
-                                  <TableCell colSpan={isSuperAdmin ? 12 : 9} className="py-4">
-                                    <div className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                                      <div>
-                                        <p className="text-xs uppercase tracking-wide text-sand-500">
-                                          Contact
-                                        </p>
-                                        <p className="mt-1 text-sand-300">
-                                          {r.email ?? "—"}
-                                        </p>
-                                        <p className="mt-2 flex items-center gap-3 text-xs text-sand-400">
-                                          <span className="inline-flex items-center gap-1">
-                                            <Ticket className="h-3.5 w-3.5" />
-                                            {r.hasTicket ? "Ticket" : "No ticket"}
-                                          </span>
-                                          <span className="inline-flex items-center gap-1">
-                                            <TravelCell value={r.carPass} />
-                                            {TRAVEL_LABEL[r.carPass] ?? "Not answered"}
-                                          </span>
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-xs uppercase tracking-wide text-sand-500">
-                                          Storage
-                                        </p>
-                                        <p className="mt-1 text-sand-300">
-                                          {r.storage.summary ?? "No items stored"}
-                                        </p>
-                                        {isSuperAdmin && r.storage.owedCents > 0 && (
-                                          <p className="mt-1 text-xs text-red-400">
-                                            {money(r.storage.owedCents)} owed
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <p className="text-xs uppercase tracking-wide text-sand-500">
-                                          Gear reserved
-                                        </p>
-                                        {r.equipment.items.length > 0 ? (
-                                          <ul className="mt-1 space-y-0.5 text-sand-300">
-                                            {r.equipment.items.map((it, idx) => (
-                                              <li key={idx}>
-                                                {it.quantity}× {it.label}
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        ) : (
-                                          <p className="mt-1 text-sand-500">—</p>
-                                        )}
-                                        {isSuperAdmin && r.equipment.owedCents > 0 && (
-                                          <p className="mt-1 text-xs text-red-400">
-                                            {money(r.equipment.owedCents)} owed
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <p className="text-xs uppercase tracking-wide text-sand-500">
-                                          Dues &amp; jobs
-                                        </p>
-                                        {isSuperAdmin && (
-                                          <p className="mt-1 text-sand-300">
-                                            Dues:{" "}
-                                            {r.dues.totalCents > 0
-                                              ? `${money(r.dues.totalCents)}${
-                                                  r.dues.owedCents > 0
-                                                    ? ` · ${money(r.dues.owedCents)} left`
-                                                    : " · paid"
-                                                }`
-                                              : "not started"}
-                                          </p>
-                                        )}
-                                        <p className="mt-1 text-sand-300">
-                                          {r.jobs.shiftCount > 0
-                                            ? `${r.jobs.shiftCount} shift${
-                                                r.jobs.shiftCount === 1 ? "" : "s"
-                                              } · ${r.jobs.points} pts`
-                                            : "No shifts signed up"}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              )}
-                            </Fragment>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </Card>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </Card>
+                </>
+              )}
 
               <p className="text-xs text-sand-500">
                 Showing {filteredRows.length} of {rows.length} registrations
@@ -752,16 +945,13 @@ export default function ReportsClient() {
                     <TableHead className="text-sand-400 hidden lg:table-cell">
                       Applied
                     </TableHead>
-                    <TableHead className="text-sand-400 hidden lg:table-cell">
-                      Reviewed
-                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredApplications.length === 0 ? (
                     <TableRow className="border-amber/10">
                       <TableCell
-                        colSpan={6}
+                        colSpan={5}
                         className="py-8 text-center text-sand-500"
                       >
                         {applications.length === 0
@@ -788,11 +978,6 @@ export default function ReportsClient() {
                         <TableCell className="text-sand-400 text-xs hidden lg:table-cell">
                           {new Date(a.created_at).toLocaleDateString()}
                         </TableCell>
-                        <TableCell className="text-sand-400 text-xs hidden lg:table-cell">
-                          {a.reviewed_at
-                            ? new Date(a.reviewed_at).toLocaleDateString()
-                            : "—"}
-                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -807,6 +992,14 @@ export default function ReportsClient() {
           </p>
         </TabsContent>
       </Tabs>
+
+      {/* Per-camper detail */}
+      <DetailModal
+        row={detailRow}
+        isSuperAdmin={isSuperAdmin}
+        onClose={() => setDetailRow(null)}
+        onCancelRegistration={(r) => setCancelTarget(r)}
+      />
 
       {/* Cancel confirmation */}
       <Dialog
@@ -828,35 +1021,6 @@ export default function ReportsClient() {
               manually in Stripe if needed.
             </DialogDescription>
           </DialogHeader>
-
-          {cancelTarget && (
-            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-sand-300">
-              {cancelTarget.equipment.items.length > 0 ? (
-                <p>
-                  Frees{" "}
-                  <span className="text-sand-100">
-                    {cancelTarget.equipment.items.reduce(
-                      (n, it) => n + it.quantity,
-                      0
-                    )}{" "}
-                    gear item(s)
-                  </span>{" "}
-                  back to inventory.
-                </p>
-              ) : (
-                <p>No reserved gear to release.</p>
-              )}
-              {cancelTarget.balanceCents > 0 ? (
-                <p className="mt-1">
-                  Voids{" "}
-                  <span className="text-sand-100">
-                    {money(cancelTarget.balanceCents)}
-                  </span>{" "}
-                  in unpaid balance.
-                </p>
-              ) : null}
-            </div>
-          )}
 
           <div className="flex gap-3 pt-1">
             <Button
