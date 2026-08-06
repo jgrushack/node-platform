@@ -19,7 +19,15 @@ import {
   Phone,
   Instagram,
   Video,
+  Download,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -60,6 +68,16 @@ interface ApplicationRow {
 }
 
 type RosterFilter = "all" | "paid" | "partial" | "unpaid" | "cancelled";
+type TicketFilter = "any" | "yes" | "no";
+type TravelFilter =
+  | "any"
+  | "car_pass_parking"
+  | "ride_sorted"
+  | "ride_unsorted"
+  | "burner_express"
+  | "no";
+type JobsFilter = "any" | "none" | "some";
+type DatesFilter = "any" | "set" | "unset" | "reno";
 
 const money = (cents: number) =>
   (cents / 100).toLocaleString("en-US", {
@@ -482,6 +500,10 @@ export default function ReportsClient() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<RosterFilter>("all");
+  const [ticketFilter, setTicketFilter] = useState<TicketFilter>("any");
+  const [travelFilter, setTravelFilter] = useState<TravelFilter>("any");
+  const [jobsFilter, setJobsFilter] = useState<JobsFilter>("any");
+  const [datesFilter, setDatesFilter] = useState<DatesFilter>("any");
   const [appSearch, setAppSearch] = useState("");
   const [appStatusFilter, setAppStatusFilter] = useState<string>("all");
   const [detailRow, setDetailRow] = useState<ReportRow | null>(null);
@@ -548,8 +570,75 @@ export default function ReportsClient() {
         ? r.status === "cancelled"
         : r.status !== "cancelled" &&
           (statusFilter === "all" || r.duesStatus === statusFilter);
-    return matchesSearch && matchesStatus;
+    const matchesTicket =
+      ticketFilter === "any" || r.hasTicket === (ticketFilter === "yes");
+    const matchesTravel = travelFilter === "any" || r.carPass === travelFilter;
+    const matchesJobs =
+      jobsFilter === "any" ||
+      (jobsFilter === "none" ? r.jobs.shiftCount === 0 : r.jobs.shiftCount > 0);
+    const matchesDates =
+      datesFilter === "any" ||
+      (datesFilter === "set"
+        ? !!r.arrivalDate
+        : datesFilter === "unset"
+          ? !r.arrivalDate
+          : !!r.renoArrivalDate);
+    return (
+      matchesSearch && matchesStatus && matchesTicket && matchesTravel && matchesJobs && matchesDates
+    );
   });
+
+  // Chip counts: dues states over the active roster, cancelled separately.
+  const activeRows = rows.filter((r) => r.status !== "cancelled");
+  const chipCount = (s: RosterFilter) =>
+    s === "all"
+      ? activeRows.length
+      : s === "cancelled"
+        ? rows.length - activeRows.length
+        : activeRows.filter((r) => r.duesStatus === s).length;
+
+  function exportCsv() {
+    const esc = (v: string | number | null) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = [
+      "Name", "Playa name", "Email", "Status", "Dues", "Ticket", "Travel",
+      "Arrival", "Departure", "Reno arrival", "Storage items", "Gear items",
+      "Job shifts", "Job points",
+      ...(isSuperAdmin ? ["Balance owed ($)"] : []),
+    ];
+    const lines = filteredRows.map((r) =>
+      [
+        r.name,
+        r.playaName,
+        r.email,
+        r.status,
+        r.duesStatus,
+        r.hasTicket ? "yes" : "no",
+        TRAVEL_LABEL[r.carPass] ?? r.carPass,
+        r.arrivalDate,
+        r.departureDate,
+        r.renoArrivalDate,
+        r.storage.items.reduce((n, it) => n + it.quantity, 0),
+        r.equipment.items.reduce((n, it) => n + it.quantity, 0),
+        r.jobs.shiftCount,
+        r.jobs.points,
+        ...(isSuperAdmin ? [(r.balanceCents / 100).toFixed(2)] : []),
+      ]
+        .map(esc)
+        .join(",")
+    );
+    const blob = new Blob([[header.join(","), ...lines].join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "node-2026-roster.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const filteredApplications = applications.filter((a) => {
     const matchesSearch =
@@ -724,10 +813,80 @@ export default function ReportsClient() {
                           : "text-sand-400 hover:bg-amber/5 hover:text-sand-200"
                       }`}
                     >
-                      {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+                      {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}{" "}
+                      ({chipCount(s)})
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Facet filters + export */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={ticketFilter}
+                  onValueChange={(v) => setTicketFilter(v as TicketFilter)}
+                >
+                  <SelectTrigger className="h-8 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Ticket: any</SelectItem>
+                    <SelectItem value="yes">Has ticket</SelectItem>
+                    <SelectItem value="no">No ticket</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={travelFilter}
+                  onValueChange={(v) => setTravelFilter(v as TravelFilter)}
+                >
+                  <SelectTrigger className="h-8 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Travel: any</SelectItem>
+                    <SelectItem value="ride_unsorted">Needs a ride</SelectItem>
+                    <SelectItem value="ride_sorted">Ride sorted</SelectItem>
+                    <SelectItem value="car_pass_parking">Car pass</SelectItem>
+                    <SelectItem value="burner_express">Burner Express</SelectItem>
+                    <SelectItem value="no">Not answered</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={jobsFilter}
+                  onValueChange={(v) => setJobsFilter(v as JobsFilter)}
+                >
+                  <SelectTrigger className="h-8 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Jobs: any</SelectItem>
+                    <SelectItem value="none">No shifts</SelectItem>
+                    <SelectItem value="some">Has shifts</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={datesFilter}
+                  onValueChange={(v) => setDatesFilter(v as DatesFilter)}
+                >
+                  <SelectTrigger className="h-8 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Dates: any</SelectItem>
+                    <SelectItem value="unset">Dates not set</SelectItem>
+                    <SelectItem value="set">Dates set</SelectItem>
+                    <SelectItem value="reno">Lands in Reno</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-8 text-xs text-sand-400 hover:text-sand-200"
+                  onClick={exportCsv}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Export CSV ({filteredRows.length})
+                </Button>
               </div>
 
               {filteredRows.length === 0 ? (
