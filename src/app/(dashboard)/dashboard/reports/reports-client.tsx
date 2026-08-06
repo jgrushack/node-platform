@@ -490,6 +490,258 @@ function DetailModal({
   );
 }
 
+// ── Arrivals tab ─────────────────────────────────────────────────────
+
+// Camp window: Reno landings start Aug 24, strike ends Sep 7.
+const SCHEDULE_DAYS: string[] = (() => {
+  const out: string[] = [];
+  const d = new Date("2026-08-24T12:00:00");
+  for (let i = 0; i < 15; i++) {
+    out.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+})();
+
+const weekday = (day: string) =>
+  new Date(`${day}T12:00:00`)
+    .toLocaleDateString("en-US", { weekday: "short" })
+    .slice(0, 2);
+
+// Validated against the blue-950 glass surface (dataviz six-check palette run).
+const CHART = {
+  playa: "#db2777",
+  reno: "#0284c7",
+  camp: "#d97706",
+};
+
+function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [showNoDates, setShowNoDates] = useState(false);
+
+  const active = rows.filter((r) => r.status !== "cancelled");
+  const arrivalsByDay = new Map<string, ReportRow[]>();
+  const renoByDay = new Map<string, ReportRow[]>();
+  active.forEach((r) => {
+    if (r.arrivalDate)
+      arrivalsByDay.set(r.arrivalDate, [
+        ...(arrivalsByDay.get(r.arrivalDate) ?? []),
+        r,
+      ]);
+    if (r.renoArrivalDate)
+      renoByDay.set(r.renoArrivalDate, [
+        ...(renoByDay.get(r.renoArrivalDate) ?? []),
+        r,
+      ]);
+  });
+  // Null departure = assume they stay through strike.
+  const inCamp = SCHEDULE_DAYS.map(
+    (day) =>
+      active.filter(
+        (r) =>
+          r.arrivalDate &&
+          r.arrivalDate <= day &&
+          day <= (r.departureDate ?? "2026-09-07")
+      ).length
+  );
+  const noDates = active.filter((r) => !r.arrivalDate);
+
+  const maxArrivals = Math.max(
+    1,
+    ...SCHEDULE_DAYS.map((d) =>
+      Math.max(arrivalsByDay.get(d)?.length ?? 0, renoByDay.get(d)?.length ?? 0)
+    )
+  );
+  const maxCamp = Math.max(1, ...inCamp);
+  const peakCampDay = SCHEDULE_DAYS[inCamp.indexOf(maxCamp)];
+
+  const selArrivals = selectedDay ? arrivalsByDay.get(selectedDay) ?? [] : [];
+  const selReno = selectedDay ? renoByDay.get(selectedDay) ?? [] : [];
+
+  const phase = (day: string) =>
+    day < "2026-08-26"
+      ? "pre"
+      : day < "2026-08-30"
+        ? "build"
+        : day < "2026-09-05"
+          ? "event"
+          : "strike";
+
+  return (
+    <div className="space-y-4">
+      {/* Arrivals per day */}
+      <Card className="glass-card border-0">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-sand-300">
+            Arrivals by day
+          </CardTitle>
+          <div className="flex flex-wrap items-center gap-4 text-xs text-sand-400">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-sm"
+                style={{ background: CHART.playa }}
+              />
+              Rolling into BRC
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-sm"
+                style={{ background: CHART.reno }}
+              />
+              Landing in Reno
+            </span>
+            {noDates.length > 0 && (
+              <button
+                onClick={() => setShowNoDates((v) => !v)}
+                className="text-amber hover:underline"
+              >
+                {noDates.length} with no dates yet
+              </button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {showNoDates && (
+            <p className="mb-3 rounded-lg border border-amber/15 bg-amber/5 px-3 py-2 text-xs text-sand-300">
+              {noDates.map((r) => r.name).join(", ")}
+            </p>
+          )}
+          <div className="flex items-end gap-1 overflow-x-auto pb-1">
+            {SCHEDULE_DAYS.map((day) => {
+              const a = arrivalsByDay.get(day)?.length ?? 0;
+              const rn = renoByDay.get(day)?.length ?? 0;
+              const selected = selectedDay === day;
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDay(selected ? null : day)}
+                  title={`${fmtDate(day)} — ${a} arriving, ${rn} landing in Reno`}
+                  className={`group flex min-w-9 flex-1 flex-col items-center rounded-lg pt-1 transition-colors ${
+                    selected ? "bg-amber/10" : "hover:bg-amber/5"
+                  }`}
+                >
+                  <div className="flex h-28 w-full items-end justify-center gap-0.5">
+                    {[
+                      { n: a, color: CHART.playa },
+                      { n: rn, color: CHART.reno },
+                    ].map(({ n, color }, i) => (
+                      <div key={i} className="flex w-2.5 flex-col items-center justify-end self-stretch">
+                        {n > 0 && (
+                          <>
+                            <span className="mb-0.5 text-[10px] leading-none text-sand-400">
+                              {n}
+                            </span>
+                            <div
+                              className="w-full rounded-t"
+                              style={{
+                                background: color,
+                                height: `${(n / maxArrivals) * 88}%`,
+                                minHeight: 4,
+                              }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <span
+                    className={`mt-1 text-[10px] leading-none ${
+                      phase(day) === "build"
+                        ? "text-amber"
+                        : phase(day) === "strike"
+                          ? "text-red-400"
+                          : "text-sand-500"
+                    }`}
+                  >
+                    {weekday(day)}
+                  </span>
+                  <span className="text-[10px] text-sand-500">
+                    {day.slice(8).replace(/^0/, "")}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-sand-500">
+            <span className="text-amber">Build Aug 26–29</span> · Opening Aug 30
+            · <span className="text-red-400">Strike Sep 5–7</span>
+          </p>
+
+          {selectedDay && (
+            <div className="mt-3 space-y-2 rounded-lg border border-amber/10 bg-blue-950/30 px-3 py-2.5 text-sm">
+              <p className="font-medium text-sand-200">{fmtDate(selectedDay)}</p>
+              <p className="text-sand-300">
+                <span style={{ color: CHART.playa }}>●</span>{" "}
+                {selArrivals.length > 0
+                  ? `Arriving: ${selArrivals.map((r) => r.name).join(", ")}`
+                  : "No one rolling in"}
+              </p>
+              <p className="text-sand-300">
+                <span style={{ color: CHART.reno }}>●</span>{" "}
+                {selReno.length > 0
+                  ? `Landing in Reno: ${selReno.map((r) => r.name).join(", ")}`
+                  : "No Reno landings"}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Camp population */}
+      <Card className="glass-card border-0">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-sand-300">
+            In camp each day
+          </CardTitle>
+          <p className="text-xs text-sand-500">
+            Campers with dates, arrival through departure (no departure = stays
+            for strike)
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-1 overflow-x-auto pb-1">
+            {SCHEDULE_DAYS.map((day, i) => (
+              <div
+                key={day}
+                title={`${fmtDate(day)} — ${inCamp[i]} in camp`}
+                className="group flex min-w-9 flex-1 flex-col items-center rounded-lg pt-1 hover:bg-amber/5"
+              >
+                <div className="flex h-24 w-full flex-col items-center justify-end">
+                  {(day === peakCampDay || inCamp[i] === 0) && (
+                    <span className="mb-0.5 text-[10px] leading-none text-sand-400">
+                      {inCamp[i]}
+                    </span>
+                  )}
+                  {inCamp[i] > 0 && (
+                    <div
+                      className="w-2.5 rounded-t"
+                      style={{
+                        background: CHART.camp,
+                        height: `${(inCamp[i] / maxCamp) * 88}%`,
+                        minHeight: 4,
+                      }}
+                    />
+                  )}
+                </div>
+                <span className="mt-1 text-[10px] leading-none text-sand-500">
+                  {weekday(day)}
+                </span>
+                <span className="text-[10px] text-sand-500">
+                  {day.slice(8).replace(/^0/, "")}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-sand-500">
+            Peak: {maxCamp} campers on {fmtDate(peakCampDay)} · hover any day
+            for its count
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── Main ─────────────────────────────────────────────────────────────
 
 export default function ReportsClient() {
@@ -763,6 +1015,12 @@ export default function ReportsClient() {
             className="data-[state=active]:bg-amber/15 data-[state=active]:text-amber text-sand-400"
           >
             Roster
+          </TabsTrigger>
+          <TabsTrigger
+            value="arrivals"
+            className="data-[state=active]:bg-amber/15 data-[state=active]:text-amber text-sand-400"
+          >
+            Arrivals
           </TabsTrigger>
           <TabsTrigger
             value="applications"
@@ -1045,6 +1303,19 @@ export default function ReportsClient() {
                 Showing {filteredRows.length} of {rows.length} registrations
               </p>
             </>
+          )}
+        </TabsContent>
+
+        {/* Arrivals tab */}
+        <TabsContent value="arrivals" className="mt-6">
+          {rosterError ? (
+            <Card className="glass-card border-0">
+              <CardContent className="py-10 text-center text-sand-400">
+                Admin access required to view arrivals.
+              </CardContent>
+            </Card>
+          ) : (
+            <ArrivalsTab rows={rows} />
           )}
         </TabsContent>
 
