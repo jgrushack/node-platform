@@ -39,6 +39,8 @@ async function requireAdmin(): Promise<
 
 export type StorageItemLine = { type: string; quantity: number; labels: string[] };
 
+export type DuesStatus = "paid" | "partial" | "unpaid";
+
 export type ReportRow = {
   registrationId: string;
   profileId: string;
@@ -51,8 +53,11 @@ export type ReportRow = {
   carPass: string;
   arrivalDate: string | null;
   departureDate: string | null;
+  renoArrivalDate: string | null;
   /** Full dues obligation (the tier), owed = remaining. Super-admin only (else 0). */
   dues: { totalCents: number; owedCents: number; paidCents: number };
+  /** Yes/no/partial dues payment — visible to all admins (no amounts). */
+  duesStatus: DuesStatus;
   storage: {
     owedCents: number;
     paidCents: number;
@@ -143,7 +148,7 @@ export async function getCampReport(): Promise<CampReportResult> {
     admin
       .from("registrations")
       .select(
-        "id, profile_id, status, has_ticket, has_car_pass, arrival_date, departure_date"
+        "id, profile_id, status, has_ticket, has_car_pass, arrival_date, departure_date, reno_arrival_date"
       )
       .eq("camp_year_id", campYearId),
     admin
@@ -168,6 +173,7 @@ export async function getCampReport(): Promise<CampReportResult> {
     has_car_pass: string | null;
     arrival_date: string | null;
     departure_date: string | null;
+    reno_arrival_date: string | null;
   };
   const registrations = (regsRes.data ?? []) as RegRow[];
   const profileIds = Array.from(new Set(registrations.map((r) => r.profile_id)));
@@ -382,12 +388,19 @@ export async function getCampReport(): Promise<CampReportResult> {
       carPass: r.has_car_pass ?? "no",
       arrivalDate: r.arrival_date,
       departureDate: r.departure_date,
+      renoArrivalDate: r.reno_arrival_date,
       formsStarted: hasAnyInvoice || !!prof?.storageDone,
       dues: {
         totalCents: dues.owed + dues.paid,
         owedCents: dues.owed,
         paidCents: dues.paid,
       },
+      duesStatus:
+        dues.paid > 0 && dues.owed === 0
+          ? ("paid" as const)
+          : dues.paid > 0
+            ? ("partial" as const)
+            : ("unpaid" as const),
       storage: {
         owedCents: storage.owed,
         paidCents: storage.paid,

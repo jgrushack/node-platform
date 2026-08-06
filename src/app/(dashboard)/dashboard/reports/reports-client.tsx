@@ -59,7 +59,7 @@ interface ApplicationRow {
   reviewed_at: string | null;
 }
 
-type RosterFilter = "all" | "confirmed" | "pending" | "waitlisted" | "cancelled";
+type RosterFilter = "all" | "paid" | "partial" | "unpaid" | "cancelled";
 
 const money = (cents: number) =>
   (cents / 100).toLocaleString("en-US", {
@@ -146,6 +146,22 @@ function statusBadge(status: string) {
       className={styles[status] || "bg-sand-500/15 text-sand-400"}
     >
       {status}
+    </Badge>
+  );
+}
+
+/** Dues payment badge; cancelled registrations keep their status badge. */
+function duesBadge(row: ReportRow) {
+  if (row.status === "cancelled") return statusBadge(row.status);
+  const styles: Record<ReportRow["duesStatus"], [string, string]> = {
+    paid: ["Paid", "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"],
+    partial: ["Partial", "bg-amber/15 text-amber border-amber/20"],
+    unpaid: ["Unpaid", "bg-red-500/15 text-red-400 border-red-500/20"],
+  };
+  const [label, className] = styles[row.duesStatus];
+  return (
+    <Badge variant="outline" className={className}>
+      {label}
     </Badge>
   );
 }
@@ -243,6 +259,9 @@ function DetailModal({
               label="Dates"
               value={`${fmtDate(row.arrivalDate)} → ${fmtDate(row.departureDate)}`}
             />
+            {row.renoArrivalDate && (
+              <Field label="Lands in Reno" value={fmtDate(row.renoArrivalDate)} />
+            )}
             {row.profile.phone && (
               <Field
                 label="Phone"
@@ -523,7 +542,11 @@ export default function ReportsClient() {
       [r.name, r.playaName, r.email]
         .filter(Boolean)
         .some((v) => v!.toLowerCase().includes(search.toLowerCase()));
-    const matchesStatus = statusFilter === "all" || r.status === statusFilter;
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "cancelled"
+        ? r.status === "cancelled"
+        : r.status !== "cancelled" && r.duesStatus === statusFilter);
     return matchesSearch && matchesStatus;
   });
 
@@ -685,9 +708,9 @@ export default function ReportsClient() {
                   {(
                     [
                       "all",
-                      "confirmed",
-                      "pending",
-                      "waitlisted",
+                      "paid",
+                      "partial",
+                      "unpaid",
                       "cancelled",
                     ] as RosterFilter[]
                   ).map((s) => (
@@ -734,7 +757,7 @@ export default function ReportsClient() {
                             ) : null}
                           </p>
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-sand-400">
-                            {statusBadge(r.status)}
+                            {duesBadge(r)}
                             <span className="inline-flex items-center gap-1">
                               <TicketIcon has={r.hasTicket} />
                               <TravelCell value={r.carPass} />
@@ -761,7 +784,7 @@ export default function ReportsClient() {
                         <TableHeader>
                           <TableRow className="border-amber/10 hover:bg-transparent">
                             <TableHead className="text-sand-400">Name</TableHead>
-                            <TableHead className="text-sand-400">Status</TableHead>
+                            <TableHead className="text-sand-400">Dues</TableHead>
                             <TableHead className="text-sand-400 text-center">
                               Ticket
                             </TableHead>
@@ -806,7 +829,7 @@ export default function ReportsClient() {
                                     </span>
                                   ) : null}
                                 </TableCell>
-                                <TableCell>{statusBadge(r.status)}</TableCell>
+                                <TableCell>{duesBadge(r)}</TableCell>
                                 <TableCell className="text-center">
                                   <TicketIcon has={r.hasTicket} />
                                 </TableCell>
