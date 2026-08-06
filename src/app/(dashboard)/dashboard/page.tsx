@@ -246,6 +246,7 @@ export default function DashboardPage() {
   const [storageInfo, setStorageInfo] = useState<GetStorageSurveyResult | null>(null);
   const [arrivalDate, setArrivalDate] = useState<string | null>(null);
   const [departureDate, setDepartureDate] = useState<string | null>(null);
+  const [renoArrivalDate, setRenoArrivalDate] = useState<string | null>(null);
   const [duesState, setDuesState] = useState<ChecklistState>("todo");
   const [duesProcessing, setDuesProcessing] = useState(false);
   const [showTicketTravelModal, setShowTicketTravelModal] = useState(false);
@@ -324,7 +325,7 @@ export default function DashboardPage() {
               // Check registration
               supabase
                 .from("registrations")
-                .select("status, has_ticket, has_car_pass, arrival_date, departure_date")
+                .select("status, has_ticket, has_car_pass, arrival_date, departure_date, reno_arrival_date")
                 .eq("profile_id", authUser.id)
                 .eq("camp_year_id", campYear.id)
                 .maybeSingle()
@@ -332,6 +333,7 @@ export default function DashboardPage() {
                   if (reg) {
                     setArrivalDate(reg.arrival_date ?? null);
                     setDepartureDate(reg.departure_date ?? null);
+                    setRenoArrivalDate(reg.reno_arrival_date ?? null);
                   }
                   if (reg && reg.status === "confirmed") {
                     setHasTicket(!!reg.has_ticket);
@@ -720,7 +722,7 @@ export default function DashboardPage() {
       icon: CalendarCheck,
       state: arrivalDate ? "done" : "todo",
       detail: arrivalDate
-        ? `Arriving ${formatDateShort(arrivalDate)}${departureDate ? ` – ${formatDateShort(departureDate)}` : ""}`
+        ? `${renoArrivalDate ? `Reno ${formatDateShort(renoArrivalDate)} · ` : ""}Arriving ${formatDateShort(arrivalDate)}${departureDate ? ` – ${formatDateShort(departureDate)}` : ""}`
         : "Set your playa dates",
       onClick: () => setShowArrivalModal(true),
     },
@@ -1539,9 +1541,11 @@ export default function DashboardPage() {
         open={showArrivalModal}
         initialArrival={arrivalDate}
         initialDeparture={departureDate}
-        onSaved={(a, d) => {
+        initialRenoArrival={renoArrivalDate}
+        onSaved={(a, d, rn) => {
           setArrivalDate(a);
           setDepartureDate(d);
+          setRenoArrivalDate(rn);
           setShowArrivalModal(false);
         }}
         onDismiss={() => setShowArrivalModal(false)}

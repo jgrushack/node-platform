@@ -41,6 +41,14 @@ const EVENT_DAYS: DayOption[] = [
 // No one arrives during strike (Sep 5–7), so arrival options stop at Sep 4.
 const ARRIVAL_EVENT_DAYS = EVENT_DAYS.slice(0, 6);
 
+// Reno landing options: fliers often land a day or two before rolling in.
+const RENO_DAYS: DayOption[] = [
+  { value: "2026-08-24", weekday: "Mon", label: "Aug 24" },
+  { value: "2026-08-25", weekday: "Tue", label: "Aug 25" },
+  ...BUILD_DAYS,
+  ...ARRIVAL_EVENT_DAYS,
+];
+
 // Nobody departs before Sep 2 — the earliest sensible leave day.
 const DEPARTURE_DAYS = EVENT_DAYS.filter((d) => d.value >= "2026-09-02");
 
@@ -48,7 +56,12 @@ interface Props {
   open: boolean;
   initialArrival?: string | null;
   initialDeparture?: string | null;
-  onSaved: (arrival: string | null, departure: string | null) => void;
+  initialRenoArrival?: string | null;
+  onSaved: (
+    arrival: string | null,
+    departure: string | null,
+    renoArrival: string | null
+  ) => void;
   onDismiss: () => void;
 }
 
@@ -88,11 +101,13 @@ export function ArrivalDatesModal({
   open,
   initialArrival,
   initialDeparture,
+  initialRenoArrival,
   onSaved,
   onDismiss,
 }: Props) {
-  const [step, setStep] = useState<"arrival" | "departure">("arrival");
+  const [step, setStep] = useState<"arrival" | "reno" | "departure">("arrival");
   const [arrival, setArrival] = useState(initialArrival ?? "");
+  const [reno, setReno] = useState(initialRenoArrival ?? "");
   const [departure, setDeparture] = useState(initialDeparture ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,25 +121,34 @@ export function ArrivalDatesModal({
     }
     setSaving(true);
     setError(null);
-    const res = await updateArrivalDates(arrival, departure || null);
+    const res = await updateArrivalDates(
+      arrival,
+      departure || null,
+      reno || null
+    );
     setSaving(false);
     if ("error" in res) {
       setError(res.error ?? "Couldn't save your dates. Try again.");
       return;
     }
-    onSaved(arrival, departure || null);
+    onSaved(arrival, departure || null, reno || null);
   }
 
   const isArrivalStep = step === "arrival";
-  const selected = isArrivalStep ? arrival : departure;
+  const isRenoStep = step === "reno";
+  const selected = isArrivalStep ? arrival : isRenoStep ? reno : departure;
 
   function pick(value: string) {
     setError(null);
     if (isArrivalStep) {
       setArrival(value);
-      // Keep departure consistent: a departure earlier than the new arrival
-      // no longer makes sense.
+      // Keep the other dates consistent with the new arrival: a departure
+      // before it or a Reno landing after it no longer makes sense.
       if (departure && value > departure) setDeparture("");
+      if (reno && value < reno) setReno("");
+    } else if (isRenoStep) {
+      // Tap the selected day again to clear it — Reno is optional.
+      setReno(value === reno ? "" : value);
     } else {
       setDeparture(value);
     }
@@ -136,12 +160,18 @@ export function ArrivalDatesModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sand-100">
             <CalendarCheck className="h-5 w-5 text-pink-400" />
-            {isArrivalStep ? "When are you arriving?" : "When are you leaving?"}
+            {isArrivalStep
+              ? "When are you arriving?"
+              : isRenoStep
+                ? "When do you land in Reno?"
+                : "When are you leaving?"}
           </DialogTitle>
           <DialogDescription className="text-sand-400">
             {isArrivalStep
               ? "Pick the day you’ll roll into Black Rock City."
-              : "Pick the day you’re heading home."}
+              : isRenoStep
+                ? "Flying in? Pick your Reno landing day — skip if you’re driving straight in."
+                : "Pick the day you’re heading home."}
           </DialogDescription>
         </DialogHeader>
 
@@ -183,6 +213,24 @@ export function ArrivalDatesModal({
                 </div>
               </div>
             </>
+          ) : isRenoStep ? (
+            /* Reno landing day — optional, never after the chosen playa arrival. */
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-sand-400">
+                Reno landing day
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {RENO_DAYS.map((d) => (
+                  <DayButton
+                    key={d.value}
+                    option={d}
+                    selected={selected === d.value}
+                    disabled={!!arrival && d.value > arrival}
+                    onClick={() => pick(d.value)}
+                  />
+                ))}
+              </div>
+            </div>
           ) : (
             /* Departure day — Sep 2 onward, and never before the chosen arrival. */
             <div className="space-y-2">
@@ -211,6 +259,14 @@ export function ArrivalDatesModal({
                 August 30 at 4:00 PM
               </span>
               .
+            </p>
+          ) : isRenoStep ? (
+            <p className="rounded-lg border border-sky-500/15 bg-sky-500/5 px-3 py-2 text-sm text-sand-300">
+              Knowing when people land helps us coordinate{" "}
+              <span className="font-semibold text-sand-100">
+                rides and supply runs
+              </span>{" "}
+              from Reno. Tap a selected day again to clear it.
             </p>
           ) : (
             <p className="rounded-lg border border-amber-500/15 bg-amber-500/5 px-3 py-2 text-sm text-sand-300">
@@ -246,10 +302,33 @@ export function ArrivalDatesModal({
                   disabled={!arrival}
                   onClick={() => {
                     setError(null);
-                    setStep("departure");
+                    setStep("reno");
                   }}
                 >
                   Next
+                </Button>
+              </>
+            ) : isRenoStep ? (
+              <>
+                <Button
+                  variant="ghost"
+                  className="text-sand-400 hover:text-sand-200"
+                  disabled={saving}
+                  onClick={() => {
+                    setError(null);
+                    setStep("arrival");
+                  }}
+                >
+                  Back
+                </Button>
+                <Button
+                  className="flex-1 bg-pink-500 text-white hover:bg-pink-600"
+                  onClick={() => {
+                    setError(null);
+                    setStep("departure");
+                  }}
+                >
+                  {reno ? "Next" : "Skip — driving in"}
                 </Button>
               </>
             ) : (
@@ -260,7 +339,7 @@ export function ArrivalDatesModal({
                   disabled={saving}
                   onClick={() => {
                     setError(null);
-                    setStep("arrival");
+                    setStep("reno");
                   }}
                 >
                   Back

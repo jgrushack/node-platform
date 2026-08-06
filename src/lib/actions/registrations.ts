@@ -164,15 +164,21 @@ export async function updateTicketAndCarPass(
 
 export async function updateArrivalDates(
   arrivalDate: string | null,
-  departureDate: string | null
+  departureDate: string | null,
+  renoArrivalDate: string | null = null
 ) {
   const a = arrivalDateSchema.safeParse(arrivalDate);
   const d = arrivalDateSchema.safeParse(departureDate);
-  if (!a.success || !d.success) return { error: "Invalid date." };
+  const rn = arrivalDateSchema.safeParse(renoArrivalDate);
+  if (!a.success || !d.success || !rn.success) return { error: "Invalid date." };
 
   // If both are present, arrival must not be after departure.
   if (arrivalDate && departureDate && arrivalDate > departureDate) {
     return { error: "Arrival can't be after departure." };
+  }
+  // Reno comes before the playa.
+  if (renoArrivalDate && arrivalDate && renoArrivalDate > arrivalDate) {
+    return { error: "Reno arrival can't be after your playa arrival." };
   }
 
   const supabase = await createClient();
@@ -196,7 +202,11 @@ export async function updateArrivalDates(
 
   const { error } = await supabase
     .from("registrations")
-    .update({ arrival_date: arrivalDate, departure_date: departureDate })
+    .update({
+      arrival_date: arrivalDate,
+      departure_date: departureDate,
+      reno_arrival_date: renoArrivalDate,
+    })
     .eq("profile_id", user.id)
     .eq("camp_year_id", campYear.id);
 
