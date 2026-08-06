@@ -542,11 +542,12 @@ export default function ReportsClient() {
       [r.name, r.playaName, r.email]
         .filter(Boolean)
         .some((v) => v!.toLowerCase().includes(search.toLowerCase()));
+    // "All" means the active roster — cancelled folks only show under their own chip.
     const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "cancelled"
+      statusFilter === "cancelled"
         ? r.status === "cancelled"
-        : r.status !== "cancelled" && r.duesStatus === statusFilter);
+        : r.status !== "cancelled" &&
+          (statusFilter === "all" || r.duesStatus === statusFilter);
     return matchesSearch && matchesStatus;
   });
 
