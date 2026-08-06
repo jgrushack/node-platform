@@ -206,6 +206,8 @@ export async function updateArrivalDates(
       arrival_date: arrivalDate,
       departure_date: departureDate,
       reno_arrival_date: renoArrivalDate,
+      // Saving the wizard means they saw the Reno step — null = "driving in".
+      reno_arrival_answered: true,
     })
     .eq("profile_id", user.id)
     .eq("camp_year_id", campYear.id);

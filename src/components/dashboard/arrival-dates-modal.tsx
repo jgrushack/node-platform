@@ -57,6 +57,8 @@ interface Props {
   initialArrival?: string | null;
   initialDeparture?: string | null;
   initialRenoArrival?: string | null;
+  /** Open on the Reno step — for re-prompting campers who set dates before it existed. */
+  startAtReno?: boolean;
   onSaved: (
     arrival: string | null,
     departure: string | null,
@@ -102,10 +104,13 @@ export function ArrivalDatesModal({
   initialArrival,
   initialDeparture,
   initialRenoArrival,
+  startAtReno,
   onSaved,
   onDismiss,
 }: Props) {
-  const [step, setStep] = useState<"arrival" | "reno" | "departure">("arrival");
+  const [step, setStep] = useState<"arrival" | "reno" | "departure">(
+    startAtReno && initialArrival ? "reno" : "arrival"
+  );
   const [arrival, setArrival] = useState(initialArrival ?? "");
   const [reno, setReno] = useState(initialRenoArrival ?? "");
   const [departure, setDeparture] = useState(initialDeparture ?? "");

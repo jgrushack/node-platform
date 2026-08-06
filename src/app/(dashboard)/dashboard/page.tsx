@@ -247,6 +247,8 @@ export default function DashboardPage() {
   const [arrivalDate, setArrivalDate] = useState<string | null>(null);
   const [departureDate, setDepartureDate] = useState<string | null>(null);
   const [renoArrivalDate, setRenoArrivalDate] = useState<string | null>(null);
+  const [renoAnswered, setRenoAnswered] = useState(true);
+  const [showRenoPrompt, setShowRenoPrompt] = useState(false);
   const [duesState, setDuesState] = useState<ChecklistState>("todo");
   const [duesProcessing, setDuesProcessing] = useState(false);
   const [showTicketTravelModal, setShowTicketTravelModal] = useState(false);
@@ -325,7 +327,7 @@ export default function DashboardPage() {
               // Check registration
               supabase
                 .from("registrations")
-                .select("status, has_ticket, has_car_pass, arrival_date, departure_date, reno_arrival_date")
+                .select("status, has_ticket, has_car_pass, arrival_date, departure_date, reno_arrival_date, reno_arrival_answered")
                 .eq("profile_id", authUser.id)
                 .eq("camp_year_id", campYear.id)
                 .maybeSingle()
@@ -334,6 +336,16 @@ export default function DashboardPage() {
                     setArrivalDate(reg.arrival_date ?? null);
                     setDepartureDate(reg.departure_date ?? null);
                     setRenoArrivalDate(reg.reno_arrival_date ?? null);
+                    setRenoAnswered(!!reg.reno_arrival_answered);
+                    // Dates set before the Reno step existed → re-prompt once per session.
+                    if (
+                      reg.status === "confirmed" &&
+                      reg.arrival_date &&
+                      !reg.reno_arrival_answered &&
+                      sessionStorage.getItem("renoPromptDismissed") !== "1"
+                    ) {
+                      setShowRenoPrompt(true);
+                    }
                   }
                   if (reg && reg.status === "confirmed") {
                     setHasTicket(!!reg.has_ticket);
@@ -720,9 +732,11 @@ export default function DashboardPage() {
       key: "arrival",
       label: "Arrival Dates",
       icon: CalendarCheck,
-      state: arrivalDate ? "done" : "todo",
+      state: arrivalDate && renoAnswered ? "done" : "todo",
       detail: arrivalDate
-        ? `${renoArrivalDate ? `Reno ${formatDateShort(renoArrivalDate)} · ` : ""}Arriving ${formatDateShort(arrivalDate)}${departureDate ? ` – ${formatDateShort(departureDate)}` : ""}`
+        ? renoAnswered
+          ? `${renoArrivalDate ? `Reno ${formatDateShort(renoArrivalDate)} · ` : ""}Arriving ${formatDateShort(arrivalDate)}${departureDate ? ` – ${formatDateShort(departureDate)}` : ""}`
+          : "Add your Reno landing day"
         : "Set your playa dates",
       onClick: () => setShowArrivalModal(true),
     },
@@ -750,11 +764,13 @@ export default function DashboardPage() {
     ? "storage"
     : showTicketSaleModal
       ? "ticket"
-      : showPasswordDialog
-        ? "password"
-        : showPwaPrompt
-          ? "pwa"
-          : null;
+      : showRenoPrompt
+        ? "reno"
+        : showPasswordDialog
+          ? "password"
+          : showPwaPrompt
+            ? "pwa"
+            : null;
 
   return (
     <div className="space-y-8">
@@ -1534,21 +1550,31 @@ export default function DashboardPage() {
         onDismiss={() => setShowStorageEdit(false)}
       />
 
-      {/* Arrival dates — opened from the checklist Arrival row.
+      {/* Arrival dates — opened from the checklist Arrival row, or auto-opened
+          on the Reno step for campers who set dates before that step existed.
           key remounts it on open so it re-reads the saved dates. */}
       <ArrivalDatesModal
-        key={`arrival-${showArrivalModal}`}
-        open={showArrivalModal}
+        key={`arrival-${showArrivalModal}-${loadModal === "reno"}`}
+        open={showArrivalModal || loadModal === "reno"}
         initialArrival={arrivalDate}
         initialDeparture={departureDate}
         initialRenoArrival={renoArrivalDate}
+        startAtReno={!showArrivalModal && loadModal === "reno"}
         onSaved={(a, d, rn) => {
           setArrivalDate(a);
           setDepartureDate(d);
           setRenoArrivalDate(rn);
+          setRenoAnswered(true);
+          setShowArrivalModal(false);
+          setShowRenoPrompt(false);
+        }}
+        onDismiss={() => {
+          if (showRenoPrompt) {
+            sessionStorage.setItem("renoPromptDismissed", "1");
+            setShowRenoPrompt(false);
+          }
           setShowArrivalModal(false);
         }}
-        onDismiss={() => setShowArrivalModal(false)}
       />
     </div>
   );
