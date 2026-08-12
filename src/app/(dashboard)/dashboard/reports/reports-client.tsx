@@ -216,7 +216,9 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-3">
       <span className="shrink-0 text-sand-500">{label}</span>
-      <span className="text-right text-sand-200">{value || "—"}</span>
+      <span className="min-w-0 wrap-anywhere text-right text-sand-200">
+        {value || "—"}
+      </span>
     </div>
   );
 }
@@ -237,7 +239,7 @@ function DetailModal({
 
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="glass border-pink-500/10 max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="glass border-pink-500/10 flex max-h-[90vh] flex-col sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2 text-sand-100">
             {row.name}
@@ -248,12 +250,12 @@ function DetailModal({
             ) : null}
             {statusBadge(row.status)}
           </DialogTitle>
-          <DialogDescription className="text-sand-400">
+          <DialogDescription className="wrap-anywhere text-sand-400">
             {row.email ?? "no email on file"}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain">
           {/* Registration & travel */}
           <Section title="Registration & travel">
             <Field
@@ -596,7 +598,7 @@ function SapCard({ active }: { active: ReportRow[] }) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="flex items-end gap-1 overflow-x-auto pb-1">
+        <div className="flex items-end gap-0.5 overflow-x-auto pb-1">
           {BUILD_DAYS.map((day) => {
             const n = byDay.get(day)?.length ?? 0;
             const q = SAP_QUOTA[day];
@@ -609,7 +611,7 @@ function SapCard({ active }: { active: ReportRow[] }) {
                 key={day}
                 onClick={() => setSelectedDay(selected ? null : day)}
                 title={`${fmtDate(day)} — ${n} arriving, ${q} passes`}
-                className={`group flex min-w-14 flex-1 flex-col items-center rounded-lg pt-1 transition-colors ${
+                className={`group flex min-w-11 flex-1 flex-col items-center rounded-lg pt-1 transition-colors ${
                   selected ? "bg-amber/10" : "hover:bg-amber/5"
                 }`}
               >
@@ -660,14 +662,17 @@ function SapCard({ active }: { active: ReportRow[] }) {
             {overDays.map((d) => {
               const people = byDay.get(d) ?? [];
               const short = people.length - SAP_QUOTA[d];
+              const names = people.slice(0, 3).map((r) => r.name).join(", ");
+              const more = people.length > 3 ? `, +${people.length - 3} more` : "";
               return (
                 <p key={d} className="flex items-start gap-1.5">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
-                    {fmtDate(d)}: {people.length} arriving, only {SAP_QUOTA[d]}{" "}
-                    pass{SAP_QUOTA[d] === 1 ? "" : "es"} — {short} camper
-                    {short === 1 ? "" : "s"} ({people.map((r) => r.name).join(", ")})
-                    need{short === 1 ? "s" : ""} a different day or a pass swap.
+                    {fmtDate(d)}: {people.length} arriving ({names}
+                    {more}), only {SAP_QUOTA[d]} pass
+                    {SAP_QUOTA[d] === 1 ? "" : "es"} — {short} need
+                    {short === 1 ? "s" : ""} a different day or a pass swap.
+                    Tap the day for the full list.
                   </span>
                 </p>
               );
@@ -902,7 +907,7 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
             {noDates.length > 0 && (
               <button
                 onClick={() => setShowNoDates((v) => !v)}
-                className="text-amber hover:underline"
+                className="-mx-2 -my-1.5 rounded px-2 py-1.5 text-amber hover:underline"
               >
                 {noDates.length} with no dates yet
               </button>
@@ -915,7 +920,7 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
               {noDates.map((r) => r.name).join(", ")}
             </p>
           )}
-          <div className="flex items-end gap-1 overflow-x-auto pb-1">
+          <div className="flex items-end gap-1 overflow-x-auto pb-1 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] md:[mask-image:none]">
             {SCHEDULE_DAYS.map((day) => {
               const a = arrivalsByDay.get(day)?.length ?? 0;
               const rn = renoByDay.get(day)?.length ?? 0;
@@ -1014,7 +1019,7 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
           </p>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-1 overflow-x-auto pb-1">
+          <div className="flex items-end gap-1 overflow-x-auto pb-1 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] md:[mask-image:none]">
             {SCHEDULE_DAYS.map((day, i) => (
               <div
                 key={day}
@@ -1022,11 +1027,9 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
                 className="group flex min-w-9 flex-1 flex-col items-center rounded-lg pt-1 hover:bg-amber/5"
               >
                 <div className="flex h-24 w-full flex-col items-center justify-end">
-                  {(day === peakCampDay || inCamp[i] === 0) && (
-                    <span className="mb-0.5 text-[10px] leading-none text-sand-400">
-                      {inCamp[i]}
-                    </span>
-                  )}
+                  <span className="mb-0.5 text-[10px] leading-none text-sand-400">
+                    {inCamp[i]}
+                  </span>
                   {inCamp[i] > 0 && (
                     <div
                       className="w-2.5 rounded-t"
@@ -1048,8 +1051,7 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
             ))}
           </div>
           <p className="mt-2 text-[11px] text-sand-500">
-            Peak: {maxCamp} campers on {fmtDate(peakCampDay)} · hover any day
-            for its count
+            Peak: {maxCamp} campers on {fmtDate(peakCampDay)}
           </p>
         </CardContent>
       </Card>
@@ -1380,7 +1382,7 @@ export default function ReportsClient() {
                     <button
                       key={s}
                       onClick={() => setStatusFilter(s)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                      className={`min-h-10 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors sm:min-h-0 ${
                         statusFilter === s
                           ? "bg-amber/15 text-amber"
                           : "text-sand-400 hover:bg-amber/5 hover:text-sand-200"
@@ -1399,7 +1401,7 @@ export default function ReportsClient() {
                   value={ticketFilter}
                   onValueChange={(v) => setTicketFilter(v as TicketFilter)}
                 >
-                  <SelectTrigger className="h-8 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300">
+                  <SelectTrigger className="h-8 min-h-10 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300 sm:min-h-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1412,7 +1414,7 @@ export default function ReportsClient() {
                   value={travelFilter}
                   onValueChange={(v) => setTravelFilter(v as TravelFilter)}
                 >
-                  <SelectTrigger className="h-8 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300">
+                  <SelectTrigger className="h-8 min-h-10 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300 sm:min-h-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1428,7 +1430,7 @@ export default function ReportsClient() {
                   value={jobsFilter}
                   onValueChange={(v) => setJobsFilter(v as JobsFilter)}
                 >
-                  <SelectTrigger className="h-8 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300">
+                  <SelectTrigger className="h-8 min-h-10 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300 sm:min-h-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1441,7 +1443,7 @@ export default function ReportsClient() {
                   value={datesFilter}
                   onValueChange={(v) => setDatesFilter(v as DatesFilter)}
                 >
-                  <SelectTrigger className="h-8 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300">
+                  <SelectTrigger className="h-8 min-h-10 w-auto gap-1 border-amber/10 bg-blue-950/30 text-xs text-sand-300 sm:min-h-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1686,7 +1688,7 @@ export default function ReportsClient() {
                 <button
                   key={s}
                   onClick={() => setAppStatusFilter(s)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`min-h-10 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors sm:min-h-0 ${
                     appStatusFilter === s
                       ? "bg-amber/15 text-amber"
                       : "text-sand-400 hover:bg-amber/5 hover:text-sand-200"
@@ -1791,7 +1793,7 @@ export default function ReportsClient() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:gap-3">
             <Button
               variant="ghost"
               className="text-sand-400 hover:text-sand-200"

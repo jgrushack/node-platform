@@ -716,7 +716,7 @@ function AdminSchedule({
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7 text-sand-400 hover:text-red-400"
+                    className="h-7 w-7 text-sand-400 hover:text-red-400 pointer-coarse:h-10 pointer-coarse:w-10"
                     onClick={() => handleDelete(s)}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -792,7 +792,7 @@ function ShiftDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass">
+      <DialogContent className="glass max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add shift</DialogTitle>
         </DialogHeader>
@@ -936,11 +936,11 @@ function AdminCatalog({
                 · <span className="text-amber">{d.point_value} pts</span>
               </span>
             </div>
-            <div className="flex shrink-0 gap-1">
+            <div className="flex shrink-0 gap-1 pointer-coarse:gap-2">
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7 text-sand-400 hover:text-sand-100"
+                className="h-7 w-7 text-sand-400 hover:text-sand-100 pointer-coarse:h-10 pointer-coarse:w-10"
                 onClick={() => setEditing(d)}
               >
                 <Pencil className="h-4 w-4" />
@@ -948,7 +948,7 @@ function AdminCatalog({
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7 text-sand-400 hover:text-red-400"
+                className="h-7 w-7 text-sand-400 hover:text-red-400 pointer-coarse:h-10 pointer-coarse:w-10"
                 onClick={() => handleDelete(d)}
               >
                 <Trash2 className="h-4 w-4" />
@@ -1048,7 +1048,7 @@ function DefinitionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass">
+      <DialogContent className="glass max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{existing ? "Edit job" : "Add job"}</DialogTitle>
         </DialogHeader>
@@ -1073,7 +1073,7 @@ function DefinitionDialog({
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
               <Label className="text-sand-300">People</Label>
               <Input
