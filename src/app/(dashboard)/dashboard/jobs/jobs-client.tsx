@@ -368,8 +368,8 @@ function MemberBoard({
                   <span className="font-semibold text-sand-300">
                     {progress.pointsTarget} points
                   </span>{" "}
-                  (about 6 shifts) so every shift gets covered. The Strike and
-                  BBQ shifts above are required on top of that.
+                  (about 4–5 shifts) so every shift gets covered. The Strike
+                  and BBQ shifts above are required on top of that.
                 </>
               )}
             </p>
