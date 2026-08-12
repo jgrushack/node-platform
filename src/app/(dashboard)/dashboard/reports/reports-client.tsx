@@ -7,6 +7,7 @@ import {
   Car,
   Bus,
   Ticket,
+  AlertTriangle,
   CheckCircle2,
   Clock,
   XCircle,
@@ -515,6 +516,314 @@ const CHART = {
   camp: "#d97706",
 };
 
+// Setup Access Pass allocation per build day (from BMorg placement).
+// Gate opens to everyone Sun Aug 30; before that, entry requires an SAP.
+const SAP_QUOTA: Record<string, number> = {
+  "2026-08-24": 0,
+  "2026-08-25": 6,
+  "2026-08-26": 12,
+  "2026-08-27": 10,
+  "2026-08-28": 4,
+  "2026-08-29": 0,
+};
+const BUILD_DAYS = Object.keys(SAP_QUOTA);
+const SAP_TOTAL = Object.values(SAP_QUOTA).reduce((a, b) => a + b, 0);
+
+// Travel-status hues, validated on the blue-950 surface (dataviz six-check
+// run; purple's contrast WARN is relieved by the visible name label on chips).
+const RIDE_COLOR: Record<string, string> = {
+  car_pass_parking: "#059669",
+  ride_unsorted: "#d97706",
+  ride_sorted: "#0284c7",
+  burner_express: "#9333ea",
+};
+const RIDE_FALLBACK = "#64748b";
+
+/** SAP pass board: one slot per pass, per build day — filled when an early
+ *  arriver claims it, dashed when spare, red when arrivals exceed the quota. */
+function SapCard({ active }: { active: ReportRow[] }) {
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const byDay = new Map<string, ReportRow[]>();
+  active.forEach((r) => {
+    if (r.arrivalDate && SAP_QUOTA[r.arrivalDate] !== undefined)
+      byDay.set(r.arrivalDate, [...(byDay.get(r.arrivalDate) ?? []), r]);
+  });
+  const preBuild = active.filter(
+    (r) => r.arrivalDate && r.arrivalDate < BUILD_DAYS[0]
+  );
+  const totalArriving = BUILD_DAYS.reduce(
+    (a, d) => a + (byDay.get(d)?.length ?? 0),
+    0
+  );
+  const overDays = BUILD_DAYS.filter(
+    (d) => (byDay.get(d)?.length ?? 0) > SAP_QUOTA[d]
+  );
+  const maxSlots = Math.max(
+    1,
+    ...BUILD_DAYS.map((d) =>
+      Math.max(SAP_QUOTA[d], byDay.get(d)?.length ?? 0)
+    )
+  );
+  const sel = selectedDay ? byDay.get(selectedDay) ?? [] : [];
+
+  return (
+    <Card className="glass-card border-0">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="text-sm font-medium text-sand-300">
+            Setup Access Passes — build week
+          </CardTitle>
+          <span className="text-xs text-sand-400">
+            {totalArriving} arriving early · {SAP_TOTAL} passes
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 text-xs text-sand-400">
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-2.5 rounded-[3px]"
+              style={{ background: CHART.camp }}
+            />
+            Pass claimed
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[3px] border border-dashed border-sand-500" />
+            Spare pass
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[3px] bg-red-600" />
+            Arriving without a pass
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-end gap-1 overflow-x-auto pb-1">
+          {BUILD_DAYS.map((day) => {
+            const n = byDay.get(day)?.length ?? 0;
+            const q = SAP_QUOTA[day];
+            const filled = Math.min(n, q);
+            const spare = q - filled;
+            const over = n - filled;
+            const selected = selectedDay === day;
+            return (
+              <button
+                key={day}
+                onClick={() => setSelectedDay(selected ? null : day)}
+                title={`${fmtDate(day)} — ${n} arriving, ${q} passes`}
+                className={`group flex min-w-14 flex-1 flex-col items-center rounded-lg pt-1 transition-colors ${
+                  selected ? "bg-amber/10" : "hover:bg-amber/5"
+                }`}
+              >
+                <span
+                  className={`mb-1 text-[10px] leading-none ${
+                    over > 0 ? "text-red-400" : "text-sand-400"
+                  }`}
+                >
+                  {n}/{q}
+                </span>
+                <div
+                  className="flex w-full flex-col items-center justify-end gap-0.5"
+                  style={{ height: maxSlots * 12 }}
+                >
+                  {Array.from({ length: over }, (_, i) => (
+                    <span
+                      key={`o${i}`}
+                      className="h-2.5 w-6 rounded-[3px] bg-red-600"
+                    />
+                  ))}
+                  {Array.from({ length: spare }, (_, i) => (
+                    <span
+                      key={`s${i}`}
+                      className="h-2.5 w-6 rounded-[3px] border border-dashed border-sand-500"
+                    />
+                  ))}
+                  {Array.from({ length: filled }, (_, i) => (
+                    <span
+                      key={`f${i}`}
+                      className="h-2.5 w-6 rounded-[3px]"
+                      style={{ background: CHART.camp }}
+                    />
+                  ))}
+                </div>
+                <span className="mt-1 text-[10px] leading-none text-sand-500">
+                  {weekday(day)}
+                </span>
+                <span className="text-[10px] text-sand-500">
+                  {day.slice(8).replace(/^0/, "")}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {(overDays.length > 0 || preBuild.length > 0) && (
+          <div className="mt-3 space-y-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5 text-xs text-red-300">
+            {overDays.map((d) => {
+              const people = byDay.get(d) ?? [];
+              const short = people.length - SAP_QUOTA[d];
+              return (
+                <p key={d} className="flex items-start gap-1.5">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {fmtDate(d)}: {people.length} arriving, only {SAP_QUOTA[d]}{" "}
+                    pass{SAP_QUOTA[d] === 1 ? "" : "es"} — {short} camper
+                    {short === 1 ? "" : "s"} ({people.map((r) => r.name).join(", ")})
+                    need{short === 1 ? "s" : ""} a different day or a pass swap.
+                  </span>
+                </p>
+              );
+            })}
+            {preBuild.length > 0 && (
+              <p className="flex items-start gap-1.5">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Arriving before build week (no SAP exists):{" "}
+                  {preBuild
+                    .map((r) => `${r.name} (${fmtDate(r.arrivalDate)})`)
+                    .join(", ")}
+                </span>
+              </p>
+            )}
+          </div>
+        )}
+
+        {selectedDay && (
+          <div className="mt-3 rounded-lg border border-amber/10 bg-blue-950/30 px-3 py-2.5 text-sm">
+            <p className="font-medium text-sand-200">{fmtDate(selectedDay)}</p>
+            <p className="text-sand-300">
+              {sel.length > 0
+                ? `Needs an SAP: ${sel.map((r) => r.name).join(", ")}`
+                : "No early arrivals this day"}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** One camper as a travel-status chip: colored icon + name. */
+function RideChip({ r }: { r: ReportRow }) {
+  const c = RIDE_COLOR[r.carPass] ?? RIDE_FALLBACK;
+  const Icon = r.carPass === "burner_express" ? Bus : Car;
+  return (
+    <span
+      title={TRAVEL_LABEL[r.carPass] ?? "Other / not answered"}
+      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs text-sand-200"
+      style={{ borderColor: `${c}59`, background: `${c}1f` }}
+    >
+      <Icon className="h-3 w-3 shrink-0" style={{ color: c }} />
+      {r.name}
+    </span>
+  );
+}
+
+/** Reno ride coordination: everyone grouped by landing day, colored by how
+ *  they plan to get to BRC, with per-day carpool match / no-driver flags. */
+function RidesCard({ active }: { active: ReportRow[] }) {
+  const byDay = new Map<string, ReportRow[]>();
+  active.forEach((r) => {
+    // Drivers rarely log a Reno landing — place them on their BRC arrival day.
+    const day =
+      r.renoArrivalDate ??
+      (r.carPass === "car_pass_parking" ? r.arrivalDate : null);
+    if (day) byDay.set(day, [...(byDay.get(day) ?? []), r]);
+  });
+  const days = Array.from(byDay.keys()).sort();
+  const unscheduled = active.filter(
+    (r) => r.carPass === "ride_unsorted" && !r.renoArrivalDate
+  );
+
+  return (
+    <Card className="glass-card border-0">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-sand-300">
+          Reno rides & carpools
+        </CardTitle>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-sand-400">
+          {(
+            [
+              ["car_pass_parking", "Driving in"],
+              ["ride_unsorted", "Needs a ride"],
+              ["ride_sorted", "Ride sorted"],
+              ["burner_express", "Burner Express"],
+            ] as const
+          ).map(([k, label]) => (
+            <span key={k} className="inline-flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: RIDE_COLOR[k] }}
+              />
+              {label}
+            </span>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {days.length === 0 && (
+          <p className="text-sm text-sand-400">
+            No landing days on file yet — chips appear as campers fill in
+            their Reno dates.
+          </p>
+        )}
+        {days.map((day) => {
+          const people = byDay.get(day)!;
+          const drivers = people.filter(
+            (r) => r.carPass === "car_pass_parking"
+          ).length;
+          const seekers = people.filter(
+            (r) => r.carPass === "ride_unsorted"
+          ).length;
+          return (
+            <div
+              key={day}
+              className="rounded-lg border border-amber/10 bg-blue-950/30 px-3 py-2.5"
+            >
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-sand-200">
+                  {weekday(day)} {fmtDate(day)}
+                </p>
+                {seekers > 0 && drivers === 0 ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {seekers} need{seekers === 1 ? "s" : ""} a ride — no
+                    drivers this day yet
+                  </span>
+                ) : seekers > 0 ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    carpool match: {drivers} driving, {seekers} looking
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {people.map((r) => (
+                  <RideChip key={r.registrationId} r={r} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        {unscheduled.length > 0 && (
+          <div className="rounded-lg border border-amber/15 bg-amber/5 px-3 py-2.5">
+            <p className="mb-1.5 text-xs font-medium text-amber">
+              Needs a ride, no landing day yet
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {unscheduled.map((r) => (
+                <RideChip key={r.registrationId} r={r} />
+              ))}
+            </div>
+          </div>
+        )}
+        <p className="text-[11px] text-sand-500">
+          Grouped by Reno landing day; drivers without one are shown on their
+          BRC arrival day. Chip color = how they plan to get in.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showNoDates, setShowNoDates] = useState(false);
@@ -686,6 +995,12 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
           )}
         </CardContent>
       </Card>
+
+      {/* SAP pass board */}
+      <SapCard active={active} />
+
+      {/* Reno ride coordination */}
+      <RidesCard active={active} />
 
       {/* Camp population */}
       <Card className="glass-card border-0">
