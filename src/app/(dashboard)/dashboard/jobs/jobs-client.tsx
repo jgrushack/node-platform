@@ -111,8 +111,8 @@ export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
             Camp Jobs
           </h1>
           <p className="text-sm text-sand-400">
-            Sign up for shifts during burn week. Every job earns points — pitch
-            in and keep NODE running.
+            Sign up for shifts during burn week. Jobs earn points — pitch in
+            and keep NODE running. Strike is required of everyone.
           </p>
         </div>
         <Button
@@ -358,8 +358,9 @@ function MemberBoard({
             {/* How points work */}
             <p className="text-xs leading-relaxed text-sand-500">
               Points scale with effort — difficulty × 30-minute blocks — so
-              longer, harder shifts are worth more (a strike shift = 36, a
-              dinner = 16, a quick tidy = 2).
+              longer, harder shifts are worth more (a dinner = 16, a quick
+              tidy = 2). Strike shifts earn no points — everyone is required
+              to help strike, on top of your points goal.
               {progress.pointsTarget > 0 && (
                 <>
                   {" "}
