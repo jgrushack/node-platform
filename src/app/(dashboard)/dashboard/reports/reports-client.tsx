@@ -108,6 +108,7 @@ const TRAVEL_LABEL: Record<string, string> = {
   ride_sorted: "Car ride — sorted",
   ride_unsorted: "Needs a ride",
   burner_express: "Burner Express",
+  other: "Other arrangement",
   no: "Not answered",
 };
 
@@ -541,8 +542,11 @@ const RIDE_COLOR: Record<string, string> = {
 };
 const RIDE_FALLBACK = "#64748b";
 
-/** SAP pass board: one slot per pass, per build day — filled when an early
- *  arriver claims it, dashed when spare, red when arrivals exceed the quota. */
+/** SAP pass board. A pass is valid from its issue day ONWARD (a Tuesday SAP
+ *  admits a Tuesday-or-later playa arrival), so unused passes roll forward
+ *  and the real constraint is cumulative: arrivals-so-far ≤ passes-so-far.
+ *  Each column shows that day's issued passes plus any arrivals covered by
+ *  rolled-forward passes; red = a true cumulative shortfall. */
 function SapCard({ active }: { active: ReportRow[] }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const byDay = new Map<string, ReportRow[]>();
@@ -557,14 +561,36 @@ function SapCard({ active }: { active: ReportRow[] }) {
     (a, d) => a + (byDay.get(d)?.length ?? 0),
     0
   );
-  const overDays = BUILD_DAYS.filter(
-    (d) => (byDay.get(d)?.length ?? 0) > SAP_QUOTA[d]
-  );
+
+  // Walk the days in order, arrivals consuming the oldest passes first.
+  type DayCalc = {
+    day: string;
+    n: number;
+    issued: number;
+    usable: number; // passes in hand that day (issued + rolled forward)
+    fromToday: number; // arrivals on a pass issued this day
+    fromCarry: number; // arrivals on a rolled-forward earlier pass
+    shortfall: number; // arrivals with no pass available at all
+    spare: number; // this day's passes left over (roll forward)
+  };
+  let carry = 0;
+  const calc: DayCalc[] = BUILD_DAYS.map((day) => {
+    const n = byDay.get(day)?.length ?? 0;
+    const issued = SAP_QUOTA[day];
+    const usable = carry + issued;
+    const fromCarry = Math.min(n, carry);
+    const fromToday = Math.min(n - fromCarry, issued);
+    const shortfall = n - fromCarry - fromToday;
+    const spare = issued - fromToday;
+    carry = carry - fromCarry + spare;
+    return { day, n, issued, usable, fromToday, fromCarry, shortfall, spare };
+  });
+  const shortDays = calc.filter((c) => c.shortfall > 0);
+  const leftover = carry;
+
   const maxSlots = Math.max(
     1,
-    ...BUILD_DAYS.map((d) =>
-      Math.max(SAP_QUOTA[d], byDay.get(d)?.length ?? 0)
-    )
+    ...calc.map((c) => c.issued + c.fromCarry + c.shortfall)
   );
   const sel = selectedDay ? byDay.get(selectedDay) ?? [] : [];
 
@@ -576,7 +602,8 @@ function SapCard({ active }: { active: ReportRow[] }) {
             Setup Access Passes — build week
           </CardTitle>
           <span className="text-xs text-sand-400">
-            {totalArriving} arriving early · {SAP_TOTAL} passes
+            {totalArriving} arriving early · {SAP_TOTAL} passes ·{" "}
+            {leftover} to spare
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs text-sand-400">
@@ -585,60 +612,72 @@ function SapCard({ active }: { active: ReportRow[] }) {
               className="h-2.5 w-2.5 rounded-[3px]"
               style={{ background: CHART.camp }}
             />
-            Pass claimed
+            On this day&rsquo;s pass
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-2.5 rounded-[3px] border-2"
+              style={{ borderColor: CHART.camp }}
+            />
+            On an earlier pass
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-[3px] border border-dashed border-sand-500" />
-            Spare pass
+            Unused (rolls forward)
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-[3px] bg-red-600" />
-            Arriving without a pass
+            No pass available
           </span>
         </div>
+        <p className="text-[11px] text-sand-500">
+          A pass works its own day and any day after, so spares roll forward.
+        </p>
       </CardHeader>
       <CardContent>
         <div className="flex items-end gap-0.5 overflow-x-auto pb-1">
-          {BUILD_DAYS.map((day) => {
-            const n = byDay.get(day)?.length ?? 0;
-            const q = SAP_QUOTA[day];
-            const filled = Math.min(n, q);
-            const spare = q - filled;
-            const over = n - filled;
-            const selected = selectedDay === day;
+          {calc.map((c) => {
+            const selected = selectedDay === c.day;
             return (
               <button
-                key={day}
-                onClick={() => setSelectedDay(selected ? null : day)}
-                title={`${fmtDate(day)} — ${n} arriving, ${q} passes`}
+                key={c.day}
+                onClick={() => setSelectedDay(selected ? null : c.day)}
+                title={`${fmtDate(c.day)} — ${c.n} arriving · ${c.issued} issued · ${c.usable} usable`}
                 className={`group flex min-w-11 flex-1 flex-col items-center rounded-lg pt-1 transition-colors ${
                   selected ? "bg-amber/10" : "hover:bg-amber/5"
                 }`}
               >
                 <span
                   className={`mb-1 text-[10px] leading-none ${
-                    over > 0 ? "text-red-400" : "text-sand-400"
+                    c.shortfall > 0 ? "text-red-400" : "text-sand-400"
                   }`}
                 >
-                  {n}/{q}
+                  {c.n}/{c.usable}
                 </span>
                 <div
                   className="flex w-full flex-col items-center justify-end gap-0.5"
                   style={{ height: maxSlots * 12 }}
                 >
-                  {Array.from({ length: over }, (_, i) => (
+                  {Array.from({ length: c.shortfall }, (_, i) => (
                     <span
                       key={`o${i}`}
                       className="h-2.5 w-6 rounded-[3px] bg-red-600"
                     />
                   ))}
-                  {Array.from({ length: spare }, (_, i) => (
+                  {Array.from({ length: c.fromCarry }, (_, i) => (
+                    <span
+                      key={`c${i}`}
+                      className="h-2.5 w-6 rounded-[3px] border-2"
+                      style={{ borderColor: CHART.camp }}
+                    />
+                  ))}
+                  {Array.from({ length: c.spare }, (_, i) => (
                     <span
                       key={`s${i}`}
                       className="h-2.5 w-6 rounded-[3px] border border-dashed border-sand-500"
                     />
                   ))}
-                  {Array.from({ length: filled }, (_, i) => (
+                  {Array.from({ length: c.fromToday }, (_, i) => (
                     <span
                       key={`f${i}`}
                       className="h-2.5 w-6 rounded-[3px]"
@@ -647,32 +686,33 @@ function SapCard({ active }: { active: ReportRow[] }) {
                   ))}
                 </div>
                 <span className="mt-1 text-[10px] leading-none text-sand-500">
-                  {weekday(day)}
+                  {weekday(c.day)}
                 </span>
                 <span className="text-[10px] text-sand-500">
-                  {day.slice(8).replace(/^0/, "")}
+                  {c.day.slice(8).replace(/^0/, "")}
                 </span>
               </button>
             );
           })}
         </div>
 
-        {(overDays.length > 0 || preBuild.length > 0) && (
+        {(shortDays.length > 0 || preBuild.length > 0) && (
           <div className="mt-3 space-y-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5 text-xs text-red-300">
-            {overDays.map((d) => {
-              const people = byDay.get(d) ?? [];
-              const short = people.length - SAP_QUOTA[d];
+            {shortDays.map((c) => {
+              const people = byDay.get(c.day) ?? [];
               const names = people.slice(0, 3).map((r) => r.name).join(", ");
-              const more = people.length > 3 ? `, +${people.length - 3} more` : "";
+              const more =
+                people.length > 3 ? `, +${people.length - 3} more` : "";
               return (
-                <p key={d} className="flex items-start gap-1.5">
+                <p key={c.day} className="flex items-start gap-1.5">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
-                    {fmtDate(d)}: {people.length} arriving ({names}
-                    {more}), only {SAP_QUOTA[d]} pass
-                    {SAP_QUOTA[d] === 1 ? "" : "es"} — {short} need
-                    {short === 1 ? "s" : ""} a different day or a pass swap.
-                    Tap the day for the full list.
+                    {fmtDate(c.day)}: {c.n} arriving ({names}
+                    {more}) but only {c.usable} pass
+                    {c.usable === 1 ? "" : "es"} issued by then — {c.shortfall}{" "}
+                    can&rsquo;t get in. Move arrivals later or check the dates
+                    are really playa (not Reno) arrivals. Tap the day for the
+                    full list.
                   </span>
                 </p>
               );
@@ -722,108 +762,120 @@ function RideChip({ r }: { r: ReportRow }) {
   );
 }
 
-/** Reno ride coordination: everyone grouped by landing day, colored by how
- *  they plan to get to BRC, with per-day carpool match / no-driver flags. */
+/** Ride coordination — facts only, no assumed carpools. Who has a car (with
+ *  their dates), who still needs a ride and when they land, who's set. Whether
+ *  a car has spare seats isn't tracked; the camp coordinates directly. */
 function RidesCard({ active }: { active: ReportRow[] }) {
-  const byDay = new Map<string, ReportRow[]>();
-  active.forEach((r) => {
-    // Drivers rarely log a Reno landing — place them on their BRC arrival day.
-    const day =
-      r.renoArrivalDate ??
-      (r.carPass === "car_pass_parking" ? r.arrivalDate : null);
-    if (day) byDay.set(day, [...(byDay.get(day) ?? []), r]);
-  });
-  const days = Array.from(byDay.keys()).sort();
-  const unscheduled = active.filter(
-    (r) => r.carPass === "ride_unsorted" && !r.renoArrivalDate
+  const cars = active.filter(
+    (r) => r.carPass === "car_pass_parking" || r.carPass === "other"
   );
+  const seekers = active.filter((r) => r.carPass === "ride_unsorted");
+  const seekersByDay = new Map<string, ReportRow[]>();
+  const seekersNoDate: ReportRow[] = [];
+  seekers.forEach((r) => {
+    if (r.renoArrivalDate)
+      seekersByDay.set(r.renoArrivalDate, [
+        ...(seekersByDay.get(r.renoArrivalDate) ?? []),
+        r,
+      ]);
+    else seekersNoDate.push(r);
+  });
+  const seekerDays = Array.from(seekersByDay.keys()).sort();
+  const sorted = active.filter((r) => r.carPass === "ride_sorted");
+  const bus = active.filter((r) => r.carPass === "burner_express");
 
   return (
     <Card className="glass-card border-0">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-sand-300">
-          Reno rides & carpools
+          Cars & rides
         </CardTitle>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-sand-400">
-          {(
-            [
-              ["car_pass_parking", "Driving in"],
-              ["ride_unsorted", "Needs a ride"],
-              ["ride_sorted", "Ride sorted"],
-              ["burner_express", "Burner Express"],
-            ] as const
-          ).map(([k, label]) => (
-            <span key={k} className="inline-flex items-center gap-1.5">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: RIDE_COLOR[k] }}
-              />
-              {label}
-            </span>
-          ))}
-        </div>
+        <p className="text-xs text-sand-500">
+          Having a car doesn&rsquo;t mean offering seats — coordinate directly.
+        </p>
       </CardHeader>
       <CardContent className="space-y-3">
-        {days.length === 0 && (
-          <p className="text-sm text-sand-400">
-            No landing days on file yet — chips appear as campers fill in
-            their Reno dates.
+        {/* Who has a car, with their travel dates */}
+        <div className="rounded-lg border border-amber/10 bg-blue-950/30 px-3 py-2.5">
+          <p className="mb-1.5 text-xs font-medium text-sand-300">
+            Have cars ({cars.length})
           </p>
-        )}
-        {days.map((day) => {
-          const people = byDay.get(day)!;
-          const drivers = people.filter(
-            (r) => r.carPass === "car_pass_parking"
-          ).length;
-          const seekers = people.filter(
-            (r) => r.carPass === "ride_unsorted"
-          ).length;
-          return (
-            <div
-              key={day}
-              className="rounded-lg border border-amber/10 bg-blue-950/30 px-3 py-2.5"
-            >
-              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-sand-200">
-                  {weekday(day)} {fmtDate(day)}
-                </p>
-                {seekers > 0 && drivers === 0 ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    {seekers} need{seekers === 1 ? "s" : ""} a ride — no
-                    drivers this day yet
-                  </span>
-                ) : seekers > 0 ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    carpool match: {drivers} driving, {seekers} looking
-                  </span>
-                ) : null}
+          <div className="space-y-1.5">
+            {cars.map((r) => (
+              <div
+                key={r.registrationId}
+                className="flex flex-wrap items-center gap-x-2 gap-y-0.5"
+              >
+                <RideChip r={r} />
+                <span className="text-[11px] text-sand-500">
+                  {r.renoArrivalDate
+                    ? `Reno ${fmtDate(r.renoArrivalDate)}`
+                    : "Reno —"}
+                  {" · "}
+                  {r.arrivalDate
+                    ? `playa ${fmtDate(r.arrivalDate)}`
+                    : "playa —"}
+                  {r.carPass === "other" ? " · listed travel as “other”" : ""}
+                </span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {people.map((r) => (
-                  <RideChip key={r.registrationId} r={r} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-        {unscheduled.length > 0 && (
-          <div className="rounded-lg border border-amber/15 bg-amber/5 px-3 py-2.5">
-            <p className="mb-1.5 text-xs font-medium text-amber">
-              Needs a ride, no landing day yet
+            ))}
+            {cars.length === 0 && (
+              <p className="text-sm text-sand-400">No cars on file.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Who needs a ride, by landing day */}
+        {seekerDays.map((day) => (
+          <div
+            key={day}
+            className="rounded-lg border border-amber/10 bg-blue-950/30 px-3 py-2.5"
+          >
+            <p className="mb-1.5 text-xs font-medium text-sand-300">
+              Need a ride — land {weekday(day)} {fmtDate(day)}
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {unscheduled.map((r) => (
+              {seekersByDay.get(day)!.map((r) => (
+                <RideChip key={r.registrationId} r={r} />
+              ))}
+            </div>
+          </div>
+        ))}
+        {seekersNoDate.length > 0 && (
+          <div className="rounded-lg border border-amber/15 bg-amber/5 px-3 py-2.5">
+            <p className="mb-1.5 text-xs font-medium text-amber">
+              Need a ride — no landing day yet
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {seekersNoDate.map((r) => (
                 <RideChip key={r.registrationId} r={r} />
               ))}
             </div>
           </div>
         )}
-        <p className="text-[11px] text-sand-500">
-          Grouped by Reno landing day; drivers without one are shown on their
-          BRC arrival day. Chip color = how they plan to get in.
-        </p>
+        {seekers.length === 0 && (
+          <p className="text-sm text-sand-400">
+            No one currently needs a ride.
+          </p>
+        )}
+
+        {/* Already set */}
+        {(sorted.length > 0 || bus.length > 0) && (
+          <div className="space-y-1 text-xs text-sand-500">
+            {sorted.length > 0 && (
+              <p>
+                <span style={{ color: RIDE_COLOR.ride_sorted }}>●</span> Ride
+                sorted: {sorted.map((r) => r.name).join(", ")}
+              </p>
+            )}
+            {bus.length > 0 && (
+              <p>
+                <span style={{ color: RIDE_COLOR.burner_express }}>●</span>{" "}
+                Burner Express: {bus.map((r) => r.name).join(", ")}
+              </p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
