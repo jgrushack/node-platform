@@ -4,6 +4,7 @@ import { approvedApplicantEmail } from "./templates/approved-applicant";
 import { campMessageEmail } from "./templates/camp-message";
 import { calendarInviteEmail } from "./templates/calendar-invite";
 import { duesPaymentFailedEmail } from "./templates/dues-payment-failed";
+import { lockedInEmail } from "./templates/locked-in";
 import { buildInviteIcs, type IcsEvent, type IcsOrganizer } from "@/lib/calendar/ics";
 
 /** Strip HTML tags and decode entities into plain text for email fallback. */
@@ -227,4 +228,27 @@ export async function sendEventInviteBatch({
   }
 
   return { sent, failed };
+}
+
+export async function sendLockedInEmail(
+  args: {
+    email: string;
+  } & Parameters<typeof lockedInEmail>[0]
+): Promise<{ success: true } | { error: string }> {
+  const { email, ...rest } = args;
+  const html = lockedInEmail(rest);
+  const { error } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
+    to: email,
+    subject: "You're locked in — NODE 2026 \u{1F525}",
+    html,
+    text: htmlToPlainText(html),
+  });
+
+  if (error) {
+    console.error("[sendLockedInEmail]", error);
+    return { error: error.message };
+  }
+  return { success: true };
 }

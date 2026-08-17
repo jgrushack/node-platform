@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Check,
+  CheckCircle2,
   AlertTriangle,
   Circle,
   Clock,
@@ -54,11 +56,55 @@ const STATUS: Record<
   },
 };
 
-export function RoadTo2026({ rows }: { rows: ChecklistRow[] }) {
+export function isChecklistComplete(rows: ChecklistRow[]): boolean {
+  const counted = rows.filter((r) => r.state !== "soon");
+  return counted.length > 0 && counted.every((r) => r.state === "done");
+}
+
+export function RoadTo2026({
+  rows,
+  collapsible = false,
+}: {
+  rows: ChecklistRow[];
+  /** When every row is done, render a slim "You're ready" bar that expands on tap. */
+  collapsible?: boolean;
+}) {
   const counted = rows.filter((r) => r.state !== "soon");
   const done = counted.filter((r) => r.state === "done").length;
   const total = counted.length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const complete = total > 0 && done === total;
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = collapsible && complete && !expanded;
+
+  if (collapsed) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="glass-card flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-white/5"
+        >
+          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-green-500/15 ring-1 ring-green-500/40">
+            <CheckCircle2 className="h-4 w-4 text-green-400" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-sand-100">
+              Road to 2026 — you&apos;re ready
+            </span>
+            <span className="block text-xs text-sand-400">
+              All {total} checks done · tap to review or edit
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 flex-shrink-0 text-sand-500" />
+        </button>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -72,8 +118,17 @@ export function RoadTo2026({ rows }: { rows: ChecklistRow[] }) {
             <Map className="h-4 w-4 text-pink-400" />
             Road to 2026
           </CardTitle>
-          <span className="text-xs font-medium text-sand-400">
+          <span className="flex items-center gap-3 text-xs font-medium text-sand-400">
             {done} of {total} done
+            {collapsible && complete && (
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="text-pink-400 hover:text-pink-300"
+              >
+                collapse
+              </button>
+            )}
           </span>
         </CardHeader>
         <CardContent className="space-y-3">

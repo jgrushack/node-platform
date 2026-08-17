@@ -17,9 +17,104 @@ import {
   type JobBoardSettings,
   type SignupWindow,
   type MyJobProgress,
+  type BoardMode,
+  type BoardModeSetting,
+  type MyNextShift,
 } from "@/lib/types/job";
 
 const YEAR = 2026;
+
+// ── Playa-local time helpers (America/Los_Angeles) ───────────────────
+
+const PLAYA_TZ = "America/Los_Angeles";
+
+function playaParts(d: Date): { y: number; m: number; d: number; h: number; mi: number } {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: PLAYA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const map: Record<string, string> = {};
+  for (const p of fmt.formatToParts(d)) map[p.type] = p.value;
+  return {
+    y: Number(map.year),
+    m: Number(map.month),
+    d: Number(map.day),
+    h: Number(map.hour) % 24,
+    mi: Number(map.minute),
+  };
+}
+
+/** Today's date on playa as YYYY-MM-DD. */
+function playaToday(now = new Date()): string {
+  const p = playaParts(now);
+  return `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
+}
+
+/** Playa-local wall time (date + HH:MM) → epoch ms. */
+function playaLocalToMs(dateStr: string, hhmm: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const [h, mi] = hhmm.split(":").map(Number);
+  const guess = Date.UTC(y, m - 1, d, h, mi);
+  const p = playaParts(new Date(guess));
+  const asLocal = Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi);
+  const offset = asLocal - guess; // ms playa is ahead of UTC (negative)
+  return guess - offset;
+}
+
+function addDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.toISOString().slice(0, 10);
+}
+
+type ModeInputs = {
+  boardMode: BoardModeSetting | null | undefined;
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+};
+
+/** Resolve the effective board mode for a given playa date. */
+function resolveMode(inp: ModeInputs, today: string): BoardMode {
+  if (inp.boardMode && inp.boardMode !== "auto") return inp.boardMode;
+  if (inp.startDate && inp.endDate) {
+    if (today > inp.endDate) return "closed";
+    if (today >= inp.startDate) return "live";
+  }
+  return "prep";
+}
+
+/** Small shared loader: camp year + board settings + resolved mode. */
+async function loadModeContext(admin: ReturnType<typeof createAdminClient>) {
+  const { data: campYear } = await admin
+    .from("camp_years")
+    .select("id, start_date, end_date")
+    .eq("year", YEAR)
+    .single();
+  if (!campYear) return null;
+  const { data: settingsRow } = await admin
+    .from("job_board_settings")
+    .select("board_mode, drop_lock_at")
+    .eq("camp_year_id", campYear.id)
+    .maybeSingle();
+  const todayPlaya = playaToday();
+  const mode = resolveMode(
+    {
+      boardMode: settingsRow?.board_mode as BoardModeSetting | undefined,
+      startDate: campYear.start_date,
+      endDate: campYear.end_date,
+    },
+    todayPlaya
+  );
+  const dropLocked =
+    !!settingsRow?.drop_lock_at &&
+    Date.now() >= new Date(settingsRow.drop_lock_at).getTime();
+  return { campYearId: campYear.id as string, mode, dropLocked, todayPlaya };
+}
 
 function displayName(p: {
   first_name: string | null;
@@ -41,6 +136,12 @@ export type JobsBoardData = {
   window: SignupWindow;
   progress: MyJobProgress;
   leaderboard: LeaderboardEntry[];
+  /** Resolved board mode: pre-playa, on-playa live, or closed. */
+  mode: BoardMode;
+  /** True once members can no longer drop shifts themselves. */
+  dropLocked: boolean;
+  /** Today's date on playa (America/Los_Angeles), YYYY-MM-DD. */
+  todayPlaya: string;
 };
 
 export type GetJobsBoardResult = { error: string } | JobsBoardData;
@@ -66,7 +167,7 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
 
   const { data: campYear } = await admin
     .from("camp_years")
-    .select("id")
+    .select("id, start_date, end_date")
     .eq("year", YEAR)
     .single();
   if (!campYear) return { error: "No 2026 camp year configured." };
@@ -112,12 +213,18 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
   const shiftIds = shifts.map((s: { id: string }) => s.id);
 
   // Signups across all shifts → rosters, leaderboard, my points.
-  type SignupRow = { shift_id: string; profile_id: string };
+  type SignupRow = {
+    id: string;
+    shift_id: string;
+    profile_id: string;
+    checked_in_at: string | null;
+    no_show: boolean;
+  };
   let signups: SignupRow[] = [];
   if (shiftIds.length > 0) {
     const { data } = await admin
       .from("job_signups")
-      .select("shift_id, profile_id")
+      .select("id, shift_id, profile_id, checked_in_at, no_show")
       .in("shift_id", shiftIds);
     signups = (data ?? []) as SignupRow[];
   }
@@ -149,9 +256,12 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
 
     const roster = rosterByShift.get(s.shift_id) ?? [];
     roster.push({
+      signupId: s.id,
       profileId: s.profile_id,
       name: nameById.get(s.profile_id) ?? "Camper",
       isMe: s.profile_id === user.id,
+      checkedInAt: s.checked_in_at,
+      noShow: !!s.no_show,
     });
     rosterByShift.set(s.shift_id, roster);
 
@@ -189,6 +299,7 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
         filled: roster.length,
         isFull: roster.length >= s.capacity,
         mine: roster.some((r) => r.isMe),
+        myCheckedInAt: roster.find((r) => r.isMe)?.checkedInAt ?? null,
       };
     }
   );
@@ -215,7 +326,7 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
   const { data: settingsRow } = await admin
     .from("job_board_settings")
     .select(
-      "signup_opens_at, early_access_enabled, early_access_years_threshold, early_access_hours, points_target"
+      "signup_opens_at, early_access_enabled, early_access_years_threshold, early_access_hours, points_target, board_mode, drop_lock_at"
     )
     .eq("camp_year_id", campYear.id)
     .maybeSingle();
@@ -227,8 +338,24 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
         earlyAccessYearsThreshold: settingsRow.early_access_years_threshold,
         earlyAccessHours: settingsRow.early_access_hours,
         pointsTarget: settingsRow.points_target,
+        boardMode: (settingsRow.board_mode as BoardModeSetting) ?? "auto",
+        dropLockAt: settingsRow.drop_lock_at ?? null,
       }
     : null;
+
+  // Board mode (prep / live / closed) + drop lock.
+  const todayPlaya = playaToday();
+  const mode = resolveMode(
+    {
+      boardMode: settings?.boardMode,
+      startDate: campYear.start_date,
+      endDate: campYear.end_date,
+    },
+    todayPlaya
+  );
+  const dropLocked =
+    !!settings?.dropLockAt &&
+    Date.now() >= new Date(settings.dropLockAt).getTime();
 
   // Resolve this member's signup window.
   let signupWindow: SignupWindow = { open: true, opensAt: null, earlyAccess: false };
@@ -269,6 +396,9 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
     window: signupWindow,
     progress,
     leaderboard,
+    mode,
+    dropLocked,
+    todayPlaya,
   };
 }
 
@@ -314,6 +444,15 @@ export async function dropShift(shiftId: string): Promise<SignupResult> {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
+  // On playa (or once the admin lock kicks in) members can't drop —
+  // rosters are printed and crews are counting on them.
+  const ctx = await loadModeContext(createAdminClient());
+  if (ctx && (ctx.dropLocked || ctx.mode !== "prep")) {
+    return {
+      error: "Drops are locked — find someone to swap and ask a lead.",
+    };
+  }
+
   const { error } = await supabase
     .from("job_signups")
     .delete()
@@ -326,6 +465,233 @@ export async function dropShift(shiftId: string): Promise<SignupResult> {
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard");
   return { success: true };
+}
+
+// ── On-playa: check-in, attendance, dashboard helpers ────────────────
+
+/** Members may self check-in this many ms either side of a shift start. */
+const CHECKIN_WINDOW_MS = 3 * 3600_000;
+
+/** Self check-in on my own signup (live mode, within ±3h of shift start). */
+export async function checkInToShift(shiftId: string): Promise<SignupResult> {
+  if (!shiftId || typeof shiftId !== "string") return { error: "Invalid shift" };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const admin = createAdminClient();
+  const ctx = await loadModeContext(admin);
+  if (!ctx) return { error: "No 2026 camp year configured." };
+  if (ctx.mode !== "live")
+    return { error: "Check-in opens once we're on playa." };
+
+  const { data: shift } = await admin
+    .from("job_shifts")
+    .select("id, shift_date, start_time")
+    .eq("id", shiftId)
+    .eq("camp_year_id", ctx.campYearId)
+    .maybeSingle();
+  if (!shift) return { error: "That shift no longer exists." };
+
+  const startMs = playaLocalToMs(shift.shift_date, shift.start_time.slice(0, 5));
+  const delta = Date.now() - startMs;
+  if (delta < -CHECKIN_WINDOW_MS)
+    return { error: "Too early — check-in opens 3 hours before your shift." };
+  if (delta > CHECKIN_WINDOW_MS)
+    return { error: "Check-in window has passed — ask a lead to mark you in." };
+
+  // User-scoped update; RLS limits this to my own signup row.
+  const { data: updated, error } = await supabase
+    .from("job_signups")
+    .update({ checked_in_at: new Date().toISOString(), checked_in_by: user.id })
+    .eq("shift_id", shiftId)
+    .eq("profile_id", user.id)
+    .select("id");
+  if (error) {
+    console.error("[checkInToShift]", error);
+    return { error: "Couldn't check you in. Please try again." };
+  }
+  if (!updated || updated.length === 0)
+    return { error: "You're not signed up for that shift." };
+  revalidatePath("/dashboard/jobs");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/** Admin/lead: mark a signup checked-in and/or no-show. */
+export async function setSignupAttendance(
+  signupId: string,
+  input: { checkedIn: boolean; noShow: boolean }
+): Promise<MutationResult> {
+  if (!signupId || typeof signupId !== "string") return { error: "Invalid signup" };
+  const ctx = await requireAdmin();
+  if ("error" in ctx) return ctx;
+  const { error } = await ctx.admin
+    .from("job_signups")
+    .update({
+      checked_in_at: input.checkedIn ? new Date().toISOString() : null,
+      checked_in_by: input.checkedIn ? ctx.userId : null,
+      no_show: !!input.noShow,
+    })
+    .eq("id", signupId);
+  if (error) {
+    console.error("[setSignupAttendance]", error);
+    return { error: "Couldn't update attendance." };
+  }
+  revalidatePath("/dashboard/jobs");
+  revalidatePath("/dashboard/jobs/day-sheet");
+  return { success: true };
+}
+
+export type OpenShiftSoon = {
+  id: string;
+  title: string;
+  label: string | null;
+  category: string | null;
+  date: string; // YYYY-MM-DD
+  start: string; // HH:MM
+  end: string | null;
+  filled: number;
+  capacity: number;
+  pointValue: number;
+  mine: boolean;
+};
+
+/**
+ * Live mode only: today/tomorrow shifts that still need people, soonest
+ * first. Returns [] outside live mode. Used by the dashboard.
+ */
+export async function getOpenShiftsSoon(): Promise<OpenShiftSoon[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const admin = createAdminClient();
+  const ctx = await loadModeContext(admin);
+  if (!ctx || ctx.mode !== "live") return [];
+
+  const { data: shifts } = await admin
+    .from("job_shifts")
+    .select("id, definition_id, label, shift_date, start_time, end_time, capacity")
+    .eq("camp_year_id", ctx.campYearId)
+    .in("shift_date", [ctx.todayPlaya, addDays(ctx.todayPlaya, 1)])
+    .order("shift_date")
+    .order("start_time");
+  if (!shifts || shifts.length === 0) return [];
+
+  const ids = shifts.map((s: { id: string }) => s.id);
+  const { data: signups } = await admin
+    .from("job_signups")
+    .select("shift_id, profile_id")
+    .in("shift_id", ids);
+  const countBy = new Map<string, number>();
+  const mineSet = new Set<string>();
+  for (const s of signups ?? []) {
+    countBy.set(s.shift_id, (countBy.get(s.shift_id) ?? 0) + 1);
+    if (s.profile_id === user.id) mineSet.add(s.shift_id);
+  }
+  const defIds = Array.from(
+    new Set(shifts.map((s: { definition_id: string }) => s.definition_id))
+  );
+  const { data: defs } = await admin
+    .from("job_definitions")
+    .select("id, title, category, point_value")
+    .in("id", defIds);
+  const defById = new Map(
+    (defs ?? []).map((d: { id: string }) => [d.id, d as { id: string; title: string; category: string | null; point_value: number }])
+  );
+
+  const now = Date.now();
+  return shifts
+    .map((s: { id: string; definition_id: string; label: string | null; shift_date: string; start_time: string; end_time: string | null; capacity: number }) => {
+      const def = defById.get(s.definition_id);
+      const filled = countBy.get(s.id) ?? 0;
+      return {
+        id: s.id,
+        title: def?.title ?? "Job",
+        label: s.label,
+        category: def?.category ?? null,
+        date: s.shift_date,
+        start: s.start_time.slice(0, 5),
+        end: s.end_time ? s.end_time.slice(0, 5) : null,
+        filled,
+        capacity: s.capacity,
+        pointValue: def?.point_value ?? 0,
+        mine: mineSet.has(s.id),
+      };
+    })
+    .filter((s) => s.filled < s.capacity)
+    // Hide shifts whose end has already passed today.
+    .filter((s) => {
+      const endMs = playaLocalToMs(s.date, s.end ?? s.start) + (s.end ? 0 : 3600_000);
+      return endMs >= now;
+    });
+}
+
+/**
+ * The current member's next upcoming shift (playa-local), or null.
+ * Includes a shift that's in progress right now. Used by the dashboard.
+ */
+export async function getMyNextShift(): Promise<MyNextShift | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const admin = createAdminClient();
+  const ctx = await loadModeContext(admin);
+  if (!ctx) return null;
+
+  const { data: mySignups } = await admin
+    .from("job_signups")
+    .select("shift_id, checked_in_at")
+    .eq("profile_id", user.id);
+  if (!mySignups || mySignups.length === 0) return null;
+  const checkedBy = new Map<string, string | null>(
+    mySignups.map((r: { shift_id: string; checked_in_at: string | null }) => [
+      r.shift_id,
+      r.checked_in_at,
+    ])
+  );
+
+  const { data: shifts } = await admin
+    .from("job_shifts")
+    .select("id, definition_id, label, shift_date, start_time, end_time")
+    .eq("camp_year_id", ctx.campYearId)
+    .in("id", Array.from(checkedBy.keys()))
+    .order("shift_date")
+    .order("start_time");
+  if (!shifts || shifts.length === 0) return null;
+
+  const now = Date.now();
+  const next = shifts.find(
+    (s: { shift_date: string; start_time: string; end_time: string | null }) => {
+      const endMs = s.end_time
+        ? playaLocalToMs(s.shift_date, s.end_time.slice(0, 5))
+        : playaLocalToMs(s.shift_date, s.start_time.slice(0, 5)) + 3600_000;
+      return endMs >= now;
+    }
+  );
+  if (!next) return null;
+
+  const { data: def } = await admin
+    .from("job_definitions")
+    .select("title")
+    .eq("id", next.definition_id)
+    .maybeSingle();
+
+  return {
+    id: next.id,
+    title: def?.title ?? "Job",
+    label: next.label,
+    date: next.shift_date,
+    start: next.start_time.slice(0, 5),
+    end: next.end_time ? next.end_time.slice(0, 5) : null,
+    checkedIn: !!checkedBy.get(next.id),
+  };
 }
 
 // ── Lightweight progress (for the dashboard Road-to-2026 row) ────────
@@ -589,6 +955,8 @@ export async function updateJobBoardSettings(
       early_access_years_threshold: d.early_access_years_threshold,
       early_access_hours: d.early_access_hours,
       points_target: d.points_target,
+      board_mode: d.board_mode ?? "auto",
+      drop_lock_at: d.drop_lock_at ? d.drop_lock_at : null,
       updated_by: ctx.userId,
     },
     { onConflict: "camp_year_id" }

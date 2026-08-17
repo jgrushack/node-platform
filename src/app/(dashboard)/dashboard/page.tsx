@@ -49,14 +49,19 @@ import {
 import { ArrivalDatesModal } from "@/components/dashboard/arrival-dates-modal";
 import {
   RoadTo2026,
+  isChecklistComplete,
   type ChecklistRow,
   type ChecklistState,
 } from "@/components/dashboard/road-to-2026";
+import { Celebration } from "@/components/dashboard/celebration";
+import { HypeCard } from "@/components/dashboard/hype-card";
+import { getHypeData, markReady, type HypeData } from "@/lib/actions/hype";
 import {
   getStorageSurvey,
   type GetStorageSurveyResult,
 } from "@/lib/actions/storage-survey";
-import { getMyJobProgress } from "@/lib/actions/jobs";
+import { getMyJobProgress, getMyNextShift } from "@/lib/actions/jobs";
+import type { MyNextShift } from "@/lib/types/job";
 import type { MyJobProgress } from "@/lib/types/job";
 import type { CarPassStatus } from "@/lib/actions/registrations";
 import { useRouter } from "next/navigation";
@@ -255,6 +260,11 @@ export default function DashboardPage() {
   const [showStorageEdit, setShowStorageEdit] = useState(false);
   const [showArrivalModal, setShowArrivalModal] = useState(false);
   const [jobProgress, setJobProgress] = useState<MyJobProgress | null>(null);
+  // Ready-mode: hype card + one-time celebration once the checklist is complete
+  const [hype, setHype] = useState<HypeData | null>(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [nextShift, setNextShift] = useState<MyNextShift | null>(null);
+  const [readyChecked, setReadyChecked] = useState(false);
   const router = useRouter();
 
   const userTz = useMemo(
@@ -758,6 +768,42 @@ export default function DashboardPage() {
     },
   ];
 
+  const checklistComplete = isChecklistComplete(checklistRows);
+  const dataLoaded =
+    campStatus?.label === "Attending" &&
+    hasTicket !== null &&
+    onboardingComplete !== null &&
+    storageInfo !== null &&
+    jobProgress !== null;
+
+  // Load hype data for confirmed campers (countdown, your week, camp pulse).
+  useEffect(() => {
+    if (campStatus?.label !== "Attending") return;
+    getHypeData().then((res) => {
+      if (!("error" in res)) setHype(res);
+    });
+    getMyNextShift().then(setNextShift).catch(() => {});
+  }, [campStatus?.label]);
+
+  // First time every row is done → stamp ready_at, email, and celebrate.
+  useEffect(() => {
+    if (!dataLoaded || !checklistComplete || readyChecked) return;
+    setReadyChecked(true);
+    markReady().then((res) => {
+      if ("error" in res) return;
+      const seenKey = "node:celebrated:2026";
+      const seen = typeof window !== "undefined" && localStorage.getItem(seenKey);
+      if (res.firstTime || !seen) {
+        setShowCelebration(true);
+        localStorage.setItem(seenKey, "1");
+      }
+      // Refresh pulse so "campers ready" ticks up.
+      getHypeData().then((r) => {
+        if (!("error" in r)) setHype(r);
+      });
+    });
+  }, [dataLoaded, checklistComplete, readyChecked]);
+
   // One load-time modal at a time (priority order). Each modal's own dismissal
   // flips its flag false, which surfaces the next eligible one.
   const loadModal = showStorageSurvey
@@ -873,7 +919,13 @@ export default function DashboardPage() {
           Welcome back{user ? `, ${user.firstName}` : ""}
         </h1>
         <p className="mt-1 text-sand-400">
-          Here&apos;s your NODE dashboard.
+          {hype && checklistComplete && hype.phase === "before" && hype.daysToGate !== null
+            ? hype.daysToGate <= 0
+              ? "Gate is open. Go."
+              : `${hype.daysToGate} day${hype.daysToGate === 1 ? "" : "s"} until gate. You're all set.`
+            : hype?.phase === "during"
+              ? "Welcome home. Check the board for today."
+              : "Here\u2019s your NODE dashboard."}
         </p>
       </motion.div>
 
@@ -885,10 +937,39 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Road to 2026 — permanent progress checklist for confirmed campers */}
+      {/* Road to 2026 — permanent progress checklist for confirmed campers.
+          Collapses to a slim "you're ready" bar once every row is done. */}
       {campStatus?.label === "Attending" && (
-        <RoadTo2026 rows={checklistRows} />
+        <RoadTo2026 rows={checklistRows} collapsible />
       )}
+
+      {/* Ready mode — countdown, your week, camp pulse. Shown once the
+          checklist is complete (or once we're on playa regardless). */}
+      {campStatus?.label === "Attending" &&
+        hype &&
+        (checklistComplete || hype.phase !== "before") && (
+          <HypeCard
+            data={hype}
+            nextShift={
+              nextShift
+                ? {
+                    title: nextShift.title,
+                    label: nextShift.label,
+                    shiftDate: nextShift.date,
+                    startTime: nextShift.start,
+                  }
+                : null
+            }
+            onOpenJobs={() => router.push("/dashboard/jobs")}
+            onOpenArrival={() => setShowArrivalModal(true)}
+          />
+        )}
+
+      <Celebration
+        open={showCelebration}
+        onClose={() => setShowCelebration(false)}
+        firstName={user?.firstName}
+      />
 
       {/* Storage — for previous campers NOT attending 2026 who still have gear
           in NODE storage, so they can pay/edit without the 2026 checklist. */}

@@ -39,6 +39,10 @@ export const jobBoardSettingsSchema = z.object({
   early_access_years_threshold: z.number().int().min(1).max(20),
   early_access_hours: z.number().int().min(0).max(336),
   points_target: z.number().int().min(0).max(100000),
+  // 'auto' derives prep/live/closed from the camp_years dates.
+  board_mode: z.enum(["auto", "prep", "live", "closed"]).optional(),
+  // Empty string clears the lock (drops always allowed).
+  drop_lock_at: z.string().optional().or(z.literal("")),
 });
 export type JobBoardSettingsFormData = z.infer<typeof jobBoardSettingsSchema>;
 
@@ -59,9 +63,12 @@ export interface JobDefinitionRow {
 
 /** A camper signed up on a shift (for the roster). */
 export interface ShiftSignup {
+  signupId: string;
   profileId: string;
   name: string;
   isMe: boolean;
+  checkedInAt: string | null;
+  noShow: boolean;
 }
 
 /** A dated shift with its definition data and live roster, for the board. */
@@ -81,6 +88,8 @@ export interface ShiftView {
   filled: number;
   isFull: boolean;
   mine: boolean;
+  /** When I checked in to this shift (null if not / not mine). */
+  myCheckedInAt: string | null;
 }
 
 export interface LeaderboardEntry {
@@ -98,6 +107,25 @@ export interface JobBoardSettings {
   earlyAccessYearsThreshold: number;
   earlyAccessHours: number;
   pointsTarget: number;
+  /** Admin override; 'auto' derives from camp_years dates. */
+  boardMode: BoardModeSetting;
+  /** ISO instant after which members can no longer drop shifts (null = never). */
+  dropLockAt: string | null;
+}
+
+export type BoardModeSetting = "auto" | "prep" | "live" | "closed";
+/** Resolved board mode (auto → derived from camp dates). */
+export type BoardMode = "prep" | "live" | "closed";
+
+/** Simple shape for the dashboard: the member's next upcoming shift. */
+export interface MyNextShift {
+  id: string;
+  title: string;
+  label: string | null;
+  date: string; // YYYY-MM-DD (playa-local)
+  start: string; // HH:MM
+  end: string | null;
+  checkedIn: boolean;
 }
 
 /** When the current member's signups open (resolved against their tenure). */

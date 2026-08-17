@@ -1,10 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   Briefcase,
+  Hand,
+  Zap,
+  Printer,
+  Radio,
+  Flame,
   Trophy,
   Clock,
   Users,
@@ -45,6 +51,7 @@ import {
   getJobsBoard,
   signUpForShift,
   dropShift,
+  checkInToShift,
   createJobDefinition,
   updateJobDefinition,
   deleteJobDefinition,
@@ -59,6 +66,7 @@ import type {
   ShiftView,
   JobDefinitionFormData,
   JobShiftFormData,
+  BoardModeSetting,
 } from "@/lib/types/job";
 
 // ── Formatting helpers (date/time are floating playa-local) ──────────
@@ -83,6 +91,72 @@ function pointValue(difficulty: number, durationMin: number): number {
   return difficulty * Math.ceil(durationMin / 30);
 }
 
+// ── Playa-local clock (America/Los_Angeles) ──────────────────────────
+
+const PLAYA_TZ = "America/Los_Angeles";
+
+/** Current playa-local date + minutes-since-midnight. */
+function playaNow(): { date: string; minutes: number } {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: PLAYA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const map: Record<string, string> = {};
+  for (const p of fmt.formatToParts(new Date())) map[p.type] = p.value;
+  return {
+    date: `${map.year}-${map.month}-${map.day}`,
+    minutes: (Number(map.hour) % 24) * 60 + Number(map.minute),
+  };
+}
+
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function dayIndex(dateStr: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / 86_400_000);
+}
+
+/** Minutes from now (playa-local) until the shift starts; negative = started. */
+function minutesUntil(shift: ShiftView, now: { date: string; minutes: number }): number {
+  const dayDelta = dayIndex(shift.shiftDate) - dayIndex(now.date);
+  return dayDelta * 1440 + toMinutes(shift.startTime) - now.minutes;
+}
+
+function shiftEndMinutes(shift: ShiftView): number {
+  return shift.endTime ? toMinutes(shift.endTime) : toMinutes(shift.startTime) + 60;
+}
+
+/** Shift is in progress right now (playa-local). */
+function isHappeningNow(shift: ShiftView, now: { date: string; minutes: number }): boolean {
+  return (
+    shift.shiftDate === now.date &&
+    now.minutes >= toMinutes(shift.startTime) &&
+    now.minutes < shiftEndMinutes(shift)
+  );
+}
+
+/** Ticks once a minute so "now" highlights stay fresh while the tab is open. */
+function usePlayaNow() {
+  const [now, setNow] = useState(() => playaNow());
+  useEffect(() => {
+    const id = setInterval(() => setNow(playaNow()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+const CHECKIN_WINDOW_MIN = 3 * 60;
+
+const DROP_LOCK_MSG = "Drops are locked — find someone to swap and ask a lead.";
+
 export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
   const [board, setBoard] = useState<GetJobsBoardResult>(initial);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -102,17 +176,51 @@ export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
     );
   }
 
+  const mode = board.mode;
+
+  const memberView =
+    mode === "live" ? (
+      <LiveBoard
+        data={board}
+        busyId={busyId}
+        setBusyId={setBusyId}
+        refresh={refresh}
+      />
+    ) : mode === "closed" ? (
+      <ClosedBoard data={board} />
+    ) : (
+      <MemberBoard
+        data={board}
+        busyId={busyId}
+        setBusyId={setBusyId}
+        refresh={refresh}
+      />
+    );
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-sand-100">
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold text-sand-100">
             <Briefcase className="h-6 w-6 text-pink-400" />
             Camp Jobs
+            {mode === "live" && (
+              <Badge className="ml-1 gap-1 bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30">
+                <Radio className="h-3 w-3" /> Live on playa
+              </Badge>
+            )}
+            {mode === "closed" && (
+              <Badge className="ml-1 bg-sand-700/30 text-sand-300">
+                2026 closed
+              </Badge>
+            )}
           </h1>
           <p className="text-sm text-sand-400">
-            Sign up for shifts during burn week. Jobs earn points — pitch in
-            and keep NODE running. Strike is required of everyone.
+            {mode === "live"
+              ? "Show up, check in, pitch in. Need to swap? Ask a lead."
+              : mode === "closed"
+                ? "The 2026 board is closed — thank you for pitching in."
+                : "Sign up for shifts during burn week. Jobs earn points — pitch in and keep NODE running. Strike is required of everyone."}
           </p>
         </div>
         <Button
@@ -136,14 +244,7 @@ export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
             <TabsTrigger value="catalog">Catalog</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
-          <TabsContent value="board">
-            <MemberBoard
-              data={board}
-              busyId={busyId}
-              setBusyId={setBusyId}
-              refresh={refresh}
-            />
-          </TabsContent>
+          <TabsContent value="board">{memberView}</TabsContent>
           <TabsContent value="schedule">
             <AdminSchedule data={board} refresh={refresh} />
           </TabsContent>
@@ -155,12 +256,7 @@ export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
           </TabsContent>
         </Tabs>
       ) : (
-        <MemberBoard
-          data={board}
-          busyId={busyId}
-          setBusyId={setBusyId}
-          refresh={refresh}
-        />
+        memberView
       )}
     </div>
   );
@@ -233,8 +329,32 @@ function MemberBoard({
   setBusyId: (id: string | null) => void;
   refresh: () => Promise<void>;
 }) {
-  const { shifts, progress, window: signupWindow, leaderboard, isConfirmedCamper } =
-    data;
+  const {
+    shifts,
+    progress,
+    window: signupWindow,
+    leaderboard,
+    isConfirmedCamper,
+    mode,
+    dropLocked,
+    todayPlaya,
+  } = data;
+  const canDrop = mode === "prep" && !dropLocked;
+
+  // Pre-playa nudge: the six emptiest upcoming shifts I'm not already on.
+  const needsYou = useMemo(() => {
+    if (mode !== "prep" || progress.pointsTarget <= 0 || progress.onTrack)
+      return [] as ShiftView[];
+    return shifts
+      .filter((s) => !s.mine && !s.isFull && s.shiftDate >= todayPlaya)
+      .sort(
+        (a, b) =>
+          a.filled / a.capacity - b.filled / b.capacity ||
+          a.shiftDate.localeCompare(b.shiftDate) ||
+          a.startTime.localeCompare(b.startTime)
+      )
+      .slice(0, 6);
+  }, [shifts, mode, progress.pointsTarget, progress.onTrack, todayPlaya]);
 
   const days = useMemo(() => {
     const map = new Map<string, ShiftView[]>();
@@ -261,6 +381,10 @@ function MemberBoard({
   }
 
   async function handleDrop(shift: ShiftView) {
+    if (!canDrop) {
+      toast.error(DROP_LOCK_MSG);
+      return;
+    }
     setBusyId(shift.id);
     const res = await dropShift(shift.id);
     setBusyId(null);
@@ -275,6 +399,50 @@ function MemberBoard({
     <div className="grid gap-6 lg:grid-cols-3">
       {/* Main column */}
       <div className="space-y-6 lg:col-span-2">
+        {/* Pre-playa nudge */}
+        {needsYou.length > 0 && canSignup && (
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-2"
+          >
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-sand-200">
+              <Hand className="h-4 w-4 text-amber" />
+              Shifts that need you
+              <span className="text-xs font-normal text-sand-500">
+                {progress.pointsTarget - progress.totalPoints} pts to your goal
+              </span>
+            </h2>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {needsYou.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-amber/10 px-4 py-3 ring-1 ring-amber/20"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-sand-100">
+                      {s.title}
+                      {s.label ? ` — ${s.label}` : ""}
+                    </p>
+                    <p className="text-xs text-sand-400">
+                      {formatDay(s.shiftDate)} · {formatTime(s.startTime)} ·{" "}
+                      {s.filled}/{s.capacity} filled · {s.pointValue} pts
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="shrink-0 bg-pink-500 hover:bg-pink-600"
+                    disabled={busyId === s.id}
+                    onClick={() => handleSignup(s)}
+                  >
+                    Sign up
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </motion.section>
+        )}
+
         {/* Progress */}
         <Card className="glass-card border-0">
           <CardHeader className="pb-3">
@@ -409,6 +577,11 @@ function MemberBoard({
             <h2 className="flex items-center gap-2 text-sm font-semibold text-sand-200">
               <CheckCircle2 className="h-4 w-4 text-emerald-400" />
               My shifts
+              {!canDrop && (
+                <span className="text-xs font-normal text-sand-500">
+                  · drops locked
+                </span>
+              )}
             </h2>
             <div className="space-y-2">
               {myShifts.map((s) => (
@@ -430,11 +603,12 @@ function MemberBoard({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-sand-300 hover:text-red-400"
-                    disabled={busyId === s.id}
+                    className="text-sand-300 hover:text-red-400 disabled:opacity-50"
+                    disabled={busyId === s.id || !canDrop}
+                    title={canDrop ? undefined : DROP_LOCK_MSG}
                     onClick={() => handleDrop(s)}
                   >
-                    Drop
+                    {canDrop ? "Drop" : <Lock className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
               ))}
@@ -463,6 +637,7 @@ function MemberBoard({
                     shift={s}
                     busy={busyId === s.id}
                     canSignup={canSignup}
+                    canDrop={canDrop}
                     onSignup={() => handleSignup(s)}
                     onDrop={() => handleDrop(s)}
                   />
@@ -516,6 +691,471 @@ function MemberBoard({
   );
 }
 
+// ── Live (on-playa) board ────────────────────────────────────────────
+
+function LiveBoard({
+  data,
+  busyId,
+  setBusyId,
+  refresh,
+}: {
+  data: JobsBoardData;
+  busyId: string | null;
+  setBusyId: (id: string | null) => void;
+  refresh: () => Promise<void>;
+}) {
+  return (
+    <Tabs defaultValue="today" className="space-y-4">
+      <TabsList className="glass w-full sm:w-auto">
+        <TabsTrigger value="today" className="flex-1 sm:flex-none">
+          Today
+        </TabsTrigger>
+        <TabsTrigger value="week" className="flex-1 sm:flex-none">
+          Full week
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="today">
+        <TodayView
+          data={data}
+          busyId={busyId}
+          setBusyId={setBusyId}
+          refresh={refresh}
+        />
+      </TabsContent>
+      <TabsContent value="week">
+        <MemberBoard
+          data={data}
+          busyId={busyId}
+          setBusyId={setBusyId}
+          refresh={refresh}
+        />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+function TodayView({
+  data,
+  busyId,
+  setBusyId,
+  refresh,
+}: {
+  data: JobsBoardData;
+  busyId: string | null;
+  setBusyId: (id: string | null) => void;
+  refresh: () => Promise<void>;
+}) {
+  const { shifts, isConfirmedCamper, isAdmin, todayPlaya } = data;
+  const now = usePlayaNow();
+  // Prefer the live clock's date; fall back to the server's.
+  const today = now.date || todayPlaya;
+  const tomorrow = useMemo(() => {
+    const [y, m, d] = today.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  }, [today]);
+
+  const myUpcoming = useMemo(
+    () =>
+      shifts
+        .filter((s) => s.mine)
+        .filter((s) => {
+          // Keep anything still in progress or ahead of us.
+          const dayDelta = dayIndex(s.shiftDate) - dayIndex(today);
+          if (dayDelta > 0) return true;
+          if (dayDelta < 0) return false;
+          return shiftEndMinutes(s) > now.minutes;
+        })
+        .sort(
+          (a, b) =>
+            a.shiftDate.localeCompare(b.shiftDate) ||
+            a.startTime.localeCompare(b.startTime)
+        ),
+    [shifts, today, now.minutes]
+  );
+  const nextShift = myUpcoming[0] ?? null;
+
+  const needsHands = useMemo(
+    () =>
+      shifts
+        .filter(
+          (s) =>
+            !s.isFull &&
+            !s.mine &&
+            (s.shiftDate === today || s.shiftDate === tomorrow) &&
+            !(s.shiftDate === today && shiftEndMinutes(s) <= now.minutes)
+        )
+        .sort(
+          (a, b) =>
+            a.shiftDate.localeCompare(b.shiftDate) ||
+            a.startTime.localeCompare(b.startTime)
+        ),
+    [shifts, today, tomorrow, now.minutes]
+  );
+
+  const todaysRoster = useMemo(
+    () =>
+      shifts
+        .filter((s) => s.shiftDate === today)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [shifts, today]
+  );
+
+  async function handleSignup(shift: ShiftView) {
+    setBusyId(shift.id);
+    const res = await signUpForShift(shift.id);
+    setBusyId(null);
+    if ("error" in res) toast.error(res.error);
+    else {
+      toast.success(`You're on: ${shift.title}`);
+      await refresh();
+    }
+  }
+
+  async function handleCheckIn(shift: ShiftView) {
+    setBusyId(shift.id);
+    const res = await checkInToShift(shift.id);
+    setBusyId(null);
+    if ("error" in res) toast.error(res.error);
+    else {
+      toast.success("Checked in — thank you!");
+      await refresh();
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-xl space-y-6">
+      {isAdmin && (
+        <div className="flex justify-end">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="border-amber/20 text-sand-300 hover:bg-amber/10"
+          >
+            <Link href={`/dashboard/jobs/day-sheet?date=${today}`}>
+              <Printer className="mr-1.5 h-4 w-4" /> Day sheet
+            </Link>
+          </Button>
+        </div>
+      )}
+
+      {/* (a) Right now / up next */}
+      <section className="space-y-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-sand-200">
+          <Zap className="h-4 w-4 text-amber" />
+          {nextShift && isHappeningNow(nextShift, now) ? "Right now" : "Up next"}
+        </h2>
+        {nextShift ? (
+          <NextShiftCard
+            shift={nextShift}
+            now={now}
+            busy={busyId === nextShift.id}
+            onCheckIn={() => handleCheckIn(nextShift)}
+          />
+        ) : (
+          <Card className="glass-card border-0">
+            <CardContent className="py-6 text-center text-sm text-sand-400">
+              {isConfirmedCamper
+                ? "No upcoming shifts on your plate. Grab one below!"
+                : "Only confirmed 2026 campers can take shifts."}
+            </CardContent>
+          </Card>
+        )}
+        {myUpcoming.length > 1 && (
+          <p className="px-1 text-xs text-sand-500">
+            Then:{" "}
+            {myUpcoming
+              .slice(1, 4)
+              .map(
+                (s) =>
+                  `${s.title} · ${
+                    s.shiftDate === today ? "today" : formatDay(s.shiftDate)
+                  } ${formatTime(s.startTime)}`
+              )
+              .join(" · ")}
+          </p>
+        )}
+      </section>
+
+      {/* (b) Needs hands */}
+      <section className="space-y-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-sand-200">
+          <Hand className="h-4 w-4 text-pink-400" />
+          Needs hands
+          <span className="text-xs font-normal text-sand-500">today + tomorrow</span>
+        </h2>
+        {needsHands.length === 0 ? (
+          <Card className="glass-card border-0">
+            <CardContent className="py-5 text-center text-sm text-sand-400">
+              Everything&apos;s covered — legends.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {needsHands.map((s) => (
+              <motion.div
+                key={s.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3 ring-1 ring-white/10"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-sand-100">
+                    {s.title}
+                    {s.label ? ` — ${s.label}` : ""}
+                  </p>
+                  <p className="text-xs text-sand-400">
+                    {s.shiftDate === today ? "Today" : "Tomorrow"} ·{" "}
+                    {formatTime(s.startTime)}
+                    {s.endTime ? `–${formatTime(s.endTime)}` : ""} ·{" "}
+                    <span className="text-amber">
+                      {s.capacity - s.filled} more needed
+                    </span>
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-10 shrink-0 bg-pink-500 px-4 hover:bg-pink-600"
+                  disabled={busyId === s.id || !isConfirmedCamper}
+                  onClick={() => handleSignup(s)}
+                >
+                  Sign up
+                </Button>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* (c) Today's roster */}
+      <section className="space-y-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-sand-200">
+          <CalendarDays className="h-4 w-4 text-pink-400" />
+          Today&apos;s roster
+          <span className="text-xs font-normal text-sand-500">{formatDay(today)}</span>
+        </h2>
+        {todaysRoster.length === 0 ? (
+          <Card className="glass-card border-0">
+            <CardContent className="py-5 text-center text-sm text-sand-400">
+              Nothing scheduled today.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {todaysRoster.map((s) => {
+              const current = isHappeningNow(s, now);
+              const past = shiftEndMinutes(s) <= now.minutes;
+              return (
+                <div
+                  key={s.id}
+                  className={`rounded-xl px-4 py-3 ring-1 ${
+                    current
+                      ? "bg-emerald-500/10 ring-emerald-500/40"
+                      : s.mine
+                        ? "bg-pink-500/10 ring-pink-500/20"
+                        : "bg-white/5 ring-white/10"
+                  } ${past && !current ? "opacity-60" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-sand-100">
+                        {s.title}
+                        {s.label ? ` — ${s.label}` : ""}
+                      </p>
+                      <p className="text-xs text-sand-400">
+                        {formatTime(s.startTime)}
+                        {s.endTime ? `–${formatTime(s.endTime)}` : ""} ·{" "}
+                        {s.filled}/{s.capacity}
+                      </p>
+                    </div>
+                    {current && (
+                      <Badge className="shrink-0 bg-emerald-500/20 text-emerald-300">
+                        Now
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {s.signups.length === 0 ? (
+                      <span className="text-xs text-sand-500">Nobody yet</span>
+                    ) : (
+                      s.signups.map((r) => (
+                        <span
+                          key={r.profileId}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${
+                            r.isMe
+                              ? "bg-pink-500/20 text-pink-300"
+                              : "bg-sand-700/30 text-sand-300"
+                          } ${r.noShow ? "line-through opacity-60" : ""}`}
+                        >
+                          {r.checkedInAt && (
+                            <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                          )}
+                          {r.name}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function NextShiftCard({
+  shift,
+  now,
+  busy,
+  onCheckIn,
+}: {
+  shift: ShiftView;
+  now: { date: string; minutes: number };
+  busy: boolean;
+  onCheckIn: () => void;
+}) {
+  const until = minutesUntil(shift, now);
+  const inWindow = Math.abs(until) <= CHECKIN_WINDOW_MIN;
+  const checkedIn = !!shift.myCheckedInAt;
+  const happening = isHappeningNow(shift, now);
+
+  let when: string;
+  if (happening) when = "Happening now";
+  else if (until < 0) when = "Started";
+  else if (until < 60) when = `In ${until} min`;
+  else if (shift.shiftDate === now.date) when = `Today at ${formatTime(shift.startTime)}`;
+  else when = `${formatDay(shift.shiftDate)} at ${formatTime(shift.startTime)}`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`glass-card rounded-2xl p-5 ring-1 ${
+        happening ? "ring-emerald-500/40" : "ring-pink-500/20"
+      }`}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-amber">
+        {when}
+      </p>
+      <h3 className="mt-1 text-2xl font-bold text-sand-100">
+        {shift.title}
+        {shift.label ? (
+          <span className="text-sand-300"> — {shift.label}</span>
+        ) : null}
+      </h3>
+      <p className="mt-1 text-sm text-sand-300">
+        {formatDay(shift.shiftDate)} · {formatTime(shift.startTime)}
+        {shift.endTime ? `–${formatTime(shift.endTime)}` : ""}
+        {shift.category ? ` · ${shift.category}` : ""}
+      </p>
+      {shift.description && (
+        <p className="mt-2 text-sm text-sand-400">{shift.description}</p>
+      )}
+      {shift.signups.length > 1 && (
+        <p className="mt-2 text-xs text-sand-500">
+          With:{" "}
+          {shift.signups
+            .filter((r) => !r.isMe)
+            .map((r) => r.name)
+            .join(", ")}
+        </p>
+      )}
+
+      <div className="mt-4">
+        {checkedIn ? (
+          <div className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/15 text-base font-semibold text-emerald-300 ring-1 ring-emerald-500/30">
+            <CheckCircle2 className="h-5 w-5" /> Checked in
+          </div>
+        ) : (
+          <Button
+            className="h-14 w-full bg-emerald-500 text-base font-semibold text-blue-950 hover:bg-emerald-400 disabled:opacity-50"
+            disabled={busy || !inWindow}
+            title={
+              inWindow
+                ? undefined
+                : "Check-in opens 3 hours before your shift"
+            }
+            onClick={onCheckIn}
+          >
+            <CheckCircle2 className="mr-2 h-5 w-5" />
+            {busy ? "Checking in…" : "I'm here ✓"}
+          </Button>
+        )}
+        {!checkedIn && !inWindow && (
+          <p className="mt-1.5 text-center text-xs text-sand-500">
+            Check-in opens 3 hours before your shift.
+          </p>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Closed board (post-burn) ─────────────────────────────────────────
+
+function ClosedBoard({ data }: { data: JobsBoardData }) {
+  const { shifts, progress, leaderboard } = data;
+  const myShifts = shifts.filter((s) => s.mine);
+  const me = leaderboard.find((e) => e.isMe);
+  return (
+    <div className="mx-auto max-w-xl space-y-6">
+      <Card className="glass-card border-0">
+        <CardContent className="space-y-3 py-6 text-center">
+          <Flame className="mx-auto h-8 w-8 text-amber" />
+          <h2 className="text-lg font-semibold text-sand-100">
+            2026 board is closed — thanks for pitching in
+          </h2>
+          <p className="text-sm text-sand-400">
+            You put in{" "}
+            <span className="font-semibold text-sand-200">
+              {progress.totalPoints} point{progress.totalPoints === 1 ? "" : "s"}
+            </span>{" "}
+            across {progress.shiftCount} shift
+            {progress.shiftCount === 1 ? "" : "s"}
+            {me ? ` · #${me.rank} on the leaderboard` : ""}.
+          </p>
+        </CardContent>
+      </Card>
+
+      {myShifts.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-sand-200">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            My shifts
+          </h2>
+          <div className="space-y-2">
+            {myShifts.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between rounded-xl bg-white/5 px-4 py-3 ring-1 ring-white/10"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-sand-100">
+                    {s.title}
+                    {s.label ? ` — ${s.label}` : ""}
+                  </p>
+                  <p className="text-xs text-sand-400">
+                    {formatDay(s.shiftDate)} · {formatTime(s.startTime)}
+                    {s.endTime ? `–${formatTime(s.endTime)}` : ""} ·{" "}
+                    {s.pointValue} pts
+                  </p>
+                </div>
+                {s.myCheckedInAt && (
+                  <Badge className="shrink-0 bg-emerald-500/15 text-emerald-300">
+                    Checked in
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function NoticeCard({
   icon: Icon,
   children,
@@ -535,12 +1175,14 @@ function ShiftCard({
   shift,
   busy,
   canSignup,
+  canDrop = true,
   onSignup,
   onDrop,
 }: {
   shift: ShiftView;
   busy: boolean;
   canSignup: boolean;
+  canDrop?: boolean;
   onSignup: () => void;
   onDrop: () => void;
 }) {
@@ -604,10 +1246,17 @@ function ShiftCard({
             size="sm"
             variant="outline"
             className="w-full"
-            disabled={busy}
+            disabled={busy || !canDrop}
+            title={canDrop ? undefined : DROP_LOCK_MSG}
             onClick={onDrop}
           >
-            Drop shift
+            {canDrop ? (
+              "Drop shift"
+            ) : (
+              <>
+                <Lock className="mr-1 h-3.5 w-3.5" /> You&apos;re on it
+              </>
+            )}
           </Button>
         ) : shift.isFull ? (
           <Button size="sm" variant="outline" className="w-full" disabled>
@@ -1153,6 +1802,12 @@ function AdminSettings({
   );
   const [hours, setHours] = useState(String(s?.earlyAccessHours ?? 24));
   const [target, setTarget] = useState(String(s?.pointsTarget ?? 0));
+  const [boardMode, setBoardMode] = useState<BoardModeSetting>(
+    s?.boardMode ?? "auto"
+  );
+  const [dropLockAt, setDropLockAt] = useState(
+    isoToLocalInput(s?.dropLockAt ?? null)
+  );
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -1164,6 +1819,8 @@ function AdminSettings({
       early_access_years_threshold: Number(threshold || 2),
       early_access_hours: Number(hours || 24),
       points_target: Number(target || 0),
+      board_mode: boardMode,
+      drop_lock_at: dropLockAt ? new Date(dropLockAt).toISOString() : "",
     });
     setSaving(false);
     if ("error" in res) {
@@ -1239,6 +1896,48 @@ function AdminSettings({
           <p className="mt-1 text-xs text-sand-500">
             Shown as a progress goal. 0 = no target.
           </p>
+        </div>
+
+        <div className="space-y-4 rounded-lg border border-amber/10 bg-blue-950/20 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-sand-400">
+            On-playa mode
+          </p>
+          <div>
+            <Label className="text-sand-300">Board mode</Label>
+            <Select
+              value={boardMode}
+              onValueChange={(v) => setBoardMode(v as BoardModeSetting)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto (from camp dates)</SelectItem>
+                <SelectItem value="prep">Pre-playa</SelectItem>
+                <SelectItem value="live">Live</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-sand-500">
+              Currently resolving to{" "}
+              <span className="font-semibold text-sand-300">{data.mode}</span>.
+              Auto goes live on the camp start date and closes after the end
+              date. Live + Closed lock drops automatically.
+            </p>
+          </div>
+          <div>
+            <Label className="text-sand-300">Lock drops after</Label>
+            <Input
+              type="datetime-local"
+              value={dropLockAt}
+              onChange={(e) => setDropLockAt(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-sand-500">
+              Members can&apos;t drop shifts after this time. Blank = drops
+              allowed until the board goes live.
+              {data.dropLocked && " Drops are currently locked."}
+            </p>
+          </div>
         </div>
 
         <Button
