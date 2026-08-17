@@ -288,8 +288,12 @@ export default function DashboardLayout({
           </Link>
         )}
 
-        {/* Page content */}
-        <ScrollArea className="flex-1 min-w-0">
+        {/* Page content. Radix wraps viewport children in an inline
+            `display:table; min-width:100%` div, which sizes to the content's
+            min-content width — so any nowrap/truncate text (e.g. hype card
+            "Your week" rows) pushes <main> wider than a phone screen and
+            body's overflow-x:clip chops the right edge. Force it to block. */}
+        <ScrollArea className="flex-1 min-w-0 [&_[data-slot=scroll-area-viewport]>div]:block!">
           <main className="p-4 md:p-8">{children}</main>
         </ScrollArea>
       </div>
