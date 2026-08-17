@@ -279,7 +279,7 @@ export function HypeCard({
 function TimeCell({ value, label, pad }: { value: number; label: string; pad?: boolean }) {
   return (
     <div className="flex flex-col items-center rounded-xl bg-white/5 px-1 py-3 ring-1 ring-white/10 sm:py-4">
-      <span className="font-heading text-3xl font-bold leading-none tabular-nums text-sand-50 sm:text-5xl md:text-6xl">
+      <span className="font-sans text-4xl font-extrabold leading-none tabular-nums tracking-tight text-sand-50 sm:text-5xl md:text-6xl">
         {pad ? String(value).padStart(2, "0") : value}
       </span>
       <span className="mt-2 text-[10px] font-medium uppercase tracking-[0.2em] text-sand-400 sm:text-xs">
