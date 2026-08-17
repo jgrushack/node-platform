@@ -137,18 +137,21 @@ export function HypeCard({
                 : "Until next year"}
           </div>
           {data.phase === "before" && cd ? (
-            <div className="mt-3">
-              <div className="flex items-end gap-2 sm:gap-4">
-                <TimeCell value={cd.days} label={cd.days === 1 ? "day" : "days"} big />
-                <TimeCell value={cd.hours} label="hrs" />
-                <TimeCell value={cd.mins} label="min" />
-                <TimeCell value={cd.secs} label="sec" />
+            <div className="mt-4">
+              <div className="grid grid-cols-4 gap-2 sm:gap-3">
+                <TimeCell value={cd.days} label={cd.days === 1 ? "day" : "days"} />
+                <TimeCell value={cd.hours} label="hours" pad />
+                <TimeCell value={cd.mins} label="minutes" pad />
+                <TimeCell value={cd.secs} label="seconds" pad />
               </div>
-              <p className="mt-2 text-sm text-sand-400">
-                until gate opens ·{" "}
-                <span className="text-sand-200">
-                  {data.startDate ? formatDay(data.startDate) : ""}
-                </span>
+              <p className="mt-4 text-center text-sm text-sand-300">
+                until gate opens
+                {data.startDate && (
+                  <>
+                    {" "}
+                    · <span className="font-medium text-sand-100">{formatDay(data.startDate)}</span>
+                  </>
+                )}
               </p>
             </div>
           ) : data.phase === "during" ? (
@@ -273,17 +276,15 @@ export function HypeCard({
   );
 }
 
-function TimeCell({ value, label, big }: { value: number; label: string; big?: boolean }) {
+function TimeCell({ value, label, pad }: { value: number; label: string; pad?: boolean }) {
   return (
-    <div className="flex items-baseline gap-1">
-      <span
-        className={`font-heading font-bold tabular-nums leading-none text-sand-100 ${
-          big ? "text-5xl sm:text-7xl" : "text-2xl sm:text-4xl text-sand-200"
-        }`}
-      >
-        {big ? value : String(value).padStart(2, "0")}
+    <div className="flex flex-col items-center rounded-xl bg-white/5 px-1 py-3 ring-1 ring-white/10 sm:py-4">
+      <span className="font-heading text-3xl font-bold leading-none tabular-nums text-sand-50 sm:text-5xl md:text-6xl">
+        {pad ? String(value).padStart(2, "0") : value}
       </span>
-      <span className="text-[11px] uppercase tracking-wider text-sand-500">{label}</span>
+      <span className="mt-2 text-[10px] font-medium uppercase tracking-[0.2em] text-sand-400 sm:text-xs">
+        {label}
+      </span>
     </div>
   );
 }
