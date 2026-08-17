@@ -145,7 +145,7 @@ export async function getHypeData(): Promise<HypeData | { error: string }> {
     : null;
 
   // Camp pulse + buddies (camp-wide, service role — same pattern as leaderboard).
-  const [{ data: regs }, { data: shifts }, { data: signupCount }] =
+  const [{ data: regs }, { data: shifts }, { count: signupCount }] =
     await Promise.all([
       admin
         .from("registrations")
@@ -217,7 +217,7 @@ export async function getHypeData(): Promise<HypeData | { error: string }> {
       confirmed: regRows.length,
       ready: regRows.filter((r) => !!r.ready_at).length,
       slotsTotal: (shifts ?? []).reduce((s, x) => s + (x.capacity ?? 0), 0),
-      slotsFilled: (signupCount as unknown as number | null) ?? 0,
+      slotsFilled: signupCount ?? 0,
     },
   };
 }
