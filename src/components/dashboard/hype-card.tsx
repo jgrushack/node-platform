@@ -188,6 +188,7 @@ export function HypeCard({
                       : undefined
                   }
                   onClick={onOpenArrival}
+                  action="dates"
                 />
               )}
               <Row
@@ -204,6 +205,7 @@ export function HypeCard({
                     : undefined
                 }
                 onClick={onOpenArrival}
+                action="dates"
               />
               <Row
                 icon={Briefcase}
@@ -219,6 +221,7 @@ export function HypeCard({
                     : undefined
                 }
                 onClick={onOpenJobs}
+                action="board"
               />
             </ul>
           </CardContent>
@@ -295,19 +298,22 @@ function Row({
   value,
   sub,
   onClick,
+  action,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   sub?: string;
   onClick?: () => void;
+  /** Short verb shown at the right edge, e.g. "edit" or "board". */
+  action?: string;
 }) {
   return (
     <li>
       <button
         type="button"
         onClick={onClick}
-        className="-mx-2 flex w-full items-start gap-3 rounded-lg px-2 py-1 text-left transition-colors hover:bg-white/5"
+        className="group -mx-2 flex w-full items-start gap-3 rounded-lg px-2 py-1 text-left transition-colors hover:bg-white/5"
       >
         <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-pink-400" />
         <span className="min-w-0 flex-1">
@@ -315,6 +321,12 @@ function Row({
           <span className="block truncate text-sm font-medium text-sand-100">{value}</span>
           {sub && <span className="block truncate text-xs text-sand-400">{sub}</span>}
         </span>
+        {onClick && (
+          <span className="mt-1 flex flex-shrink-0 items-center gap-0.5 text-[11px] text-sand-500 group-hover:text-pink-300">
+            {action ?? "edit"}
+            <ChevronRight className="h-3 w-3" />
+          </span>
+        )}
       </button>
     </li>
   );
