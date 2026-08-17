@@ -11,8 +11,8 @@ const EQUIPMENT_KIND = "equipment_2026";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-/** Admin/super-admin gate; returns the service-role client, camp year, and role. */
-async function requireAdmin(): Promise<
+/** Any signed-in member with a profile; returns the service-role client, camp year, and role. */
+async function requireMember(): Promise<
   { admin: Admin; campYearId: string; role: string } | { error: string }
 > {
   const supabase = await createClient();
@@ -25,8 +25,7 @@ async function requireAdmin(): Promise<
     .select("role")
     .eq("id", user.id)
     .single();
-  if (!me || !["admin", "super_admin"].includes(me.role))
-    return { error: "Not authorized" };
+  if (!me) return { error: "Not authorized" };
   const admin = createAdminClient();
   const { data: campYear } = await admin
     .from("camp_years")
@@ -35,6 +34,17 @@ async function requireAdmin(): Promise<
     .single();
   if (!campYear) return { error: "No 2026 camp year configured." };
   return { admin, campYearId: campYear.id, role: me.role };
+}
+
+/** Admin/super-admin gate; returns the service-role client, camp year, and role. */
+async function requireAdmin(): Promise<
+  { admin: Admin; campYearId: string; role: string } | { error: string }
+> {
+  const ctx = await requireMember();
+  if ("error" in ctx) return ctx;
+  if (!["admin", "super_admin"].includes(ctx.role))
+    return { error: "Not authorized" };
+  return ctx;
 }
 
 export type StorageItemLine = { type: string; quantity: number; labels: string[] };
@@ -56,8 +66,8 @@ export type ReportRow = {
   renoArrivalDate: string | null;
   /** Full dues obligation (the tier), owed = remaining. Super-admin only (else 0). */
   dues: { totalCents: number; owedCents: number; paidCents: number };
-  /** Yes/no/partial dues payment — visible to all admins (no amounts). */
-  duesStatus: DuesStatus;
+  /** Yes/no/partial dues payment — admins only (no amounts); null for members. */
+  duesStatus: DuesStatus | null;
   storage: {
     owedCents: number;
     paidCents: number;
@@ -100,7 +110,13 @@ export type ReportRow = {
 
 export type CampReportResult =
   | { error: string }
-  | { rows: ReportRow[]; isSuperAdmin: boolean };
+  | {
+      rows: ReportRow[];
+      /** Sees dues amounts/balances + can cancel registrations. */
+      isSuperAdmin: boolean;
+      /** Sees dues paid/partial/unpaid status, applications, emergency contacts. */
+      isAdmin: boolean;
+    };
 
 const STORAGE_ITEM_LABEL: Record<string, string> = {
   bike: "Bike",
@@ -136,13 +152,16 @@ function parseStorageItems(notes: string | null): StorageItemLine[] {
 }
 
 /** Full per-camper record: registration, travel, dues/storage/equipment, gear,
- *  jobs, and every profile + application answer. Admin + super_admin only;
- *  money (dues/balances) is stripped for non-super-admins. */
+ *  jobs, and every profile + application answer. Any signed-in member may read
+ *  it — travel/arrival/rides coordination is camp-wide — but money (dues/
+ *  balances) is super-admin only, and dues status, application answers,
+ *  emergency contacts and cancelled registrations are admin only. */
 export async function getCampReport(): Promise<CampReportResult> {
-  const ctx = await requireAdmin();
+  const ctx = await requireMember();
   if ("error" in ctx) return ctx;
   const { admin, campYearId, role } = ctx;
   const isSuperAdmin = role === "super_admin";
+  const isAdmin = isSuperAdmin || role === "admin";
 
   const [regsRes, invRes, resvRes, itemsRes, signupsRes] = await Promise.all([
     admin
@@ -452,7 +471,18 @@ export async function getCampReport(): Promise<CampReportResult> {
     }
   }
 
-  return { rows, isSuperAdmin };
+  // Members (non-admins): no dues status, no application answers, no emergency
+  // contacts, and cancelled registrations are hidden entirely.
+  const visible = isAdmin ? rows : rows.filter((r) => r.status !== "cancelled");
+  if (!isAdmin) {
+    for (const r of visible) {
+      r.duesStatus = null;
+      r.application = null;
+      r.profile.emergencyContact = null;
+    }
+  }
+
+  return { rows: visible, isSuperAdmin, isAdmin };
 }
 
 export type CancelRegistrationResult =

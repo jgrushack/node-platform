@@ -98,9 +98,12 @@ export default function DashboardLayout({
             { href: "/dashboard/wiki", label: "Wiki", icon: BookOpen },
           );
 
-          // Admin/super_admin see Reports + Rentals (equipment inventory)
+          // Reports (roster / arrivals / rides) is camp-wide; payments inside it
+          // are still admin-gated server-side.
+          items.push({ href: "/dashboard/reports", label: "Reports", icon: BarChart3 });
+
+          // Admin/super_admin see Rentals (equipment inventory)
           if (["admin", "super_admin"].includes(effectiveRole)) {
-            items.push({ href: "/dashboard/reports", label: "Reports", icon: BarChart3 });
             items.push({ href: "/dashboard/rentals", label: "Rentals", icon: Tent });
           }
 

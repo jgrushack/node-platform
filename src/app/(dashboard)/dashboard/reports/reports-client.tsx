@@ -21,6 +21,7 @@ import {
   Instagram,
   Video,
   Download,
+  CalendarDays,
 } from "lucide-react";
 import {
   Select,
@@ -173,7 +174,8 @@ function statusBadge(status: string) {
 /** Dues payment badge; cancelled registrations keep their status badge. */
 function duesBadge(row: ReportRow) {
   if (row.status === "cancelled") return statusBadge(row.status);
-  const styles: Record<ReportRow["duesStatus"], [string, string]> = {
+  if (!row.duesStatus) return null;
+  const styles: Record<NonNullable<ReportRow["duesStatus"]>, [string, string]> = {
     paid: ["Paid", "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"],
     partial: ["Partial", "bg-amber/15 text-amber border-amber/20"],
     unpaid: ["Unpaid", "bg-red-500/15 text-red-400 border-red-500/20"],
@@ -227,11 +229,13 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 function DetailModal({
   row,
   isSuperAdmin,
+  isAdmin,
   onClose,
   onCancelRegistration,
 }: {
   row: ReportRow | null;
   isSuperAdmin: boolean;
+  isAdmin: boolean;
   onClose: () => void;
   onCancelRegistration: (row: ReportRow) => void;
 }) {
@@ -404,10 +408,12 @@ function DetailModal({
               <Field label="Skills" value={row.profile.skills.join(", ")} />
             )}
             <Field label="Dietary" value={row.profile.dietary} />
-            <Field
-              label="Emergency contact"
-              value={row.profile.emergencyContact}
-            />
+            {row.profile.emergencyContact && (
+              <Field
+                label="Emergency contact"
+                value={row.profile.emergencyContact}
+              />
+            )}
             {row.profile.instagram && (
               <Field
                 label="Instagram"
@@ -476,7 +482,7 @@ function DetailModal({
             </Section>
           )}
 
-          {row.status !== "cancelled" && (
+          {isAdmin && row.status !== "cancelled" && (
             <div className="border-t border-white/10 pt-3">
               <Button
                 variant="ghost"
@@ -1116,6 +1122,7 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
 export default function ReportsClient() {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1140,20 +1147,24 @@ export default function ReportsClient() {
       setRosterError(null);
       setRows(res.rows);
       setIsSuperAdmin(res.isSuperAdmin);
+      setIsAdmin(res.isAdmin);
     }
+    return res;
   }, []);
 
   useEffect(() => {
     (async () => {
-      await loadRoster();
-      const supabase = createClient();
-      const { data: apps } = await supabase
-        .from("applications")
-        .select(
-          "id, first_name, last_name, email, playa_name, status, created_at, reviewed_at"
-        )
-        .order("created_at", { ascending: false });
-      if (apps) setApplications(apps as ApplicationRow[]);
+      const res = await loadRoster();
+      if (!("error" in res) && res.isAdmin) {
+        const supabase = createClient();
+        const { data: apps } = await supabase
+          .from("applications")
+          .select(
+            "id, first_name, last_name, email, playa_name, status, created_at, reviewed_at"
+          )
+          .order("created_at", { ascending: false });
+        if (apps) setApplications(apps as ApplicationRow[]);
+      }
       setLoading(false);
     })();
   }, [loadRoster]);
@@ -1224,7 +1235,7 @@ export default function ReportsClient() {
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const header = [
-      "Name", "Playa name", "Email", "Status", "Dues", "Ticket", "Travel",
+      "Name", "Playa name", "Email", "Status", ...(isAdmin ? ["Dues"] : []), "Ticket", "Travel",
       "Arrival", "Departure", "Reno arrival", "Storage items", "Gear items",
       "Job shifts", "Job points",
       ...(isSuperAdmin ? ["Balance owed ($)"] : []),
@@ -1235,7 +1246,7 @@ export default function ReportsClient() {
         r.playaName,
         r.email,
         r.status,
-        r.duesStatus,
+        ...(isAdmin ? [r.duesStatus ?? ""] : []),
         r.hasTicket ? "yes" : "no",
         TRAVEL_LABEL[r.carPass] ?? r.carPass,
         r.arrivalDate,
@@ -1345,13 +1356,21 @@ export default function ReportsClient() {
                 icon: Ticket,
                 color: "text-coral",
               },
-          {
-            label: "Applications",
-            value: applications.length,
-            detail: `${appsPending} pending`,
-            icon: ListFilter,
-            color: "text-golden",
-          },
+          isAdmin
+            ? {
+                label: "Applications",
+                value: applications.length,
+                detail: `${appsPending} pending`,
+                icon: ListFilter,
+                color: "text-golden",
+              }
+            : {
+                label: "Dates Set",
+                value: active.filter((r) => r.arrivalDate).length,
+                detail: `of ${active.length} registered`,
+                icon: CalendarDays,
+                color: "text-golden",
+              },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}
@@ -1391,12 +1410,14 @@ export default function ReportsClient() {
           >
             Arrivals
           </TabsTrigger>
-          <TabsTrigger
-            value="applications"
-            className="data-[state=active]:bg-amber/15 data-[state=active]:text-amber text-sand-400"
-          >
-            Applications
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger
+              value="applications"
+              className="data-[state=active]:bg-amber/15 data-[state=active]:text-amber text-sand-400"
+            >
+              Applications
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Roster tab */}
@@ -1423,13 +1444,9 @@ export default function ReportsClient() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {(
-                    [
-                      "all",
-                      "paid",
-                      "partial",
-                      "unpaid",
-                      "cancelled",
-                    ] as RosterFilter[]
+                    (isAdmin
+                      ? ["all", "paid", "partial", "unpaid", "cancelled"]
+                      : ["all"]) as RosterFilter[]
                   ).map((s) => (
                     <button
                       key={s}
@@ -1571,7 +1588,9 @@ export default function ReportsClient() {
                         <TableHeader>
                           <TableRow className="border-amber/10 hover:bg-transparent">
                             <TableHead className="text-sand-400">Name</TableHead>
-                            <TableHead className="text-sand-400">Dues</TableHead>
+                            {isAdmin && (
+                              <TableHead className="text-sand-400">Dues</TableHead>
+                            )}
                             <TableHead className="text-sand-400 text-center">
                               Ticket
                             </TableHead>
@@ -1616,7 +1635,7 @@ export default function ReportsClient() {
                                     </span>
                                   ) : null}
                                 </TableCell>
-                                <TableCell>{duesBadge(r)}</TableCell>
+                                {isAdmin && <TableCell>{duesBadge(r)}</TableCell>}
                                 <TableCell className="text-center">
                                   <TicketIcon has={r.hasTicket} />
                                 </TableCell>
@@ -1680,7 +1699,7 @@ export default function ReportsClient() {
           {rosterError ? (
             <Card className="glass-card border-0">
               <CardContent className="py-10 text-center text-sand-400">
-                Admin access required to view arrivals.
+                Sign in to view arrivals.
               </CardContent>
             </Card>
           ) : (
@@ -1821,6 +1840,7 @@ export default function ReportsClient() {
         row={detailRow}
         isSuperAdmin={isSuperAdmin}
         onClose={() => setDetailRow(null)}
+        isAdmin={isAdmin}
         onCancelRegistration={(r) => setCancelTarget(r)}
       />
 
