@@ -257,6 +257,7 @@ export default function DashboardPage() {
   const [duesState, setDuesState] = useState<ChecklistState>("todo");
   const [duesProcessing, setDuesProcessing] = useState(false);
   const [showTicketTravelModal, setShowTicketTravelModal] = useState(false);
+  const [ticketTravelStep, setTicketTravelStep] = useState<"ticket" | "carpass">("ticket");
   const [showStorageEdit, setShowStorageEdit] = useState(false);
   const [showArrivalModal, setShowArrivalModal] = useState(false);
   const [jobProgress, setJobProgress] = useState<MyJobProgress | null>(null);
@@ -697,7 +698,10 @@ export default function DashboardPage() {
       icon: Ticket,
       state: hasTicket ? "done" : "todo",
       detail: hasTicket ? "Got my ticket" : "Still need a ticket",
-      onClick: () => setShowTicketTravelModal(true),
+      onClick: () => {
+        setTicketTravelStep("ticket");
+        setShowTicketTravelModal(true);
+      },
     },
     {
       key: "transport",
@@ -705,7 +709,10 @@ export default function DashboardPage() {
       icon: Bus,
       state: transportState(carPassStatus),
       detail: transportLabel(carPassStatus),
-      onClick: () => setShowTicketTravelModal(true),
+      onClick: () => {
+        setTicketTravelStep("carpass");
+        setShowTicketTravelModal(true);
+      },
     },
     {
       key: "storage",
@@ -1602,6 +1609,7 @@ export default function DashboardPage() {
             </DialogTitle>
           </DialogHeader>
           <TicketStatusForm
+            initialStep={ticketTravelStep}
             initialTicket={hasTicket ?? undefined}
             initialCarPass={carPassStatus ?? undefined}
             saving={savingTicket}
@@ -1662,19 +1670,21 @@ export default function DashboardPage() {
 }
 
 function TicketStatusForm({
+  initialStep = "ticket",
   initialTicket,
   initialCarPass,
   saving,
   onSave,
   onCancel,
 }: {
+  initialStep?: "ticket" | "carpass";
   initialTicket?: boolean;
   initialCarPass?: CarPassStatus;
   saving: boolean;
   onSave: (ticket: boolean, carPass: CarPassStatus) => void;
   onCancel?: () => void;
 }) {
-  const [step, setStep] = useState<"ticket" | "carpass">("ticket");
+  const [step, setStep] = useState<"ticket" | "carpass">(initialStep);
   const [ticket, setTicket] = useState<boolean | null>(initialTicket ?? null);
   const [carPass, setCarPass] = useState<CarPassStatus | null>(initialCarPass ?? null);
 
@@ -1685,7 +1695,7 @@ function TicketStatusForm({
 
   function selectCarPass(val: CarPassStatus) {
     setCarPass(val);
-    onSave(ticket!, val);
+    onSave(ticket ?? false, val);
   }
 
   const btnClass = "flex-1 rounded-xl border border-pink-500/20 bg-pink-500/5 px-4 py-3 text-sm font-medium text-sand-200 hover:bg-pink-500/15 hover:text-sand-100 transition-colors";
