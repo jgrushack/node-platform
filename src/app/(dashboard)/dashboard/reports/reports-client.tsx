@@ -523,6 +523,7 @@ const CHART = {
   playa: "#db2777",
   reno: "#0284c7",
   camp: "#d97706",
+  depart: "#7c3aed",
 };
 
 // Setup Access Pass allocation per build day (from BMorg placement).
@@ -890,14 +891,22 @@ function RidesCard({ active }: { active: ReportRow[] }) {
 function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showNoDates, setShowNoDates] = useState(false);
+  const [selectedDepartDay, setSelectedDepartDay] = useState<string | null>(null);
+  const [showNoDeparture, setShowNoDeparture] = useState(false);
 
   const active = rows.filter((r) => r.status !== "cancelled");
   const arrivalsByDay = new Map<string, ReportRow[]>();
   const renoByDay = new Map<string, ReportRow[]>();
+  const departuresByDay = new Map<string, ReportRow[]>();
   active.forEach((r) => {
     if (r.arrivalDate)
       arrivalsByDay.set(r.arrivalDate, [
         ...(arrivalsByDay.get(r.arrivalDate) ?? []),
+        r,
+      ]);
+    if (r.departureDate)
+      departuresByDay.set(r.departureDate, [
+        ...(departuresByDay.get(r.departureDate) ?? []),
         r,
       ]);
     if (r.renoArrivalDate)
@@ -917,6 +926,15 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
       ).length
   );
   const noDates = active.filter((r) => !r.arrivalDate);
+  // Has arrival but no departure — the "assumed through strike" crowd.
+  const noDeparture = active.filter((r) => r.arrivalDate && !r.departureDate);
+  const maxDepartures = Math.max(
+    1,
+    ...SCHEDULE_DAYS.map((d) => departuresByDay.get(d)?.length ?? 0)
+  );
+  const selDepartures = selectedDepartDay
+    ? departuresByDay.get(selectedDepartDay) ?? []
+    : [];
 
   const maxArrivals = Math.max(
     1,
@@ -1053,6 +1071,106 @@ function ArrivalsTab({ rows }: { rows: ReportRow[] }) {
                 {selReno.length > 0
                   ? `Landing in Reno: ${selReno.map((r) => r.name).join(", ")}`
                   : "No Reno landings"}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Departures per day */}
+      <Card className="glass-card border-0">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-sand-300">
+            Departures by day
+          </CardTitle>
+          <div className="flex flex-wrap items-center gap-4 text-xs text-sand-400">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-sm"
+                style={{ background: CHART.depart }}
+              />
+              Rolling out of BRC
+            </span>
+            {noDeparture.length > 0 && (
+              <button
+                onClick={() => setShowNoDeparture((v) => !v)}
+                className="-mx-2 -my-1.5 rounded px-2 py-1.5 text-amber hover:underline"
+              >
+                {noDeparture.length} with no departure yet
+              </button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {showNoDeparture && (
+            <p className="mb-3 rounded-lg border border-amber/15 bg-amber/5 px-3 py-2 text-xs text-sand-300">
+              {noDeparture.map((r) => r.name).join(", ")}
+            </p>
+          )}
+          <div className="flex items-end gap-1 overflow-x-auto pb-1 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] md:[mask-image:none]">
+            {SCHEDULE_DAYS.map((day) => {
+              const n = departuresByDay.get(day)?.length ?? 0;
+              const selected = selectedDepartDay === day;
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDepartDay(selected ? null : day)}
+                  title={`${fmtDate(day)} — ${n} leaving`}
+                  className={`group flex min-w-9 flex-1 flex-col items-center rounded-lg pt-1 transition-colors ${
+                    selected ? "bg-amber/10" : "hover:bg-amber/5"
+                  }`}
+                >
+                  <div className="flex h-24 w-full flex-col items-center justify-end">
+                    {n > 0 && (
+                      <>
+                        <span className="mb-0.5 text-[10px] leading-none text-sand-400">
+                          {n}
+                        </span>
+                        <div
+                          className="w-2.5 rounded-t"
+                          style={{
+                            background: CHART.depart,
+                            height: `${(n / maxDepartures) * 88}%`,
+                            minHeight: 4,
+                          }}
+                        />
+                      </>
+                    )}
+                  </div>
+                  <span
+                    className={`mt-1 text-[10px] leading-none ${
+                      phase(day) === "build"
+                        ? "text-amber"
+                        : phase(day) === "strike"
+                          ? "text-red-400"
+                          : "text-sand-500"
+                    }`}
+                  >
+                    {weekday(day)}
+                  </span>
+                  <span className="text-[10px] text-sand-500">
+                    {day.slice(8).replace(/^0/, "")}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-sand-500">
+            Exodus starts Sun Aug 30 evening ·{" "}
+            <span className="text-red-400">Strike Sep 5–7</span> · leaving
+            before strike? make sure your shifts are covered
+          </p>
+
+          {selectedDepartDay && (
+            <div className="mt-3 space-y-2 rounded-lg border border-amber/10 bg-blue-950/30 px-3 py-2.5 text-sm">
+              <p className="font-medium text-sand-200">
+                {fmtDate(selectedDepartDay)}
+              </p>
+              <p className="text-sand-300">
+                <span style={{ color: CHART.depart }}>●</span>{" "}
+                {selDepartures.length > 0
+                  ? `Leaving: ${selDepartures.map((r) => r.name).join(", ")}`
+                  : "No one rolling out"}
               </p>
             </div>
           )}
@@ -1408,7 +1526,7 @@ export default function ReportsClient() {
             value="arrivals"
             className="data-[state=active]:bg-amber/15 data-[state=active]:text-amber text-sand-400"
           >
-            Arrivals
+            Arrivals<span className="hidden sm:inline">&nbsp;&amp; Departures</span>
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger
