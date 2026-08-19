@@ -15,7 +15,7 @@ import { updateArrivalDates } from "@/lib/actions/registrations";
 
 // NODE 2026 schedule (camp dates, not official BRC gate dates):
 //   Build week ...... Wed Aug 26 – Sat Aug 29
-//   Opening ceremony  Sun Aug 30, 4:00 PM
+//   Welcome ceremony   Sun Aug 30, 3:00 PM
 //   Strike .......... Sep 5 – 7
 type DayOption = { value: string; weekday: string; label: string };
 
@@ -259,9 +259,9 @@ export function ArrivalDatesModal({
           {/* Step-specific guidance */}
           {isArrivalStep ? (
             <p className="rounded-lg border border-pink-500/15 bg-pink-500/5 px-3 py-2 text-sm text-sand-300">
-              We recommend coming as early as you can. Opening ceremony is{" "}
+              We recommend coming as early as you can. Welcome ceremony is{" "}
               <span className="font-semibold text-sand-100">
-                August 30 at 4:00 PM
+                August 30 at 3:00 PM
               </span>
               .
             </p>
