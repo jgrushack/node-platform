@@ -287,7 +287,7 @@ function JobGuide({ definitions }: { definitions: JobDefinitionRow[] }) {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-amber">
             {cat}
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {defs.map((d) => (
               <Card key={d.id} className="glass-card border-0">
                 <CardContent className="space-y-2 py-4">
@@ -396,7 +396,7 @@ function MemberBoard({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Main column */}
       <div className="space-y-6 lg:col-span-2">
         {/* Pre-playa nudge */}
@@ -413,7 +413,7 @@ function MemberBoard({
                 {progress.pointsTarget - progress.totalPoints} pts to your goal
               </span>
             </h2>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {needsYou.map((s) => (
                 <div
                   key={s.id}
@@ -630,7 +630,7 @@ function MemberBoard({
                 <CalendarDays className="h-4 w-4 text-pink-400" />
                 {formatDay(date)}
               </h2>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {dayShifts.map((s) => (
                   <ShiftCard
                     key={s.id}

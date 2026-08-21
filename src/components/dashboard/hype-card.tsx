@@ -172,7 +172,7 @@ export function HypeCard({
       </Card>
 
       {/* Your week + camp pulse */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card className="glass-card border-0">
           <CardContent className="p-5">
             <h3 className="mb-3 text-sm font-semibold text-sand-200">Your week</h3>

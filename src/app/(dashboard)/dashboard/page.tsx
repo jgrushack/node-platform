@@ -1228,7 +1228,7 @@ export default function DashboardPage() {
       )}
 
       {/* Bottom grid: Documents + Recent Updates */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Documents + Ticket & Travel */}
         <div className="space-y-6">
           <motion.div

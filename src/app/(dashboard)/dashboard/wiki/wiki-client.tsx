@@ -164,7 +164,7 @@ export default function WikiClient({
         </select>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[240px_1fr]">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[240px_1fr]">
         {/* Sidebar nav */}
         <nav className="hidden md:block">
           <div className="sticky top-4 space-y-4">
