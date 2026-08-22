@@ -88,7 +88,8 @@ export function LockscreenClient() {
     if (!img) return;
     setRendering(true);
 
-    const headingFam = resolveFamily("font-heading");
+    // Sci-Fied matches the NODE wordmark on the art and reads bolder than Neuropol.
+    const headingFam = resolveFamily("font-brand");
     const bodyFam = resolveFamily("font-sans");
     // Make sure the faces are actually loaded before drawing on canvas.
     try {
@@ -121,30 +122,29 @@ export function LockscreenClient() {
 
     if (displayName) {
       // Fit the name inside the dashed panel (match the poster's letterspacing)
-      let size = showContact ? 96 : 110;
+      let size = 130;
       const trySpacing = "letterSpacing" in ctx;
       for (; size >= 34; size -= 4) {
         ctx.font = `700 ${size}px ${headingFam}`;
         if (trySpacing)
-          (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${Math.round(size * 0.12)}px`;
+          (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${Math.round(size * 0.06)}px`;
         if (ctx.measureText(displayName).width <= BOX_W - 60) break;
       }
-      const nameY = showContact ? BOX_CY - 32 : BOX_CY;
-      ctx.fillText(displayName, BOX_CX, nameY);
+      ctx.fillText(displayName, BOX_CX, BOX_CY);
     }
 
     if (showContact) {
       if ("letterSpacing" in ctx)
         (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = "2px";
-      // Numbers stay in the body face — Neuropol digits are unreadable.
-      let csize = 44;
-      const line = `IN CASE OF EMERGENCY: ${contactLine}`;
-      for (; csize >= 22; csize -= 2) {
+      // Bottom strip, clear of the name panel. Digits in the body face.
+      let csize = 34;
+      const line = `IN CASE OF EMERGENCY: ${contactLine.toUpperCase()}`;
+      for (; csize >= 20; csize -= 2) {
         ctx.font = `600 ${csize}px ${bodyFam}`;
-        if (ctx.measureText(line).width <= BOX_W - 60) break;
+        if (ctx.measureText(line).width <= ART_W - 80) break;
       }
-      ctx.fillStyle = "rgba(255,255,255,0.88)";
-      ctx.fillText(line, BOX_CX, BOX_CY + 52);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillText(line, ART_W / 2, ART_H - 52);
     }
 
     setDataUrl(canvas.toDataURL("image/jpeg", 0.92));
