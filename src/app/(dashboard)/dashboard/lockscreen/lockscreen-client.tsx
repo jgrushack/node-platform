@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Caveat } from "next/font/google";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Download, Loader2, Share2, Smartphone } from "lucide-react";
+
+// Script option for the name (loaded only on this page).
+const caveat = Caveat({ subsets: ["latin"], weight: "700" });
+
+type FontKey = "node" | "clean" | "script";
+type NameSource = "playa" | "real";
 
 // Base art is 1124×1999. The dashed "your name here" panel sits at:
 const ART_W = 1124;
@@ -33,6 +40,9 @@ function resolveFamily(className: string): string {
 export function LockscreenClient() {
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
+  const [fontKey, setFontKey] = useState<FontKey>("node");
+  const [nameSource, setNameSource] = useState<NameSource>("playa");
+  const [profileNames, setProfileNames] = useState<{ playa: string; real: string }>({ playa: "", real: "" });
   const [withContact, setWithContact] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rendering, setRendering] = useState(false);
@@ -50,12 +60,16 @@ export function LockscreenClient() {
       }
       supabase
         .from("profiles")
-        .select("first_name, playa_name, emergency_contact")
+        .select("first_name, last_name, playa_name, emergency_contact")
         .eq("id", user.id)
         .single()
         .then(({ data }) => {
           if (data) {
-            setName((data.playa_name || data.first_name || "").trim());
+            const playa = (data.playa_name || "").trim();
+            const real = [data.first_name, data.last_name].filter(Boolean).join(" ").trim();
+            setProfileNames({ playa, real });
+            if (!playa) setNameSource("real");
+            setName(playa || real);
             setContact((data.emergency_contact || "").trim());
           }
           setLoading(false);
@@ -88,13 +102,18 @@ export function LockscreenClient() {
     if (!img) return;
     setRendering(true);
 
-    // Sci-Fied matches the NODE wordmark on the art and reads bolder than Neuropol.
-    const headingFam = resolveFamily("font-brand");
+    // Sci-Fied matches the NODE wordmark; Exo 2 is the clean option; Caveat the script.
     const bodyFam = resolveFamily("font-sans");
+    const nameFam =
+      fontKey === "node"
+        ? resolveFamily("font-brand")
+        : fontKey === "script"
+          ? resolveFamily(caveat.className)
+          : bodyFam;
     // Make sure the faces are actually loaded before drawing on canvas.
     try {
       await Promise.all([
-        document.fonts.load(`700 90px ${headingFam}`),
+        document.fonts.load(`700 90px ${nameFam}`),
         document.fonts.load(`600 40px ${bodyFam}`),
       ]);
     } catch {
@@ -109,7 +128,8 @@ export function LockscreenClient() {
 
     ctx.drawImage(img, 0, 0, ART_W, ART_H);
 
-    const displayName = name.trim().toUpperCase();
+    // Script stays as typed (like a signature); the tech faces go uppercase.
+    const displayName = fontKey === "script" ? name.trim() : name.trim().toUpperCase();
     const contactLine = contact.trim();
     const showContact = withContact && contactLine.length > 0;
 
@@ -121,14 +141,17 @@ export function LockscreenClient() {
     ctx.shadowOffsetY = 3;
 
     if (displayName) {
-      // Fit the name inside the dashed panel (match the poster's letterspacing)
-      let size = 130;
+      // Fit the name inside the dashed panel with generous side padding —
+      // it must never touch the dashes.
+      const PAD = 120; // 60px clear air each side
       const trySpacing = "letterSpacing" in ctx;
-      for (; size >= 34; size -= 4) {
-        ctx.font = `700 ${size}px ${headingFam}`;
+      let size = fontKey === "script" ? 170 : 130;
+      for (; size >= 24; size -= 2) {
+        ctx.font = `700 ${size}px ${nameFam}`;
         if (trySpacing)
-          (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${Math.round(size * 0.06)}px`;
-        if (ctx.measureText(displayName).width <= BOX_W - 60) break;
+          (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing =
+            fontKey === "script" ? "0px" : `${Math.round(size * 0.06)}px`;
+        if (ctx.measureText(displayName).width <= BOX_W - PAD) break;
       }
       ctx.fillText(displayName, BOX_CX, BOX_CY);
     }
@@ -149,7 +172,7 @@ export function LockscreenClient() {
 
     setDataUrl(canvas.toDataURL("image/jpeg", 0.92));
     setRendering(false);
-  }, [name, contact, withContact]);
+  }, [name, contact, withContact, fontKey]);
 
   // Re-render preview when inputs change (debounced)
   useEffect(() => {
@@ -223,14 +246,64 @@ export function LockscreenClient() {
               <Label htmlFor="ls-name" className="text-sand-300">
                 Name on the lock screen
               </Label>
+              <div className="flex gap-2">
+                {(
+                  [
+                    { key: "playa", label: "Playa name" },
+                    { key: "real", label: "Real name" },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => {
+                      setNameSource(o.key);
+                      setName(profileNames[o.key]);
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      nameSource === o.key
+                        ? "bg-pink-500/20 text-pink-300 ring-1 ring-pink-400/40"
+                        : "bg-white/5 text-sand-400 hover:bg-white/10"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
               <Input
                 id="ls-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Playa name"
+                placeholder="Your name"
                 maxLength={24}
                 disabled={loading}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sand-300">Font</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { key: "node", label: "NODE", cls: "font-brand" },
+                    { key: "clean", label: "Clean", cls: "font-sans font-bold" },
+                    { key: "script", label: "Script", cls: caveat.className },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => setFontKey(o.key)}
+                    className={`rounded-lg px-2 py-2 text-sm transition-colors ${o.cls} ${
+                      fontKey === o.key
+                        ? "bg-pink-500/20 text-pink-200 ring-1 ring-pink-400/40"
+                        : "bg-white/5 text-sand-300 hover:bg-white/10"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-3">
