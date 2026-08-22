@@ -21,6 +21,7 @@ import {
   Tent,
   Briefcase,
   BookOpen,
+  Smartphone,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -96,6 +97,7 @@ export default function DashboardLayout({
             { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
             { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
             { href: "/dashboard/wiki", label: "Wiki", icon: BookOpen },
+            { href: "/dashboard/lockscreen", label: "Lock Screen", icon: Smartphone },
           );
 
           // Reports (roster / arrivals / rides) is camp-wide; payments inside it
