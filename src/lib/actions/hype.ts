@@ -145,7 +145,7 @@ export async function getHypeData(): Promise<HypeData | { error: string }> {
     : null;
 
   // Camp pulse + buddies (camp-wide, service role — same pattern as leaderboard).
-  const [{ data: regs }, { data: shifts }, { count: signupCount }] =
+  const [{ data: regs }, { data: shifts }, { data: signups }] =
     await Promise.all([
       admin
         .from("registrations")
@@ -156,14 +156,11 @@ export async function getHypeData(): Promise<HypeData | { error: string }> {
         .eq("status", "confirmed"),
       admin
         .from("job_shifts")
-        .select("id, capacity")
+        .select("id, capacity, shift_date, definition:job_definitions(title)")
         .eq("camp_year_id", campYear.id),
       admin
         .from("job_signups")
-        .select("shift_id, shift:job_shifts!inner(camp_year_id)", {
-          count: "exact",
-          head: true,
-        })
+        .select("shift_id, profile_id, shift:job_shifts!inner(camp_year_id)")
         .eq("shift.camp_year_id", campYear.id),
     ]);
 
@@ -213,12 +210,41 @@ export async function getHypeData(): Promise<HypeData | { error: string }> {
     },
     renoBuddies,
     arrivalBuddies,
-    pulse: {
-      confirmed: regRows.length,
-      ready: regRows.filter((r) => !!r.ready_at).length,
-      slotsTotal: (shifts ?? []).reduce((s, x) => s + (x.capacity ?? 0), 0),
-      slotsFilled: signupCount ?? 0,
-    },
+    pulse: (() => {
+      // Strike is one-per-camper: once every confirmed camper holds a strike
+      // shift, leftover strike capacity is surplus — not an "open slot".
+      type ShiftRow = {
+        id: string;
+        capacity: number | null;
+        shift_date: string | null;
+        definition: { title: string | null } | { title: string | null }[] | null;
+      };
+      const shiftRows = (shifts ?? []) as unknown as ShiftRow[];
+      const isStrike = (sh: ShiftRow) => {
+        const d = Array.isArray(sh.definition) ? sh.definition[0] : sh.definition;
+        return (
+          (sh.shift_date != null && sh.shift_date >= "2026-09-05") ||
+          /strike/i.test(d?.title ?? "")
+        );
+      };
+      const strikeIds = new Set(shiftRows.filter(isStrike).map((sh) => sh.id));
+      const rows = (signups ?? []) as unknown as { shift_id: string; profile_id: string }[];
+      const strikeSignups = rows.filter((g) => strikeIds.has(g.shift_id));
+      const campersCovered = new Set(strikeSignups.map((g) => g.profile_id));
+      const campersMissingStrike = regRows.filter(
+        (r) => !campersCovered.has(r.profile_id)
+      ).length;
+      const nonStrikeTotal = shiftRows
+        .filter((sh) => !strikeIds.has(sh.id))
+        .reduce((sum, sh) => sum + (sh.capacity ?? 0), 0);
+      return {
+        confirmed: regRows.length,
+        ready: regRows.filter((r) => !!r.ready_at).length,
+        // Strike demand = signups already placed + campers still needing one.
+        slotsTotal: nonStrikeTotal + strikeSignups.length + campersMissingStrike,
+        slotsFilled: rows.length,
+      };
+    })(),
   };
 }
 
