@@ -218,3 +218,42 @@ export async function updateArrivalDates(
 
   return { success: true };
 }
+
+/** The signed-in camper's Setup Access Pass (early arrivals only). */
+export async function getMySapPass(): Promise<
+  | { url: string; validFrom: string | null; ticketId: string | null }
+  | { none: true }
+  | { error: string }
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: campYear } = await supabase
+    .from("camp_years")
+    .select("id")
+    .eq("year", 2026)
+    .single();
+  if (!campYear) return { none: true };
+
+  const { data: reg } = await supabase
+    .from("registrations")
+    .select("sap_path, sap_ticket_id, sap_valid_from")
+    .eq("profile_id", user.id)
+    .eq("camp_year_id", campYear.id)
+    .maybeSingle();
+  if (!reg?.sap_path) return { none: true };
+
+  const { data: signed, error } = await supabase.storage
+    .from("saps")
+    .createSignedUrl(reg.sap_path, 60 * 60); // 1 hour
+  if (error || !signed) return { error: error?.message ?? "Could not sign URL" };
+
+  return {
+    url: signed.signedUrl,
+    validFrom: reg.sap_valid_from,
+    ticketId: reg.sap_ticket_id,
+  };
+}

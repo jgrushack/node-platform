@@ -23,6 +23,9 @@ import {
 } from "@/lib/types/job";
 
 const YEAR = 2026;
+// A camper with more than this many points AND a strike shift counts as
+// job-board complete even if under the points target.
+const STRIKE_RELIEF_MIN_POINTS = 35;
 
 // ── Playa-local time helpers (America/Los_Angeles) ───────────────────
 
@@ -377,13 +380,17 @@ export async function getJobsBoard(): Promise<GetJobsBoardResult> {
   const myAgg = pointsByProfile.get(user.id) ?? { points: 0, count: 0 };
   const pointsTarget = settings?.pointsTarget ?? 0;
   const myShifts = shiftViews.filter((s) => s.mine);
+  const myHasStrike = myShifts.some((s) => s.category === "Strike");
   const progress: MyJobProgress = {
     totalPoints: myAgg.points,
     shiftCount: myAgg.count,
     pointsTarget,
     onTrack:
-      pointsTarget > 0 ? myAgg.points >= pointsTarget : myAgg.count > 0,
-    hasStrikeShift: myShifts.some((s) => s.category === "Strike"),
+      pointsTarget > 0
+        ? myAgg.points >= pointsTarget ||
+          (myAgg.points > STRIKE_RELIEF_MIN_POINTS && myHasStrike)
+        : myAgg.count > 0,
+    hasStrikeShift: myHasStrike,
     hasBbqShift: myShifts.some((s) => s.category === "BBQ"),
   };
 
@@ -738,23 +745,34 @@ export async function getMyJobProgress(): Promise<MyJobProgressResult> {
     new Set((shifts ?? []).map((s: { definition_id: string }) => s.definition_id))
   );
   const ptsByDef = new Map<string, number>();
+  const strikeDefs = new Set<string>();
   if (defIds.length > 0) {
     const { data: defs } = await admin
       .from("job_definitions")
-      .select("id, point_value")
+      .select("id, point_value, category")
       .in("id", defIds);
-    (defs ?? []).forEach((d: { id: string; point_value: number }) =>
-      ptsByDef.set(d.id, d.point_value)
-    );
+    (defs ?? []).forEach((d: { id: string; point_value: number; category: string | null }) => {
+      ptsByDef.set(d.id, d.point_value);
+      if (d.category === "Strike") strikeDefs.add(d.id);
+    });
   }
 
   let totalPoints = 0;
   let shiftCount = 0;
+  let hasStrike = false;
   for (const s of shifts ?? []) {
-    totalPoints += ptsByDef.get((s as { definition_id: string }).definition_id) ?? 0;
+    const defId = (s as { definition_id: string }).definition_id;
+    totalPoints += ptsByDef.get(defId) ?? 0;
     shiftCount += 1;
+    if (strikeDefs.has(defId)) hasStrike = true;
   }
-  const onTrack = pointsTarget > 0 ? totalPoints >= pointsTarget : shiftCount > 0;
+  // On track = hit the target, OR close enough (>35 pts) with a strike shift
+  // locked in — strike coverage matters more than the last few points.
+  const onTrack =
+    pointsTarget > 0
+      ? totalPoints >= pointsTarget ||
+        (totalPoints > STRIKE_RELIEF_MIN_POINTS && hasStrike)
+      : shiftCount > 0;
   return { totalPoints, shiftCount, pointsTarget, onTrack };
 }
 

@@ -64,6 +64,7 @@ import { getMyJobProgress, getMyNextShift } from "@/lib/actions/jobs";
 import type { MyNextShift } from "@/lib/types/job";
 import type { MyJobProgress } from "@/lib/types/job";
 import type { CarPassStatus } from "@/lib/actions/registrations";
+import { getMySapPass } from "@/lib/actions/registrations";
 import { useRouter } from "next/navigation";
 
 interface UserData {
@@ -265,6 +266,7 @@ export default function DashboardPage() {
   const [hype, setHype] = useState<HypeData | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [nextShift, setNextShift] = useState<MyNextShift | null>(null);
+  const [sapPass, setSapPass] = useState<{ url: string; validFrom: string | null } | null>(null);
   const [readyChecked, setReadyChecked] = useState(false);
   const router = useRouter();
 
@@ -277,6 +279,9 @@ export default function DashboardPage() {
   useEffect(() => {
     getMyJobProgress().then((res) => {
       if (!("error" in res)) setJobProgress(res);
+    });
+    getMySapPass().then((res) => {
+      if ("url" in res) setSapPass({ url: res.url, validFrom: res.validFrom });
     });
   }, []);
 
@@ -948,6 +953,45 @@ export default function DashboardPage() {
           Collapses to a slim "you're ready" bar once every row is done. */}
       {campStatus?.label === "Attending" && (
         <RoadTo2026 rows={checklistRows} collapsible />
+      )}
+
+      {/* Setup Access Pass — early arrivals only. Signed URL, print it. */}
+      {campStatus?.label === "Attending" && sapPass && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <Card className="glass-card border-0">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber/15 ring-1 ring-amber/30">
+                  <Ticket className="h-5 w-5 text-amber" />
+                </span>
+                <div>
+                  <p className="font-medium text-sand-100">
+                    Your Setup Access Pass is ready
+                  </p>
+                  <p className="text-sm text-sand-400">
+                    {sapPass.validFrom
+                      ? `Valid ${formatDateShort(sapPass.validFrom)} & later — `
+                      : ""}
+                    print it and bring it with your ticket. A printed stack
+                    will also be at the Reno Airbnb.
+                  </p>
+                </div>
+              </div>
+              <a
+                href={sapPass.url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg bg-gradient-to-r from-pink-500 to-amber px-4 py-2 text-sm font-medium text-white"
+              >
+                View / Print PDF
+              </a>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
       {/* Ready mode — countdown, your week, camp pulse. Shown once the
