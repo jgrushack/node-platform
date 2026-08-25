@@ -29,7 +29,7 @@ const DUST_DROPS: { kind: string; title: string; body: string }[] = [
   { kind: "Pack tip", title: "Electrolytes or headache — pick one by 3pm.", body: "Water alone just makes you a well-hydrated husk. Salt is the DLC your body requires out here." },
   { kind: "Camp lore", title: "Wednesday is Hip Hop BBQ.", body: "Eight hours, three bartender shifts, one grill running hotter than the actual desert. The whole city shows up. Act like you knew." },
   { kind: "Pack tip", title: "Light your bike like a bad decision.", body: "Darkwads get t-boned at 3am and turned into cautionary tales. Be a rolling Vegas sign instead." },
-  { kind: "Camp lore", title: "Gunny runs brunch. Every. Single. Morning.", body: "8:30am, rain or whiteout. Show up wrecked, leave a functioning member of society. The dishes wash themselves, if by 'themselves' you mean you." },
+  { kind: "Camp lore", title: "You don't need an alarm. You have Gunny.", body: "Every morning he screams CHOW TIME at a volume OSHA would flag, and by 10am there's brunch. Show up wrecked, leave a functioning member of society." },
   { kind: "Pack tip", title: "Wet wipes are the playa's reserve currency.", body: "A shower out here is a rumor. Gift a stranger three wipes and watch them propose." },
   { kind: "Camp lore", title: "Strike is everyone's job.", body: "The desert was empty when we got here and it'll be emptier when we leave. Skip your strike shift and your playa name becomes 'That Guy.' Forever." },
   { kind: "Pack tip", title: "Headlamp with a red mode.", body: "Unless you enjoy flashbanging your tentmate at 4am and negotiating where you sleep now." },
