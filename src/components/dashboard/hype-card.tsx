@@ -23,18 +23,18 @@ export interface HypeShift {
 
 // ── Rotating "dust drop" content — one per visit, cycles by day ─────
 const DUST_DROPS: { kind: string; title: string; body: string }[] = [
-  { kind: "Pack tip", title: "Two pairs of goggles.", body: "One clear for night, one tinted for day. The whiteout doesn't care that you only brought one." },
-  { kind: "Pack tip", title: "Bring a cup with a carabiner.", body: "Camp bar, neighbor's bar, random art car bar — no cup, no drink." },
-  { kind: "Camp lore", title: "Martini Therapy is a NODE original.", body: "Monday at 1pm we open the bar and pour martinis for the whole city. On shift? Batching starts that morning — come help mix." },
-  { kind: "Pack tip", title: "Electrolytes > water.", body: "You'll drink plenty of water. You'll forget the salt. Pack more powder than you think." },
-  { kind: "Camp lore", title: "Hip Hop BBQ is Wednesday.", body: "Grill lead, decor lead, bartender lead — the whole camp shows up. Bring your best walk-up song." },
-  { kind: "Pack tip", title: "Bike lights, front and back.", body: "The darkwad tax is real. Light yourself up so nobody t-bones you at 3am." },
-  { kind: "Camp lore", title: "Sunday brunch is a ritual.", body: "Gunny runs it every morning. Come hungry, leave a dish washer better than you found it." },
-  { kind: "Pack tip", title: "Wet wipes are currency.", body: "Bring a giant pack. Give them away. Make friends." },
-  { kind: "Camp lore", title: "Strike is everyone's job.", body: "Every camper takes a strike shift. Leave no trace isn't a slogan, it's a Saturday." },
-  { kind: "Pack tip", title: "A headlamp with a red mode.", body: "You'll thank yourself digging through your bin at midnight without blinding your tentmate." },
-  { kind: "Camp lore", title: "The Temple burns Sunday night.", body: "Sunday dinner is early for a reason. Go together, stay quiet, walk back slow." },
-  { kind: "Pack tip", title: "Earplugs. Then more earplugs.", body: "Sound camps don't sleep. You should. Foam ones, a whole strip." },
+  { kind: "Pack tip", title: "Two pairs of goggles.", body: "One clear, one tinted. The whiteout has humbled people with twenty burns and a beard full of rebar. It will not be impressed by your one pair." },
+  { kind: "Pack tip", title: "Cup on a carabiner, or die thirsty.", body: "Every bar in the city has one rule: no cup, no booze. Clip it to your hip and become infinitely servable." },
+  { kind: "Camp lore", title: "Martini Therapy. Monday, 1pm.", body: "We prescribe gin to strangers until the city loves us. It's called Therapy because 'Recreational Alcoholism' didn't clear legal." },
+  { kind: "Pack tip", title: "Electrolytes or headache — pick one by 3pm.", body: "Water alone just makes you a well-hydrated husk. Salt is the DLC your body requires out here." },
+  { kind: "Camp lore", title: "Wednesday is Hip Hop BBQ.", body: "Eight hours, three bartender shifts, one grill running hotter than the actual desert. The whole city shows up. Act like you knew." },
+  { kind: "Pack tip", title: "Light your bike like a bad decision.", body: "Darkwads get t-boned at 3am and turned into cautionary tales. Be a rolling Vegas sign instead." },
+  { kind: "Camp lore", title: "Gunny runs brunch. Every. Single. Morning.", body: "8:30am, rain or whiteout. Show up wrecked, leave a functioning member of society. The dishes wash themselves, if by 'themselves' you mean you." },
+  { kind: "Pack tip", title: "Wet wipes are the playa's reserve currency.", body: "A shower out here is a rumor. Gift a stranger three wipes and watch them propose." },
+  { kind: "Camp lore", title: "Strike is everyone's job.", body: "The desert was empty when we got here and it'll be emptier when we leave. Skip your strike shift and your playa name becomes 'That Guy.' Forever." },
+  { kind: "Pack tip", title: "Headlamp with a red mode.", body: "Unless you enjoy flashbanging your tentmate at 4am and negotiating where you sleep now." },
+  { kind: "Camp lore", title: "The Temple burns Sunday night.", body: "Dinner's early so nobody's chewing through the most emotional fire in Nevada. Go together. Cry. That's the point." },
+  { kind: "Pack tip", title: "Earplugs. Then backup earplugs.", body: "The camp next door did not haul forty speakers across a desert to respect your circadian rhythm. Foam in, world off." },
 ];
 
 function dayIndex(seedDate: string): number {
