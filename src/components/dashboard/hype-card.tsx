@@ -25,7 +25,7 @@ export interface HypeShift {
 const DUST_DROPS: { kind: string; title: string; body: string }[] = [
   { kind: "Pack tip", title: "Two pairs of goggles.", body: "One clear for night, one tinted for day. The whiteout doesn't care that you only brought one." },
   { kind: "Pack tip", title: "Bring a cup with a carabiner.", body: "Camp bar, neighbor's bar, random art car bar — no cup, no drink." },
-  { kind: "Camp lore", title: "Martini Therapy is a NODE original.", body: "Monday afternoon, kitchen turned cocktail lab. Batch early, pour generously." },
+  { kind: "Camp lore", title: "Martini Therapy is a NODE original.", body: "Monday at 1pm we open the bar and pour martinis for the whole city. On shift? Batching starts that morning — come help mix." },
   { kind: "Pack tip", title: "Electrolytes > water.", body: "You'll drink plenty of water. You'll forget the salt. Pack more powder than you think." },
   { kind: "Camp lore", title: "Hip Hop BBQ is Wednesday.", body: "Grill lead, decor lead, bartender lead — the whole camp shows up. Bring your best walk-up song." },
   { kind: "Pack tip", title: "Bike lights, front and back.", body: "The darkwad tax is real. Light yourself up so nobody t-bones you at 3am." },
