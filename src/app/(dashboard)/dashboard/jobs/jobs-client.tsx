@@ -155,7 +155,7 @@ function usePlayaNow() {
 
 const CHECKIN_WINDOW_MIN = 3 * 60;
 
-const DROP_LOCK_MSG = "Drops are locked — find someone to swap and ask a lead.";
+const DROP_LOCK_MSG = "The board is locked for the burn — want to make a change? Take a pen to the printed board at camp.";
 
 export function JobsClient({ initial }: { initial: GetJobsBoardResult }) {
   const [board, setBoard] = useState<GetJobsBoardResult>(initial);
@@ -566,7 +566,7 @@ function MemberBoard({
                 .
               </>
             ) : (
-              "Signups aren’t open yet — we’ll announce the launch date soon."
+              "The board is locked for the burn — want to make a change? Take a pen to the printed board at camp."
             )}
           </NoticeCard>
         )}

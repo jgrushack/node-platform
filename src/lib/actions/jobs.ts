@@ -456,7 +456,7 @@ export async function dropShift(shiftId: string): Promise<SignupResult> {
   const ctx = await loadModeContext(createAdminClient());
   if (ctx && (ctx.dropLocked || ctx.mode !== "prep")) {
     return {
-      error: "Drops are locked — find someone to swap and ask a lead.",
+      error: "The board is locked for the burn — want to make a change? Take a pen to the printed board at camp.",
     };
   }
 
