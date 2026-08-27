@@ -31,15 +31,31 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // A dead refresh token (revoked session, ancient PWA cookie) makes
+  // getUser throw/err on every request. Treat it as logged-out instead of
+  // erroring, and clear the stale sb-* cookies so the client stops
+  // re-sending the dead token and gets a clean login instead of a
+  // half-broken dashboard.
+  let user = null;
+  let authDead = false;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    user = data.user;
+    if (error) authDead = true;
+  } catch {
+    authDead = true;
+  }
 
-  // Redirect unauthenticated users away from protected routes
   if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    const redirect = NextResponse.redirect(url);
+    if (authDead) {
+      for (const c of request.cookies.getAll()) {
+        if (c.name.startsWith("sb-")) redirect.cookies.delete(c.name);
+      }
+    }
+    return redirect;
   }
 
   return supabaseResponse;
