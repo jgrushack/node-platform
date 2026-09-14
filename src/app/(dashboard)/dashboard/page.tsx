@@ -55,6 +55,7 @@ import {
 } from "@/components/dashboard/road-to-2026";
 import { Celebration } from "@/components/dashboard/celebration";
 import { HypeCard } from "@/components/dashboard/hype-card";
+import { SurveyCard } from "@/components/dashboard/survey-card";
 import { getHypeData, markReady, type HypeData } from "@/lib/actions/hype";
 import {
   getStorageSurvey,
@@ -948,6 +949,9 @@ export default function DashboardPage() {
           onComplete={() => setOnboardingComplete(true)}
         />
       )}
+
+      {/* Post-burn survey — confirmed campers once gate has opened. */}
+      {campStatus?.label === "Attending" && <SurveyCard />}
 
       {/* Road to 2026 — permanent progress checklist for confirmed campers.
           Collapses to a slim "you're ready" bar once every row is done. */}
