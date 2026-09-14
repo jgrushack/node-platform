@@ -56,6 +56,7 @@ import {
 import { Celebration } from "@/components/dashboard/celebration";
 import { HypeCard } from "@/components/dashboard/hype-card";
 import { SurveyCard } from "@/components/dashboard/survey-card";
+import { PhotoUploadCard } from "@/components/dashboard/photo-upload-card";
 import { getHypeData, markReady, type HypeData } from "@/lib/actions/hype";
 import {
   getStorageSurvey,
@@ -125,6 +126,30 @@ const BUDGET_EMBED_URL =
   "https://docs.google.com/spreadsheets/d/1r-21HgEud7MnJqEanASO2JaC7AEJyav19bbEEJ97Abo/htmlview?widget=true";
 
 const FILTERED_BM_KEYWORDS = ["office hours", "campfire talk"];
+
+// ── Post-burn mode ─────────────────────────────────────────────────
+// Once NODE 2026 is over the dashboard stops nagging about the 2026
+// checklist and pivots to 2027: survey, photos, countdown. Dues still owed
+// keep their nudge.
+const CAMP_2026_END = "2026-09-07";
+// Burning Man 2027: gate opens Sun Aug 29, 2027.
+const GATE_2027 = "2027-08-29";
+const PLAYA_TZ = "America/Los_Angeles";
+
+function playaToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: PLAYA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+function daysUntil(dateStr: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const [ty, tm, td] = playaToday().split("-").map(Number);
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 86_400_000);
+}
+const POST_BURN = playaToday() > CAMP_2026_END;
 
 function formatEventDate(dateStr: string, tz: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -662,14 +687,23 @@ export default function DashboardPage() {
       valueColor: "text-sand-100",
       subtext: null as string | null,
     },
-    {
-      label: "2026 Status",
-      value: statusDisplay,
-      icon: Shield,
-      color: statusIconColor,
-      valueColor: statusValueColor,
-      subtext: statusSubtext,
-    },
+    POST_BURN
+      ? {
+          label: "NODE 2027",
+          value: `${daysUntil(GATE_2027)} days`,
+          icon: Flame,
+          color: "text-amber",
+          valueColor: "text-sand-100",
+          subtext: "until gate · Aug 29, 2027" as string | null,
+        }
+      : {
+          label: "2026 Status",
+          value: statusDisplay,
+          icon: Shield,
+          color: statusIconColor,
+          valueColor: statusValueColor,
+          subtext: statusSubtext,
+        },
     {
       label: "Next Event",
       value: nextEvent?.title ?? "TBD",
@@ -800,7 +834,7 @@ export default function DashboardPage() {
 
   // First time every row is done → stamp ready_at, email, and celebrate.
   useEffect(() => {
-    if (!dataLoaded || !checklistComplete || readyChecked) return;
+    if (POST_BURN || !dataLoaded || !checklistComplete || readyChecked) return;
     setReadyChecked(true);
     markReady().then((res) => {
       if ("error" in res) return;
@@ -819,17 +853,23 @@ export default function DashboardPage() {
 
   // One load-time modal at a time (priority order). Each modal's own dismissal
   // flips its flag false, which surfaces the next eligible one.
-  const loadModal = showStorageSurvey
-    ? "storage"
-    : showTicketSaleModal
-      ? "ticket"
-      : showRenoPrompt
-        ? "reno"
-        : showPasswordDialog
-          ? "password"
-          : showPwaPrompt
-            ? "pwa"
-            : null;
+  const loadModal = POST_BURN
+    ? showPasswordDialog
+      ? "password"
+      : showPwaPrompt
+        ? "pwa"
+        : null
+    : showStorageSurvey
+      ? "storage"
+      : showTicketSaleModal
+        ? "ticket"
+        : showRenoPrompt
+          ? "reno"
+          : showPasswordDialog
+            ? "password"
+            : showPwaPrompt
+              ? "pwa"
+              : null;
 
   return (
     <div className="space-y-8">
@@ -938,7 +978,9 @@ export default function DashboardPage() {
               : `${hype.daysToGate} day${hype.daysToGate === 1 ? "" : "s"} until gate. You're all set.`
             : hype?.phase === "during"
               ? "Welcome home. Check the board for today."
-              : "Here\u2019s your NODE dashboard."}
+              : POST_BURN
+                ? "2026 is in the books. 2027 starts here."
+                : "Here\u2019s your NODE dashboard."}
         </p>
       </motion.div>
 
@@ -953,14 +995,53 @@ export default function DashboardPage() {
       {/* Post-burn survey — confirmed campers once gate has opened. */}
       {campStatus?.label === "Attending" && <SurveyCard />}
 
+      {/* Post-burn: 2026 balance still owed keeps its nudge. */}
+      {POST_BURN && campStatus?.label === "Attending" && balance !== null && balance > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <Card className="glass-card border-0 border-l-2 border-l-red-400/60">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-500/15 ring-1 ring-red-500/30">
+                  <Wallet className="h-5 w-5 text-red-400" />
+                </span>
+                <div>
+                  <p className="font-medium text-sand-100">
+                    Your 2026 balance: $
+                    {(balance / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-sm text-sand-400">
+                    Dues, storage, or gear still owed for the burn that just happened.
+                    Settle up before 2027 planning kicks off.
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => router.push("/dashboard/payments")}
+                className="rounded-full bg-pink-500 text-white hover:bg-pink-600"
+              >
+                Pay now
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Post-burn: push photos into the communal Drive. */}
+      {POST_BURN && campStatus?.label === "Attending" && <PhotoUploadCard />}
+
       {/* Road to 2026 — permanent progress checklist for confirmed campers.
-          Collapses to a slim "you're ready" bar once every row is done. */}
-      {campStatus?.label === "Attending" && (
+          Collapses to a slim "you're ready" bar once every row is done.
+          Retired once the burn is over. */}
+      {!POST_BURN && campStatus?.label === "Attending" && (
         <RoadTo2026 rows={checklistRows} collapsible />
       )}
 
       {/* Setup Access Pass — early arrivals only. Signed URL, print it. */}
-      {campStatus?.label === "Attending" && sapPass && (
+      {!POST_BURN && campStatus?.label === "Attending" && sapPass && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1000,7 +1081,8 @@ export default function DashboardPage() {
 
       {/* Ready mode — countdown, your week, camp pulse. Shown once the
           checklist is complete (or once we're on playa regardless). */}
-      {campStatus?.label === "Attending" &&
+      {!POST_BURN &&
+        campStatus?.label === "Attending" &&
         hype &&
         (checklistComplete || hype.phase !== "before") && (
           <HypeCard
@@ -1021,7 +1103,7 @@ export default function DashboardPage() {
         )}
 
       <Celebration
-        open={showCelebration}
+        open={showCelebration && !POST_BURN}
         onClose={() => setShowCelebration(false)}
         firstName={user?.firstName}
       />
