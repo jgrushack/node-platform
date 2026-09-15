@@ -1417,7 +1417,8 @@ export default function DashboardPage() {
             </Card>
           </motion.div>
 
-          {campStatus?.label === "Attending" && (
+          {/* Ticket & Travel — 2026 logistics, retired once the burn is over. */}
+          {!POST_BURN && campStatus?.label === "Attending" && (
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
