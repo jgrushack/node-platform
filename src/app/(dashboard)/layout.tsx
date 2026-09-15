@@ -18,10 +18,7 @@ import {
   Shield,
   Mail,
   Wallet,
-  Tent,
-  Briefcase,
   BookOpen,
-  Smartphone,
   ClipboardList,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -95,10 +92,9 @@ export default function DashboardLayout({
             { href: "/dashboard/members", label: "Members", icon: UsersRound },
             { href: "/dashboard/messages", label: "Messages", icon: Mail },
             { href: "/dashboard/payments", label: "Payments", icon: Wallet },
-            { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
+            // Jobs and Lock Screen are burn-week tools — hidden post-burn (pages still work by URL).
             { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
             { href: "/dashboard/wiki", label: "Wiki", icon: BookOpen },
-            { href: "/dashboard/lockscreen", label: "Lock Screen", icon: Smartphone },
             { href: "/dashboard/survey", label: "2026 Survey", icon: ClipboardList },
           );
 
@@ -106,10 +102,7 @@ export default function DashboardLayout({
           // are still admin-gated server-side.
           items.push({ href: "/dashboard/reports", label: "Reports", icon: BarChart3 });
 
-          // Admin/super_admin see Rentals (equipment inventory)
-          if (["admin", "super_admin"].includes(effectiveRole)) {
-            items.push({ href: "/dashboard/rentals", label: "Rentals", icon: Tent });
-          }
+          // Rentals (equipment inventory) hidden post-burn — still at /dashboard/rentals for admins.
 
           // Super admin sees Users
           if (effectiveRole === "super_admin") {
