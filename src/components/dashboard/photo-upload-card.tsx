@@ -23,6 +23,10 @@ import {
 } from "@/lib/actions/drive";
 
 const CHUNK = 8 * 1024 * 1024; // 8 MiB — must be a multiple of 256 KiB
+// Files up to this size go up in ONE request; Google's intermediate 308
+// replies to chunked uploads are the flaky part from a browser, so only
+// very large videos take the chunked path.
+const SINGLE_PUT_MAX = 1024 * 1024 * 1024; // 1 GiB
 const PARALLEL = 2;
 
 type Item = {
@@ -37,6 +41,35 @@ function fmtBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
   if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
   return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+/** PUT the whole file to a Drive resumable session in one request. */
+function putWhole(
+  uploadUrl: string,
+  file: File,
+  onProgress: (sent: number) => void
+): Promise<{ fileId: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl, true);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded);
+    };
+    xhr.onerror = () => reject(new Error("Network error — check your connection and try again"));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve({ fileId: (JSON.parse(xhr.responseText) as { id: string }).id });
+        } catch {
+          reject(new Error("Bad response from Drive"));
+        }
+      } else {
+        reject(new Error(`Drive rejected the upload (${xhr.status})`));
+      }
+    };
+    xhr.send(file);
+  });
 }
 
 /** PUT one chunk to a Drive resumable session; resolves the next offset or the final file. */
@@ -111,7 +144,16 @@ export function PhotoUploadCard() {
     }
     let offset = 0;
     try {
-      // Sequential chunks; each 308 tells us where Google actually is.
+      if (item.file.size <= SINGLE_PUT_MAX) {
+        const res = await putWhole(start.uploadUrl, item.file, (sent) =>
+          update(item.id, { progress: Math.min(0.99, sent / item.file.size) })
+        );
+        const rec = await recordDriveUpload({ fileId: res.fileId, folderId: start.folderId });
+        if ("error" in rec) update(item.id, { state: "done", progress: 1, error: rec.error });
+        else update(item.id, { state: "done", progress: 1 });
+        return;
+      }
+      // Very large files: sequential chunks; each 308 tells us where Google actually is.
       for (;;) {
         const res = await putChunk(start.uploadUrl, item.file, offset, (sent) =>
           update(item.id, { progress: Math.min(0.99, sent / item.file.size) })
