@@ -23,6 +23,7 @@ import {
   Minus,
   Zap,
   Info,
+  Heart,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { StorageSurveyModal } from "@/components/dashboard/storage-survey-modal";
@@ -33,7 +34,10 @@ import {
 import {
   createStoragePaymentCheckout,
   createEquipmentPaymentCheckout,
+  createDonationCheckout,
+  getDonations,
   getDuesStatus,
+  type DonationSummary,
   type DuesStatusResult,
 } from "@/lib/actions/payments";
 import {
@@ -101,6 +105,12 @@ export function PaymentsClient() {
   const [equipment, setEquipment] = useState<EquipmentStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [showStorageEdit, setShowStorageEdit] = useState(false);
+  const [donations, setDonations] = useState<DonationSummary | null>(null);
+
+  async function refreshDonations() {
+    const d = await getDonations();
+    if (!("error" in d)) setDonations(d);
+  }
 
   async function refreshBalance() {
     const supabase = createClient();
@@ -178,6 +188,7 @@ export function PaymentsClient() {
     void (async () => {
       await refreshBalance();
       await refreshStatuses();
+      await refreshDonations();
     })();
   }, []);
 
@@ -189,7 +200,8 @@ export function PaymentsClient() {
     if (
       params.get("dues_cancel") ||
       params.get("storage_cancel") ||
-      params.get("equipment_cancel")
+      params.get("equipment_cancel") ||
+      params.get("donation_cancel")
     ) {
       toast.info("Checkout canceled — no charge made.");
       clean();
@@ -198,10 +210,20 @@ export function PaymentsClient() {
     const duesReturn = params.get("dues_session");
     const storageReturn = params.get("storage_session");
     const equipmentReturn = params.get("equipment_session");
-    if (!duesReturn && !storageReturn && !equipmentReturn) return;
+    const donationReturn = params.get("donation_session");
+    if (!duesReturn && !storageReturn && !equipmentReturn && !donationReturn) return;
     clean();
 
     void (async () => {
+      if (donationReturn) {
+        toast.success("Thank you. NODE runs on this.");
+        // The webhook creates the donation row shortly after redirect.
+        for (let i = 0; i < 6; i++) {
+          await refreshDonations();
+          await new Promise<void>((r) => setTimeout(r, 2000));
+        }
+        return;
+      }
       if (duesReturn) {
         const before = await getDuesStatus();
         const basePaid = "error" in before ? 0 : before.amountPaidCents;
@@ -287,6 +309,7 @@ export function PaymentsClient() {
         {view === "dashboard" && (
           <DashboardView
             key="dashboard"
+            donations={donations}
             balance={balance}
             hasTicketInvoice={hasTicketInvoice}
             pending={hasProcessing}
@@ -390,6 +413,7 @@ function SectionCard({
 // ── Dashboard View ─────────────────────────────────────────────────
 
 function DashboardView({
+  donations,
   balance,
   hasTicketInvoice,
   pending,
@@ -404,6 +428,7 @@ function DashboardView({
   onPayEquipment,
   onEditStorage,
 }: {
+  donations: DonationSummary | null;
   balance: number | null;
   hasTicketInvoice: boolean;
   pending: boolean;
@@ -663,10 +688,106 @@ function DashboardView({
         </Button>
       </SectionCard>
 
+      {/* Donations — open to everyone, camper or not */}
+      <DonateCard donations={donations} />
+
       <p className="pt-2 text-center text-xs text-sand-500">
         2026 camp budget — coming soon.
       </p>
     </motion.div>
+  );
+}
+
+// ── Donate ─────────────────────────────────────────────────────────
+
+const DONATION_PRESETS = [50, 100, 250, 500];
+
+function DonateCard({ donations }: { donations: DonationSummary | null }) {
+  const [amount, setAmount] = useState<number | null>(100);
+  const [custom, setCustom] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const chosen = custom.trim() ? Math.floor(Number(custom)) : amount;
+  const valid = !!chosen && Number.isFinite(chosen) && chosen >= 5;
+
+  async function donate() {
+    if (!valid || !chosen) return;
+    setBusy(true);
+    const res = await createDonationCheckout({ amountDollars: chosen });
+    setBusy(false);
+    if ("error" in res) {
+      toast.error(res.error);
+      return;
+    }
+    window.location.href = res.url;
+  }
+
+  const given = donations?.totalCents ?? 0;
+  const statusLine =
+    given > 0
+      ? `You've given $${(given / 100).toLocaleString("en-US")} this year — thank you`
+      : "Open to everyone, camper or not. Storage, dues, or just love.";
+
+  return (
+    <Card className="glass-card border-0">
+      <CardContent className="space-y-4 py-5">
+        <div className="flex items-center gap-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/15">
+            <Heart className="h-5 w-5 text-rose-400" />
+          </div>
+          <div>
+            <p className="font-semibold text-sand-100">Support NODE</p>
+            <p className="text-xs text-sand-400">{statusLine}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {DONATION_PRESETS.map((n) => {
+            const active = !custom.trim() && amount === n;
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => {
+                  setAmount(n);
+                  setCustom("");
+                }}
+                className={`rounded-full border px-4 py-1.5 text-sm tabular-nums transition-colors ${
+                  active
+                    ? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+                    : "border-white/10 bg-white/[0.03] text-sand-300 hover:border-rose-400/40"
+                }`}
+              >
+                ${n}
+              </button>
+            );
+          })}
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-sand-500">
+              $
+            </span>
+            <Input
+              inputMode="numeric"
+              placeholder="Other"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value.replace(/[^0-9]/g, ""))}
+              className="h-9 w-28 rounded-full border-white/10 bg-white/[0.03] pl-7 text-sand-100 placeholder:text-sand-600"
+            />
+          </div>
+          <Button
+            onClick={donate}
+            disabled={!valid || busy}
+            className="rounded-full bg-rose-500 text-white hover:bg-rose-600"
+          >
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Heart className="mr-2 h-4 w-4" />}
+            Donate{valid && chosen ? ` $${chosen.toLocaleString("en-US")}` : ""}
+          </Button>
+        </div>
+        <p className="text-[11px] text-sand-600">
+          NODE&apos;s 501(c)(3) application is in progress. Once approved, gifts made after the
+          effective date are tax-deductible and you&apos;ll get a receipt.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -435,3 +435,108 @@ export async function getDuesStatus(): Promise<DuesStatusResult> {
     hasSubscription: !!inv.stripe_subscription_id,
   };
 }
+
+// ── Donations ──────────────────────────────────────────────────────
+// Anyone signed in — camper or not — can give to NODE. No invoice is created
+// up front (an abandoned checkout must never show up as a balance owed); the
+// webhook creates a paid `donation` invoice when the money actually lands.
+const DONATION_KIND = "donation";
+
+const donationSchema = z.object({
+  amountDollars: z.number().int().min(5).max(100000),
+});
+
+export async function createDonationCheckout(
+  input: z.input<typeof donationSchema>
+): Promise<CreateDuesCheckoutResult> {
+  const parsed = donationSchema.safeParse(input);
+  if (!parsed.success) return { error: "Enter an amount of $5 or more." };
+  const amountCents = parsed.data.amountDollars * 100;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const admin = createAdminClient();
+  const { data: campYear } = await admin
+    .from("camp_years")
+    .select("id")
+    .eq("year", 2026)
+    .single();
+  if (!campYear) return { error: "No 2026 camp year configured." };
+
+  await admin
+    .from("profiles")
+    .upsert({ id: user.id, email: user.email }, { onConflict: "id", ignoreDuplicates: true });
+
+  const customerId = await ensureStripeCustomer(admin, user.id, user.email ?? undefined);
+
+  const hdrs = await headers();
+  const origin =
+    hdrs.get("origin") || process.env.NEXT_PUBLIC_SITE_URL || "https://node.family";
+  // No invoice_id on purpose — the webhook's donation branch creates it on success.
+  const meta = {
+    kind: DONATION_KIND,
+    profile_id: user.id,
+    camp_year_id: campYear.id,
+  };
+
+  try {
+    const session = await getStripe().checkout.sessions.create(
+      {
+        mode: "payment",
+        customer: customerId,
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: amountCents,
+              product_data: { name: "Donation to NODE" },
+            },
+            quantity: 1,
+          },
+        ],
+        payment_intent_data: { metadata: meta },
+        metadata: meta,
+        success_url: `${origin}/dashboard/payments?donation_session={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/dashboard/payments?donation_cancel=1`,
+      },
+      { idempotencyKey: `donation-${user.id}-${amountCents}-${Date.now()}` }
+    );
+    if (!session.url) return { error: "Failed to start checkout." };
+    return { url: session.url };
+  } catch (e) {
+    console.error("[createDonationCheckout]", e);
+    return { error: "Payment setup failed. Please try again." };
+  }
+}
+
+export type DonationSummary = {
+  count: number;
+  totalCents: number;
+  lastAt: string | null;
+};
+
+export async function getDonations(): Promise<DonationSummary | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: rows } = await supabase
+    .from("invoices")
+    .select("amount_paid_cents, paid_at, status")
+    .eq("profile_id", user.id)
+    .eq("kind", DONATION_KIND)
+    .in("status", ["paid", "partial"])
+    .order("paid_at", { ascending: false });
+  const list = rows ?? [];
+  return {
+    count: list.length,
+    totalCents: list.reduce((s, r) => s + (r.amount_paid_cents ?? 0), 0),
+    lastAt: list[0]?.paid_at ?? null,
+  };
+}

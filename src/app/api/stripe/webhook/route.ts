@@ -72,6 +72,55 @@ async function notifyPaymentFailed(admin: Admin, invoiceId: string): Promise<voi
   }
 }
 
+/** Donations carry no invoice until the money lands: create the paid-in-full
+ *  row now (idempotent on the PaymentIntent id), then the ledger credits it. */
+async function ensureDonationInvoice(
+  admin: Admin,
+  pi: Stripe.PaymentIntent
+): Promise<string | undefined> {
+  const profileId = pi.metadata?.profile_id;
+  const campYearId = pi.metadata?.camp_year_id;
+  if (!profileId || !campYearId) return undefined;
+
+  const { data: existing } = await admin
+    .from("invoices")
+    .select("id")
+    .eq("stripe_payment_intent_id", pi.id)
+    .maybeSingle();
+  if (existing) return existing.id;
+
+  const amount = pi.amount_received ?? pi.amount;
+  const { data, error } = await admin
+    .from("invoices")
+    .insert({
+      profile_id: profileId,
+      camp_year_id: campYearId,
+      kind: "donation",
+      currency: "usd",
+      amount_cents: amount,
+      amount_paid_cents: 0, // applyPayment credits it and flips status → paid
+      status: "sent",
+      stripe_customer_id: typeof pi.customer === "string" ? pi.customer : null,
+      stripe_payment_intent_id: pi.id,
+      total_installments: 1,
+      installment_number: 0,
+      description: "Donation to NODE",
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("[stripe webhook] donation invoice", error);
+    // A concurrent delivery may have won the insert — re-read before giving up.
+    const { data: raced } = await admin
+      .from("invoices")
+      .select("id")
+      .eq("stripe_payment_intent_id", pi.id)
+      .maybeSingle();
+    return raced?.id;
+  }
+  return data.id;
+}
+
 async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
   const stripe = getStripe();
 
@@ -104,7 +153,10 @@ async function handleEvent(event: Stripe.Event, admin: Admin): Promise<void> {
 
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
-      const invoiceId = pi.metadata?.invoice_id;
+      let invoiceId: string | undefined = pi.metadata?.invoice_id;
+      if (!invoiceId && pi.metadata?.kind === "donation") {
+        invoiceId = await ensureDonationInvoice(admin, pi);
+      }
       if (!invoiceId) return; // subscription PIs settle via invoice.paid
       await applyPayment(
         admin,
