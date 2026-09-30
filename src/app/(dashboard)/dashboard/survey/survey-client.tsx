@@ -396,6 +396,43 @@ export default function SurveyClient() {
     </motion.div>
   );
 
+  // Closed: everyone (camper or not) gets the results link; no more editing.
+  if (info.closed) {
+    return (
+      <div className="mx-auto max-w-xl">
+        {header}
+        <Card className="glass-card border-0">
+          <CardContent className="space-y-5 p-6 sm:p-8">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-green-500/15 ring-1 ring-green-500/40">
+                <CheckCircle2 className="h-6 w-6 text-green-400" />
+              </span>
+              <div>
+                <p className="text-lg font-semibold text-sand-100">The survey is closed.</p>
+                <p className="text-sm text-sand-400">
+                  {info.submitted ? "Thanks for weighing in. " : ""}
+                  Results are open to the whole camp, with names removed.
+                </p>
+              </div>
+            </div>
+            <ProgressPulse responded={info.responded} confirmed={info.confirmed} />
+            <div className="flex flex-wrap gap-2">
+              <Button asChild className="rounded-full bg-pink-500 text-white hover:bg-pink-600 glow-pink">
+                <Link href="/dashboard/survey/results">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  See what the camp said
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" className="text-sand-300 hover:text-sand-100">
+                <Link href="/dashboard">Back to dashboard</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!info.eligible) {
     return (
       <div className="mx-auto max-w-xl">

@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { COMMITMENT_LABELS } from "@/lib/survey/questions";
 import {
   NodeYearsBadge,
   BurnsBadge,
@@ -98,6 +99,8 @@ interface MemberDetail {
   instagram: string | null;
   emergency_contact: string | null;
   skills: string[];
+  commitments_2027: string[];
+  lead_area_2027: string | null;
   node_events_attended: string[];
   yearsAttended: number[];
   referredBy: string | null;
@@ -217,7 +220,7 @@ export default function MembersPage() {
     const { data: profile } = await supabase
       .from("profiles")
       .select(
-        "phone, dietary_restrictions, instagram, emergency_contact, skills, node_events_attended, other_burns"
+        "phone, dietary_restrictions, instagram, emergency_contact, skills, node_events_attended, other_burns, commitments_2027, lead_area_2027"
       )
       .eq("id", member.id)
       .single();
@@ -248,6 +251,8 @@ export default function MembersPage() {
       instagram: profile?.instagram || null,
       emergency_contact: profile?.emergency_contact || null,
       skills: profile?.skills || [],
+      commitments_2027: (profile as Record<string, unknown>)?.commitments_2027 as string[] || [],
+      lead_area_2027: ((profile as Record<string, unknown>)?.lead_area_2027 as string | null) ?? null,
       node_events_attended: profile?.node_events_attended || [],
       yearsAttended,
       referredBy: app?.referred_by || null,
@@ -624,6 +629,32 @@ export default function MembersPage() {
                           </Badge>
                         ))}
                       </div>
+                    </div>
+                  </>
+                )}
+
+              {/* 2027 commitments (from the post-burn survey) */}
+              {!detailLoading &&
+                memberDetail?.commitments_2027 &&
+                memberDetail.commitments_2027.length > 0 && (
+                  <>
+                    <Separator className="bg-pink-500/10" />
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-medium uppercase tracking-wider text-sand-500">
+                        Committed for 2027
+                      </h3>
+                      <div className="flex flex-wrap gap-1.5">
+                        {memberDetail.commitments_2027.map((c) => (
+                          <Badge key={c} className="bg-amber/15 text-amber text-xs">
+                            {COMMITMENT_LABELS[c] ?? c}
+                          </Badge>
+                        ))}
+                      </div>
+                      {memberDetail.lead_area_2027 && (
+                        <p className="text-xs text-sand-400">
+                          Lead interest: {memberDetail.lead_area_2027}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}

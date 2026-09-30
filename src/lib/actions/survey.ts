@@ -8,6 +8,7 @@ import {
   ALL_QUESTIONS,
   SENSITIVE_KEYS,
   SENSITIVE_MIN_RESPONSES,
+  SURVEY_CLOSED_AT,
   SURVEY_YEAR,
   isQuestionVisible,
   type SurveyAnswers,
@@ -132,18 +133,25 @@ async function loadContext() {
   };
 }
 
-/** Survey opens on gate day and stays open — campers fill it in from playa or after. */
+/** Survey opens on gate day and accepts answers until SURVEY_CLOSED_AT. */
 function surveyIsOpen(startDate: string | null): boolean {
+  const today = playaToday();
+  if (today >= SURVEY_CLOSED_AT) return false;
   if (!startDate) return true;
-  return playaToday() >= startDate;
+  return today >= startDate;
+}
+function surveyIsClosed(): boolean {
+  return playaToday() >= SURVEY_CLOSED_AT;
 }
 
 // ── Reads ─────────────────────────────────────────────────────────────
 export interface MySurvey {
   /** Confirmed 2026 camper (the survey is for them). */
   eligible: boolean;
-  /** Past gate day — the survey accepts responses. */
+  /** Past gate day and before close — the survey accepts responses. */
   open: boolean;
+  /** Closed for good; results are public to members. */
+  closed: boolean;
   isAdmin: boolean;
   submitted: boolean;
   submittedAt: string | null;
@@ -182,6 +190,7 @@ export async function getMySurvey(): Promise<MySurvey | { error: string }> {
   return {
     eligible: isConfirmed,
     open: surveyIsOpen(campYear.start_date),
+    closed: surveyIsClosed(),
     isAdmin,
     submitted: !!mine,
     submittedAt: mine?.submitted_at ?? null,
@@ -216,6 +225,7 @@ export async function submitSurvey(
   const { supabase, user, campYear, isConfirmed } = ctx;
   if (!isConfirmed)
     return { error: "The survey is for confirmed NODE 2026 campers." };
+  if (surveyIsClosed()) return { error: "The survey is closed. Thanks for a great year." };
   if (!surveyIsOpen(campYear.start_date))
     return { error: "The survey opens once the burn starts." };
 
@@ -283,6 +293,8 @@ export interface SurveyResponse {
 }
 
 export interface SurveyResults {
+  /** Admins see names (unless the camper opted out), private notes, and call-outs. */
+  viewerIsAdmin: boolean;
   confirmed: number;
   /** Per-camper responses with sensitive (person-naming) answers removed. */
   responses: SurveyResponse[];
@@ -304,13 +316,19 @@ function shuffle<T>(xs: T[]): T[] {
   return a;
 }
 
+// Keys only admins may read: the leadership-only note and the "who made it
+// harder" call-outs. Everyone else gets an anonymized view of everything else.
+const ADMIN_ONLY_KEYS = ["private_note", "person_lowlight"];
+
 export async function getSurveyResults(): Promise<
   SurveyResults | { error: string }
 > {
   const ctx = await loadContext();
   if (!ctx) return { error: "Not signed in" };
-  if (!ctx.isAdmin) return { error: "Not authorized" };
-  const { admin, campYear } = ctx;
+  // Results open to every signed-in member once the survey has closed;
+  // admins can always see them.
+  if (!ctx.isAdmin && !surveyIsClosed()) return { error: "Results open once the survey closes." };
+  const { admin, campYear, isAdmin } = ctx;
 
   const [{ data: rows, error }, { count: confirmed }] = await Promise.all([
     admin
@@ -352,6 +370,7 @@ export async function getSurveyResults(): Promise<
   const sensitiveUnlocked = all.length >= SENSITIVE_MIN_RESPONSES;
   const sensitive: Record<string, string[]> = {};
   for (const key of SENSITIVE_KEYS) {
+    if (!isAdmin && ADMIN_ONLY_KEYS.includes(key)) continue;
     const pool = all
       .map((r) => r.answers?.[key])
       .filter((v): v is string => typeof v === "string" && v.trim() !== "");
@@ -361,15 +380,17 @@ export async function getSurveyResults(): Promise<
   const responses: SurveyResponse[] = all.map((r) => {
     const answers: SurveyAnswers = { ...(r.answers ?? {}) };
     for (const key of SENSITIVE_KEYS) delete answers[key];
+    if (!isAdmin) for (const key of ADMIN_ONLY_KEYS) delete answers[key];
+    const hideName = r.anonymous || !isAdmin;
     return {
       id: r.id,
-      name: r.anonymous
+      name: hideName
         ? null
         : [r.profile?.first_name, r.profile?.last_name]
             .filter(Boolean)
             .join(" ") || "Unknown",
-      playaName: r.anonymous ? null : r.profile?.playa_name ?? null,
-      anonymous: r.anonymous,
+      playaName: hideName ? null : r.profile?.playa_name ?? null,
+      anonymous: hideName,
       submittedAt: r.submitted_at,
       updatedAt: r.updated_at,
       answers,
@@ -377,6 +398,7 @@ export async function getSurveyResults(): Promise<
   });
 
   return {
+    viewerIsAdmin: isAdmin,
     confirmed: confirmed ?? 0,
     responses,
     sensitive,

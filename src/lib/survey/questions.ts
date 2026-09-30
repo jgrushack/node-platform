@@ -15,6 +15,9 @@ export const SURVEY_YEAR = 2026;
  */
 export const SENSITIVE_MIN_RESPONSES = 10;
 
+/** Playa-local date the survey stopped accepting answers (Jesse closed it 2026-09-30). */
+export const SURVEY_CLOSED_AT = "2026-09-30";
+
 export type ScaleQuestion = {
   kind: "scale";
   key: string;
@@ -432,6 +435,18 @@ export const SENSITIVE_KEYS: string[] = ALL_QUESTIONS.filter(
 export function findQuestion(key: string): SurveyQuestion | undefined {
   return ALL_QUESTIONS.find((q) => q.key === key);
 }
+
+/** value → label for the "commit to 2027" picks (also stored on profiles.commitments_2027). */
+export const COMMITMENT_LABELS: Record<string, string> = Object.fromEntries(
+  ((findQuestion("commit_2027") as MultiQuestion | undefined)?.options ?? []).map(
+    (o) => [o.value, o.label]
+  )
+);
+export const LEAD_INTEREST_LABELS: Record<string, string> = Object.fromEntries(
+  ((findQuestion("lead_interest") as ChoiceQuestion | undefined)?.options ?? []).map(
+    (o) => [o.value, o.label]
+  )
+);
 
 /** One answer value as stored in `burn_surveys.answers`. */
 export type SurveyAnswerValue = number | string | string[] | null | undefined;

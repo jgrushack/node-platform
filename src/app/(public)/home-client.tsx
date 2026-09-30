@@ -5,8 +5,8 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import { MapPin } from "lucide-react";
 
-// Burning Man 2026: Aug 30 – Sep 7. Gates open Sunday Aug 30 at midnight PT.
-const BURN_START = new Date("2026-08-30T00:00:00-07:00").getTime();
+// Burning Man 2027: Aug 29 – Sep 6. The Man burns Saturday Sep 4 around 9pm PT.
+const BURN_START = new Date("2027-09-04T21:00:00-07:00").getTime();
 
 function timeUntil(target: number) {
   const diff = Math.max(0, target - Date.now());
@@ -195,7 +195,7 @@ export default function HomeClient() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
         >
-          <span className="font-brand">NODE 2026</span>
+          <span className="font-brand">NODE 2027</span>
         </motion.h1>
 
         {/* Subtitle */}
@@ -224,7 +224,7 @@ export default function HomeClient() {
           </div>
         </motion.div>
 
-        {/* Countdown to Burning Man 2026 */}
+        {/* Countdown to the Man burning, 2027 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -312,7 +312,7 @@ function BurnCountdown() {
   return (
     <div className="flex flex-col items-center gap-3">
       <p className="text-xs uppercase tracking-[0.2em] text-sand-400">
-        Burning Man 2026 starts in
+        The Man burns in
       </p>
       <div className="flex items-stretch gap-2 sm:gap-3">
         {items.map((it) => (

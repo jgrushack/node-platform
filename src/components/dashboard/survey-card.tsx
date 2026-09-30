@@ -21,8 +21,9 @@ export function SurveyCard() {
     });
   }, []);
 
-  if (!info || !info.open) return null;
-  if (!info.eligible && !info.isAdmin) return null;
+  if (!info) return null;
+  if (!info.open && !info.closed) return null;
+  if (!info.closed && !info.eligible && !info.isAdmin) return null;
 
   const pct =
     info.confirmed > 0 ? Math.round((info.responded / info.confirmed) * 100) : 0;
@@ -52,19 +53,23 @@ export function SurveyCard() {
               </span>
               <div className="min-w-0">
                 <p className="font-medium text-sand-100">
-                  {info.submitted
-                    ? `Thanks for filling out the ${SURVEY_YEAR} survey`
-                    : `How was your burn? Take the ${SURVEY_YEAR} survey`}
+                  {info.closed
+                    ? `The ${SURVEY_YEAR} survey results are in`
+                    : info.submitted
+                      ? `Thanks for filling out the ${SURVEY_YEAR} survey`
+                      : `How was your burn? Take the ${SURVEY_YEAR} survey`}
                 </p>
                 <p className="text-sm text-sand-400">
-                  {info.submitted
-                    ? "You can edit your answers any time."
-                    : "Five minutes. Honest answers build a better 2027."}
+                  {info.closed
+                    ? "Open to the whole camp, names removed. See what we said about 2026 and 2027."
+                    : info.submitted
+                      ? "You can edit your answers any time."
+                      : "Five minutes. Honest answers build a better 2027."}
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {info.isAdmin && (
+              {(info.isAdmin || info.closed) && (
                 <Link
                   href="/dashboard/survey/results"
                   className="inline-flex items-center gap-1.5 rounded-full border border-amber/30 px-3 py-2 text-sm text-amber hover:bg-amber/10"
@@ -73,7 +78,7 @@ export function SurveyCard() {
                   Results
                 </Link>
               )}
-              {info.eligible && (
+              {info.eligible && !info.closed && (
                 <Link
                   href="/dashboard/survey"
                   className={`inline-flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium ${

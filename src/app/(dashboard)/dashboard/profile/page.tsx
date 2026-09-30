@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
+import { COMMITMENT_LABELS, LEAD_INTEREST_LABELS } from "@/lib/survey/questions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,9 @@ interface ProfileData {
   dietary_restrictions: string;
   instagram: string;
   skills: string[];
+  commitments_2027: string[];
+  lead_interest_2027: string | null;
+  lead_area_2027: string | null;
   other_burns: string[];
 }
 
@@ -109,7 +113,7 @@ export default function ProfilePage() {
       supabase
         .from("profiles")
         .select(
-          "first_name, last_name, playa_name, email, phone, bio, birthday, emergency_contact, dietary_restrictions, instagram, skills, node_events_attended, avatar_url, onboarding_completed_at, other_burns"
+          "first_name, last_name, playa_name, email, phone, bio, birthday, emergency_contact, dietary_restrictions, instagram, skills, node_events_attended, avatar_url, onboarding_completed_at, other_burns, commitments_2027, lead_interest_2027, lead_area_2027"
         )
         .eq("id", user.id)
         .single()
@@ -127,6 +131,9 @@ export default function ProfilePage() {
             dietary_restrictions: data.dietary_restrictions || "",
             instagram: data.instagram || "",
             skills: data.skills || [],
+            commitments_2027: (data as Record<string, unknown>).commitments_2027 as string[] || [],
+            lead_interest_2027: ((data as Record<string, unknown>).lead_interest_2027 as string | null) ?? null,
+            lead_area_2027: ((data as Record<string, unknown>).lead_area_2027 as string | null) ?? null,
             other_burns: (data as Record<string, unknown>).other_burns as string[] || [],
           });
           setReadOnly((prev) => ({
@@ -518,6 +525,29 @@ export default function ProfilePage() {
               }
             />
           </div>
+
+          {/* 2027 commitments — read-only, lifted from the post-burn survey */}
+          {profile && (profile.commitments_2027.length > 0 || profile.lead_interest_2027) && (
+            <div className="space-y-2 rounded-xl border border-amber/20 bg-amber/5 p-4">
+              <Label className="text-amber">Committed for 2027</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {profile.commitments_2027.map((c) => (
+                  <Badge key={c} className="bg-amber/15 text-amber text-xs">
+                    {COMMITMENT_LABELS[c] ?? c}
+                  </Badge>
+                ))}
+              </div>
+              {profile.lead_interest_2027 && (
+                <p className="text-xs text-sand-400">
+                  Lead role: {LEAD_INTEREST_LABELS[profile.lead_interest_2027] ?? profile.lead_interest_2027}
+                  {profile.lead_area_2027 ? ` — ${profile.lead_area_2027}` : ""}
+                </p>
+              )}
+              <p className="text-[11px] text-sand-500">
+                From your 2026 survey. Leads will hold you to it, lovingly.
+              </p>
+            </div>
+          )}
 
           {/* Skills Tags */}
           <div className="space-y-2">

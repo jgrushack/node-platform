@@ -492,18 +492,22 @@ export default function SurveyResultsClient() {
             {SURVEY_YEAR} Survey Results
           </h1>
           <p className="mt-1 text-sand-400">
-            What the camp said. Admins only.
+            {data.viewerIsAdmin
+              ? "What the camp said. Admin view: names shown unless the camper opted out."
+              : "What the camp said. Names removed; leadership-only notes and call-outs hidden."}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          onClick={download}
-          disabled={!data.responses.length}
-          className="text-sand-300 hover:text-sand-100"
-        >
-          <Download className="mr-2 h-4 w-4" />
-          Export CSV
-        </Button>
+        {data.viewerIsAdmin && (
+          <Button
+            variant="ghost"
+            onClick={download}
+            disabled={!data.responses.length}
+            className="text-sand-300 hover:text-sand-100"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+        )}
       </motion.div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -540,12 +544,14 @@ export default function SurveyResultsClient() {
           >
             Summary
           </TabsTrigger>
-          <TabsTrigger
-            value="responses"
-            className="data-[state=active]:bg-amber/15 data-[state=active]:text-amber text-sand-400"
-          >
-            Responses
-          </TabsTrigger>
+          {data.viewerIsAdmin && (
+            <TabsTrigger
+              value="responses"
+              className="data-[state=active]:bg-amber/15 data-[state=active]:text-amber text-sand-400"
+            >
+              Responses
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="summary" className="mt-6 space-y-6">
@@ -563,7 +569,13 @@ export default function SurveyResultsClient() {
                   <CardTitle className="text-sand-200">{s.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-7">
-                  {s.questions.map((q) =>
+                  {s.questions
+                    .filter(
+                      (q) =>
+                        data.viewerIsAdmin ||
+                        (q.key !== "private_note" && q.key !== "person_lowlight")
+                    )
+                    .map((q) =>
                     q.kind === "text" && q.sensitive ? (
                       <SensitiveResult
                         key={q.key}

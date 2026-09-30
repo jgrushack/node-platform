@@ -132,8 +132,8 @@ const FILTERED_BM_KEYWORDS = ["office hours", "campfire talk"];
 // checklist and pivots to 2027: survey, photos, countdown. Dues still owed
 // keep their nudge.
 const CAMP_2026_END = "2026-09-07";
-// Burning Man 2027: gate opens Sun Aug 29, 2027.
-const GATE_2027 = "2027-08-29";
+// Burning Man 2027: the Man burns Sat Sep 4, 2027 (gate opens Aug 29).
+const MAN_BURN_2027 = "2027-09-04";
 const PLAYA_TZ = "America/Los_Angeles";
 
 function playaToday(): string {
@@ -690,11 +690,11 @@ export default function DashboardPage() {
     POST_BURN
       ? {
           label: "NODE 2027",
-          value: `${daysUntil(GATE_2027)} days`,
+          value: `${daysUntil(MAN_BURN_2027)} days`,
           icon: Flame,
           color: "text-amber",
           valueColor: "text-sand-100",
-          subtext: "until gate · Aug 29, 2027" as string | null,
+          subtext: "until the Man burns · Sep 4, 2027" as string | null,
         }
       : {
           label: "2026 Status",
