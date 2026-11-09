@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -418,6 +420,11 @@ export function CalendarClient({
           </Button>
         )}
       </motion.div>
+
+      <Link href="/dashboard/nodesgiving" className="block rounded-xl border border-pink-500/20 bg-pink-500/10 p-4 text-pink-300 hover:bg-pink-500/15">
+        <span className="font-semibold">Nodesgiving · November 21</span>
+        <span className="mt-1 block text-sm">RSVP, bring a guest, and choose a dish from the shared menu →</span>
+      </Link>
 
       {/* Google Calendar connection (admin) — needed to send invites + collect RSVPs */}
       {isAdmin && !calendarConnected && (

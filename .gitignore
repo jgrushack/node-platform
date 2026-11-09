@@ -71,3 +71,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Flyer includes a residential address; production serves it from private storage.
+/src/assets/nodesgiving/

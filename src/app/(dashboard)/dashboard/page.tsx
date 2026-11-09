@@ -57,6 +57,7 @@ import { Celebration } from "@/components/dashboard/celebration";
 import { HypeCard } from "@/components/dashboard/hype-card";
 import { SurveyCard } from "@/components/dashboard/survey-card";
 import { PhotoUploadCard } from "@/components/dashboard/photo-upload-card";
+import { NodesgivingBanner } from "@/components/dashboard/nodesgiving-banner";
 import { getHypeData, markReady, type HypeData } from "@/lib/actions/hype";
 import {
   getStorageSurvey,
@@ -873,6 +874,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <NodesgivingBanner />
+
       {/* One-time storage survey — every user answers once */}
       <StorageSurveyModal
         open={loadModal === "storage"}

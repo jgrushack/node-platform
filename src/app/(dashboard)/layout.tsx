@@ -10,6 +10,7 @@ import {
   LogOut,
   FileText,
   CalendarDays,
+  UtensilsCrossed,
   Menu,
   UsersRound,
   Eye,
@@ -49,6 +50,7 @@ export default function DashboardLayout({
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/members", label: "Members", icon: UsersRound },
     { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
+    { href: "/dashboard/nodesgiving", label: "Nodesgiving", icon: UtensilsCrossed },
     { href: "/dashboard/wiki", label: "Wiki", icon: BookOpen },
     { href: "/dashboard/profile", label: "Profile", icon: User },
   ]);
@@ -94,6 +96,7 @@ export default function DashboardLayout({
             { href: "/dashboard/payments", label: "Payments", icon: Wallet },
             // Jobs and Lock Screen are burn-week tools — hidden post-burn (pages still work by URL).
             { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
+            { href: "/dashboard/nodesgiving", label: "Nodesgiving", icon: UtensilsCrossed },
             { href: "/dashboard/wiki", label: "Wiki", icon: BookOpen },
             { href: "/dashboard/survey", label: "2026 Survey", icon: ClipboardList },
           );

@@ -1,0 +1,41 @@
+.hero {
+  background:
+    radial-gradient(ellipse at 12% 0%, #ab7bc534, transparent 58%),
+    radial-gradient(ellipse at 75% 100%, #ff9e5940, transparent 60%),
+    linear-gradient(130deg, #2c153c, #311c34 55%, #603849);
+}
+
+.title {
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 300;
+  letter-spacing: -.075em;
+  line-height: .85;
+  color: #edbaff;
+  text-shadow: 2px 3px 0 #9a4eb6, -1px -1px 0 #fff0ff;
+}
+
+.poster {
+  transform: rotate(2deg);
+  box-shadow: 0 24px 65px #11031b66, 0 0 0 1px #fff2;
+  transition: transform 250ms ease;
+}
+
+.poster:hover {
+  transform: rotate(0deg);
+}
+
+.panel {
+  border: 1px solid #dfabed26;
+  background: linear-gradient(145deg, #33203a99, #24122fbb);
+  border-radius: 1.5rem;
+}
+
+.slotGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: .75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster { transition: none; }
+}
