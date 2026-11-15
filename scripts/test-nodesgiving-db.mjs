@@ -224,5 +224,40 @@ try {
   await db.exec('set role anon');
   await rejects(read, /permission denied/);
   await rejects(() => db.query('select get_nodesgiving_flyer()'), /permission denied/);
-  console.log('PASS: migrations 62–66, preserved legacy menus, 11 seed slots plus a second potato dish, auth, privacy, capacity, duplicate names, rollback, revisions, shared dishes, suggestion approval/withdrawal and released commitments.');
+  await db.exec('reset role');
+  await db.exec(await readFile(new URL('../supabase/migrations/00067_nodesgiving_open_signups.sql', import.meta.url), 'utf8'));
+  await db.exec('set role authenticated');
+  await login(host);
+  await save([claim(potato, 'Potato gratin')]); // Third signup exceeds the two-dish target.
+  snapshot = await read();
+  assert.equal(snapshot.menu.find(m => m.id === potato.id).claimed, 3);
+  assert.equal(snapshot.menu.find(m => m.id === potato.id).slots, 2);
+  const openRevision = snapshot.mine.revision;
+  await save([claim(potato, 'Herby potato gratin', 15)]);
+  await rejects(() => save([], { revision: openRevision }), /changed elsewhere/);
+  await rejects(() => save([claim(potato, 'Roasted sweet potatoes')]), /already on the menu/);
+  assert.equal((await read()).mine.contributions[0].dish_name, 'Herby potato gratin');
+  const currentPotato = snapshot.menu.find(m => m.id === potato.id);
+  const setTarget = () => db.query('select save_nodesgiving_menu($1,$2,$3,$4,1,$5)', [currentPotato.id, currentPotato.name, currentPotato.category, currentPotato.description, currentPotato.servings]);
+  await setTarget(); // Planning targets can be below actual signups.
+  assert.equal((await read()).menu.find(m => m.id === potato.id).slots, 1);
+  assert.equal((await read()).menu.find(m => m.id === potato.id).claimed, 3);
+  await login(member);
+  await rejects(setTarget, /Unauthorized/);
+  await save([claim(potato, 'Brown butter mashed potatoes', 12)]);
+  await save([claim(potato, 'Brown butter mashed potatoes'), claim(bread, 'Dinner rolls')]);
+  await login(other);
+  await propose('Cornbread', 'Sides');
+  const overTargetSuggestion = (await read()).suggestions.find(s => s.status === 'pending');
+  await login(host);
+  await review(overTargetSuggestion.id, bread);
+  assert.equal((await read()).menu.find(m => m.id === bread.id).claimed, 2);
+  await login(other);
+  await save([], { status: 'declined' });
+  assert.equal((await read()).mine.contributions.length, 0);
+  await login('');
+  await rejects(() => save([], { revision: 0 }), /Not authenticated/);
+  await db.exec('set role anon');
+  await rejects(() => db.query("select save_nodesgiving_rsvp_v3('going',false,'','',0,'[]'::jsonb)"), /permission denied/);
+  console.log('PASS: migrations 62–67; open signups beyond targets, edits, target changes, legacy approvals, auth, privacy, duplicate recipes, revisions, rollback, and declining.');
 } finally { await db.close(); }

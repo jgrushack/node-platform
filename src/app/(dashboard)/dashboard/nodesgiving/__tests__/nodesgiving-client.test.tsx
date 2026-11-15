@@ -71,9 +71,15 @@ describe("Nodesgiving RSVP flow", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Save RSVP & commitments" })[0]);
     await waitFor(() => expect(saveNodesgivingRsvp).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 2, contributions: [{ itemId, dishName: "Slaw", servings: 10, coCooks: "Sam" }] })));
   });
-  it("disables full dishes for someone without a reservation", () => {
-    render(<NodesgivingClient initial={{ ...initial, menu: [{ id: itemId, name: "Pie", category: "Desserts", description: "", slots: 1, servings: 8, claimed: 1 }] }} />);
-    fireEvent.change(screen.getByLabelText("Will you join us?"), { target: { value: "going" } });
+  it.each([1, 2])("saves another dish when %i people have already filled a one-signup target", async (claimed) => {
+    render(<NodesgivingClient initial={{ ...initial, menu: [{ id: itemId, name: "Pie", category: "Desserts", description: "", slots: 1, servings: 8, claimed }] }} />);
     expect(screen.getByRole("checkbox", { name: /Pie/ })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Will you join us?"), { target: { value: "going" } });
+    expect(screen.getByRole("checkbox", { name: /Pie/ })).toBeEnabled();
+    expect(screen.getByText(`${claimed} signed up · Suggested: 1`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Pie/ }));
+    fireEvent.change(screen.getByLabelText("Your dish for Pie"), { target: { value: "Pecan pie" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save RSVP & commitments" })[0]);
+    await waitFor(() => expect(saveNodesgivingRsvp).toHaveBeenCalledWith(expect.objectContaining({ contributions: [{ itemId, dishName: "Pecan pie", servings: 8, coCooks: "" }] })));
   });
 });

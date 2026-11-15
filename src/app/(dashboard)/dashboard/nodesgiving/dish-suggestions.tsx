@@ -52,9 +52,9 @@ function SuggestionReview({ suggestion: s, data, busy, run }: { suggestion: Node
     <p className="text-sm text-sand-400">{s.member_name}{s.co_cooks ? ` with ${s.co_cooks}` : ""}</p>
     {s.notes && <p className="whitespace-pre-wrap text-sm">{s.notes}</p>}
     <label className="block space-y-1 text-sm"><span>Menu slot for {s.dish_name}</span><select disabled={busy} className={selectStyle} value={itemId} onChange={e => setItemId(e.target.value)}>
-      <option value="">Choose a slot</option>{matches.map(m => <option key={m.id} value={m.id} disabled={m.claimed >= m.slots}>{m.name} · {m.slots - m.claimed} available</option>)}
+      <option value="">Choose a slot</option>{matches.map(m => <option key={m.id} value={m.id}>{m.name} · {m.claimed} signed up · Suggested: {m.slots}</option>)}
     </select></label>
-    <p className="text-xs text-sand-400">Approval uses one available slot. Adjust the menu first if you want to make room.</p>
+    <p className="text-xs text-sand-400">Approval adds this dish to the category, even if its suggested signup count has been reached.</p>
     <label className="block space-y-1 text-sm"><span>Host note for {s.dish_name} (optional)</span><Input disabled={busy} maxLength={500} value={hostNote} onChange={e => setHostNote(e.target.value)} /></label>
     <div className="flex gap-2"><Button type="button" disabled={busy || !itemId} onClick={() => { void run(() => reviewNodesgivingSuggestion({ id: s.id, decision: "approved", itemId, hostNote }), "Dish approved and added to their commitments."); }}>Approve dish</Button>
       <Button type="button" variant="outline" disabled={busy} onClick={() => { void run(() => reviewNodesgivingSuggestion({ id: s.id, decision: "declined", itemId: null, hostNote }), "Suggestion declined."); }}>Decline suggestion</Button></div>

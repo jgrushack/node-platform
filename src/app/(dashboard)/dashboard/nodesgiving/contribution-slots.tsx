@@ -27,17 +27,16 @@ export function ContributionSlots({ data, selected, enabled, onChange }: Props) 
         {items.map(item => {
           const choice = selected.find(c => c.itemId === item.id);
           const claimed = data.commitments.filter(c => c.item_id === item.id);
-          const full = item.claimed >= item.slots && !data.mine?.item_ids.includes(item.id);
           return (
             <div key={item.id} className={`min-w-0 space-y-3 rounded-2xl border p-4 transition-colors ${choice && enabled ? "border-[#e6b4f4]/60 bg-[#bd79c7]/15" : "border-[#e7b3ec]/15 bg-[#f4bc94]/[.04] hover:border-[#e7b3ec]/35"}`}>
               <label className="flex items-start gap-3">
-                <input type="checkbox" checked={!!choice && enabled} disabled={!enabled || (full && !choice)}
+                <input type="checkbox" checked={!!choice && enabled} disabled={!enabled}
                   onChange={e => onChange(e.target.checked
                     ? [...selected, { itemId: item.id, dishName: "", servings: item.servings, coCooks: "" }]
                     : selected.filter(c => c.itemId !== item.id))}
                   className="mt-1 h-4 w-4 shrink-0 accent-pink-500" />
                 <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap justify-between gap-2"><span className="font-medium">{item.name}</span><span className="rounded-full bg-[#ead1f0]/10 px-2 py-1 text-xs text-[#e1c8dc]">{item.claimed}/{item.slots} committed{full ? " · Full" : ""}</span></span>
+                  <span className="flex flex-wrap justify-between gap-2"><span className="font-medium">{item.name}</span><span className="rounded-full bg-[#ead1f0]/10 px-2 py-1 text-xs text-[#e1c8dc]">{item.claimed} signed up · Suggested: {item.slots}</span></span>
                   <span className="mt-1 block text-xs text-sand-400">Aim for {item.servings} servings per signup</span>
                   {item.description && <span className="mt-2 block text-sm text-sand-300">{item.description}</span>}
                 </span>

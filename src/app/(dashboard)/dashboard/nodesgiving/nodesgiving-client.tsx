@@ -31,7 +31,6 @@ export function NodesgivingClient({ initial }: { initial: NodesgivingData }) {
   const [feedback, setFeedback] = useState("");
   const counts = data.counts;
   const claimed = data.menu.reduce((sum, item) => sum + item.claimed, 0);
-  const slots = data.menu.reduce((sum, item) => sum + item.slots, 0);
 
   async function run(action: () => Promise<{ error: string } | { success: true }>, message: string, after?: () => void) {
     setBusy(true);
@@ -46,7 +45,7 @@ export function NodesgivingClient({ initial }: { initial: NodesgivingData }) {
         toast.success(message);
         after?.();
       }
-      // Refresh capacities after a conflict too, preserving unsaved form choices.
+      // Refresh commitments after a conflict too, preserving unsaved form choices.
       const fresh = await getNodesgiving();
       if (!("error" in fresh)) {
         setData(fresh);
@@ -69,7 +68,7 @@ export function NodesgivingClient({ initial }: { initial: NodesgivingData }) {
       <NodesgivingHero title={data.event.title} date={data.event.event_date} location={data.event.location} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[ ["Confirmed people", counts.going + counts.guests], ["Guests included", counts.guests], ["Can’t make it", counts.declined], ["Menu slots filled", `${claimed} / ${slots}`] ].map(([label, value]) => (
+        {[ ["Confirmed people", counts.going + counts.guests], ["Guests included", counts.guests], ["Can’t make it", counts.declined], ["Dishes committed", claimed] ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-[#e7b3ec]/15 bg-[#b77c9c]/[.05] p-4"><p className="text-2xl font-semibold text-[#f6c5a5]">{value}</p><p className="mt-1 text-sm text-sand-400">{label}</p></div>
         ))}
       </div>
@@ -106,7 +105,7 @@ export function NodesgivingClient({ initial }: { initial: NodesgivingData }) {
           </section>
 
           <section className={`${panel} space-y-5`} aria-labelledby="menu-heading">
-            <div><h2 id="menu-heading" className="flex items-center gap-2 text-xl font-semibold"><UtensilsCrossed className="h-5 w-5 text-pink-400" /> Build the feast</h2><p className="mt-2 text-sm text-sand-400">Choose an open spot and tell us what you’re bringing. The recipes are up to you—pick the closest fit for your dish. You can change your dish, servings, or co-cooks here anytime and save. No approval needed. Check what others are bringing to avoid repeats.</p></div>
+            <div><h2 id="menu-heading" className="flex items-center gap-2 text-xl font-semibold"><UtensilsCrossed className="h-5 w-5 text-pink-400" /> Build the feast</h2><p className="mt-2 text-sm text-sand-400">Pick a category and tell us what you’re bringing. Signup counts are suggestions—you can still join a category when it’s reached its target. The recipes are up to you—pick the closest fit for your dish. You can change your dish, servings, or co-cooks here anytime and save. No approval needed. Check what others are bringing to avoid repeats.</p></div>
             {status !== "going" && <p className="rounded-lg bg-pink-500/10 p-3 text-sm text-pink-300">Choose “Yes, I’m coming” to sign up for dishes.</p>}
             {data.menu.length === 0 && <div className="rounded-xl border border-dashed border-pink-500/20 p-6"><p className="font-medium">The menu is coming together.</p><p className="mt-2 text-sm text-sand-400">You can RSVP now and come back to choose a dish once the hosts add the menu.</p></div>}
             <ContributionSlots data={data} selected={selected} enabled={status === "going"} onChange={setSelected} />
@@ -119,18 +118,18 @@ export function NodesgivingClient({ initial }: { initial: NodesgivingData }) {
 
       {data.isAdmin && <>
         <section className={`${panel} space-y-5`} aria-labelledby="host-menu-heading">
-          <div><h2 id="host-menu-heading" className="text-xl font-semibold">Host tools · Manage menu slots</h2><p className="mt-2 text-sm text-sand-400">Set the categories, signup limits, and suggested servings. Members choose their recipes. Claimed slots can only have their signup limit changed.</p></div>
+          <div><h2 id="host-menu-heading" className="text-xl font-semibold">Host tools · Manage menu slots</h2><p className="mt-2 text-sm text-sand-400">Set the categories, suggested signup counts, and servings. People can sign up beyond these counts. Members choose their recipes. Claimed slots can only have their suggested signup count changed.</p></div>
           <form onSubmit={e => { e.preventDefault(); void run(() => saveNodesgivingMenu(dish), "Menu saved.", () => setDish(blankDish)); }}>
             <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className="space-y-2 text-sm sm:col-span-2"><span>Slot name</span><Input required maxLength={150} value={dish.name} onChange={e => setDish({ ...dish, name: e.target.value })} placeholder="e.g. Vegetables" /></label>
               <label className="space-y-2 text-sm"><span>Category</span><select className={selectStyle} value={dish.category} onChange={e => setDish({ ...dish, category: e.target.value as NodesgivingMenuInput["category"] })}>{menuCategories.map(c => <option key={c}>{c}</option>)}</select></label>
-              <label className="space-y-2 text-sm"><span>Signup limit</span><Input type="number" required min={1} max={100} value={dish.slots} onChange={e => setDish({ ...dish, slots: Number(e.target.value) })} /></label>
+              <label className="space-y-2 text-sm"><span>Suggested signup count</span><Input type="number" required min={1} max={100} value={dish.slots} onChange={e => setDish({ ...dish, slots: Number(e.target.value) })} /></label>
               <label className="space-y-2 text-sm"><span>Suggested servings per signup</span><Input type="number" required min={1} max={200} value={dish.servings} onChange={e => setDish({ ...dish, servings: Number(e.target.value) })} /></label>
               <label className="space-y-2 text-sm sm:col-span-2"><span>Instructions / dietary details</span><Input maxLength={500} value={dish.description} onChange={e => setDish({ ...dish, description: e.target.value })} placeholder="Portion size, vegetarian option, serving utensils…" /></label>
               <div className="flex items-end gap-2"><Button type="submit">{dish.id ? "Save slot" : "Add slot"}</Button>{dish.id && <Button type="button" variant="ghost" onClick={() => setDish(blankDish)}>Cancel</Button>}</div>
             </fieldset>
           </form>
-          <div className="divide-y divide-pink-500/10">{data.menu.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span className="text-sm">{item.name} <span className="text-sand-400">· {item.claimed}/{item.slots} filled</span></span><div className="flex gap-2"><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setDish({ id: item.id, name: item.name, category: item.category, description: item.description, slots: item.slots, servings: item.servings })}>Edit</Button><Button type="button" size="sm" variant="ghost" disabled={busy || item.claimed > 0} onClick={() => { void run(() => deleteNodesgivingMenu(item.id), "Dish removed.", () => { if (dish.id === item.id) setDish(blankDish); }); }}>Remove</Button></div></div>)}</div>
+          <div className="divide-y divide-pink-500/10">{data.menu.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span className="text-sm">{item.name} <span className="text-sand-400">· {item.claimed} signed up · Suggested: {item.slots}</span></span><div className="flex gap-2"><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setDish({ id: item.id, name: item.name, category: item.category, description: item.description, slots: item.slots, servings: item.servings })}>Edit</Button><Button type="button" size="sm" variant="ghost" disabled={busy || item.claimed > 0} onClick={() => { void run(() => deleteNodesgivingMenu(item.id), "Dish removed.", () => { if (dish.id === item.id) setDish(blankDish); }); }}>Remove</Button></div></div>)}</div>
         </section>
         <section className={`${panel} space-y-4`} aria-labelledby="guest-list-heading">
           <h2 id="guest-list-heading" className="text-xl font-semibold">Host tools · Who’s coming & what they’re bringing</h2>

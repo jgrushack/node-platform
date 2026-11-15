@@ -72,9 +72,9 @@ describe("Nodesgiving server actions", () => {
   it("allows RSVP before menu selections", async () => {
     expect(await saveNodesgivingRsvp({ ...rsvp, contributions: [] })).toEqual({ success: true });
   });
-  it("returns capacity conflicts without claiming success", async () => {
-    rpc.mockResolvedValue({ error: { code: "P0001", message: "A selected dish is full. Refresh the menu and choose another." } });
-    expect(await saveNodesgivingRsvp(rsvp)).toEqual({ error: "A selected dish is full. Refresh the menu and choose another." });
+  it("returns duplicate recipe conflicts without claiming success", async () => {
+    rpc.mockResolvedValue({ error: { code: "P0001", message: "That dish is already on the menu. Check the shared list and choose something different." } });
+    expect(await saveNodesgivingRsvp(rsvp)).toEqual({ error: "That dish is already on the menu. Check the shared list and choose something different." });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
   it("preserves database host authorization errors", async () => {
@@ -82,7 +82,7 @@ describe("Nodesgiving server actions", () => {
     expect(await deleteNodesgivingMenu(id)).toEqual({ error: "Unauthorized" });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
-  it("validates menu limits and names before mutation", async () => {
+  it("validates suggested signup counts and names before mutation", async () => {
     for (const patch of [{ slots: 0 }, { slots: 1.5 }, { servings: 0 }, { name: "  " }]) {
       expect(await saveNodesgivingMenu({ id: null, name: "Pie", category: "Desserts", description: "", slots: 1, servings: 8, ...patch })).toHaveProperty("error");
     }
