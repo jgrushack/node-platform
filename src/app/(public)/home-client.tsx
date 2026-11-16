@@ -209,7 +209,7 @@ export default function HomeClient() {
           <p>Born in the desert. Built for the future.</p>
         </motion.div>
 
-        {/* Camp location — NODE's 2026 placement in Black Rock City */}
+        {/* Upcoming camp information */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -219,7 +219,7 @@ export default function HomeClient() {
           <div className="inline-flex items-center gap-2 rounded-full border border-pink-500/30 bg-pink-500/10 px-4 py-2 backdrop-blur-sm">
             <MapPin className="h-4 w-4 shrink-0 text-pink-400" aria-hidden="true" />
             <span className="text-sm font-semibold text-sand-100 sm:text-base">
-              9:00 &amp; G Plaza
+              2027 info coming soon
             </span>
           </div>
         </motion.div>
